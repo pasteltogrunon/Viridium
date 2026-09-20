@@ -64,6 +64,9 @@ public class SmallLogBlockRenderer implements ISimpleBlockRenderingHandler {
         ConnectionType east = smallLogBlock.getConnectionType(world, x, y, z, ForgeDirection.EAST, meta);
         ConnectionType north = smallLogBlock.getConnectionType(world, x, y, z, ForgeDirection.NORTH, meta);
         ConnectionType south = smallLogBlock.getConnectionType(world, x, y, z, ForgeDirection.SOUTH, meta);
+        int logOrientation = meta & 12;
+        boolean isXAxis = logOrientation == 4;
+        boolean isZAxis = logOrientation == 8;
         boolean hasHorizontalConnection = west != ConnectionType.NONE || east != ConnectionType.NONE
             || north != ConnectionType.NONE
             || south != ConnectionType.NONE;
@@ -142,9 +145,9 @@ public class SmallLogBlockRenderer implements ISimpleBlockRenderingHandler {
                 up == ConnectionType.TRANSPARENT);
         }
 
-        if (!smallLogBlock.doSidesConnect()) return;
-
-        if (west != ConnectionType.NONE) {
+        // A horizontal log must always render its connections along its own axis.
+        // doSidesConnect only controls the perpendicular branch connections.
+        if (west != ConnectionType.NONE && (smallLogBlock.doSidesConnect() || isXAxis)) {
             renderLogBox(
                 world,
                 x,
@@ -169,7 +172,7 @@ public class SmallLogBlockRenderer implements ISimpleBlockRenderingHandler {
                 west == ConnectionType.TRANSPARENT);
         }
 
-        if (east != ConnectionType.NONE) {
+        if (east != ConnectionType.NONE && (smallLogBlock.doSidesConnect() || isXAxis)) {
             renderLogBox(
                 world,
                 x,
@@ -194,7 +197,7 @@ public class SmallLogBlockRenderer implements ISimpleBlockRenderingHandler {
                 east == ConnectionType.TRANSPARENT);
         }
 
-        if (north != ConnectionType.NONE) {
+        if (north != ConnectionType.NONE && (smallLogBlock.doSidesConnect() || isZAxis)) {
             renderLogBox(
                 world,
                 x,
@@ -219,7 +222,7 @@ public class SmallLogBlockRenderer implements ISimpleBlockRenderingHandler {
                 north == ConnectionType.TRANSPARENT);
         }
 
-        if (south != ConnectionType.NONE) {
+        if (south != ConnectionType.NONE && (smallLogBlock.doSidesConnect() || isZAxis)) {
             renderLogBox(
                 world,
                 x,

@@ -239,15 +239,18 @@ public class SmallLogBlock extends Block {
         if (world.getBlock(neighborX, neighborY, neighborZ) instanceof BlockLeaves) return ConnectionType.TRANSPARENT;
 
         // If neighbor is small log, connect only if it is pointing towards the log.
-        if (world.getBlock(neighborX, neighborY, neighborZ) instanceof SmallLogBlock) {
+        if (world.getBlock(neighborX, neighborY, neighborZ) instanceof SmallLogBlock neighbor) {
+            ConnectionType typeIfConnected = ((SmallLogBlock) world.getBlock(x, y, z)).halfWidth < neighbor.halfWidth
+                ? ConnectionType.SOLID
+                : ConnectionType.TRANSPARENT;
             int neighborj1 = world.getBlockMetadata(neighborX, neighborY, neighborZ) & 12;
             switch (neighborj1) {
                 case 0:
-                    return direction.offsetY != 0 ? ConnectionType.SOLID : ConnectionType.NONE;
+                    return direction.offsetY != 0 ? typeIfConnected : ConnectionType.NONE;
                 case 4:
-                    return direction.offsetX != 0 ? ConnectionType.SOLID : ConnectionType.NONE;
+                    return direction.offsetX != 0 ? typeIfConnected : ConnectionType.NONE;
                 case 8:
-                    return direction.offsetZ != 0 ? ConnectionType.SOLID : ConnectionType.NONE;
+                    return direction.offsetZ != 0 ? typeIfConnected : ConnectionType.NONE;
             }
         }
 
@@ -282,6 +285,8 @@ public class SmallLogBlock extends Block {
 
     public int onBlockPlaced(World worldIn, int x, int y, int z, int side, float subX, float subY, float subZ,
         int meta) {
+        if (!doSidesConnect()) return 0;
+
         int j1 = meta & 3;
         byte b0 = switch (side) {
             case 0, 1 -> 0;
