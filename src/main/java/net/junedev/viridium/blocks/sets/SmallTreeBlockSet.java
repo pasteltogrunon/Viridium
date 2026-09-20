@@ -1,13 +1,15 @@
 package net.junedev.viridium.blocks.sets;
 
-import cpw.mods.fml.common.registry.GameRegistry;
 import net.junedev.viridium.blocks.BaseLeaves;
 import net.junedev.viridium.blocks.BasePlanks;
 import net.junedev.viridium.blocks.BaseSaplingBlock;
 import net.junedev.viridium.blocks.SmallLogBlock;
 import net.minecraft.block.Block;
 
+import cpw.mods.fml.common.registry.GameRegistry;
+
 public class SmallTreeBlockSet {
+
     private static final String ASSET_DIRECTORY = "small_trees/";
 
     public final Block smallLog;

@@ -35,7 +35,6 @@ public class Viridium {
         items = new ViriItems();
         items.preInit();
 
-
         proxy.preInit(event);
     }
 

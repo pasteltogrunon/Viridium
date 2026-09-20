@@ -1,12 +1,11 @@
 package net.junedev.viridium.client.renderers;
 
-import cpw.mods.fml.client.registry.ISimpleBlockRenderingHandler;
 import net.junedev.viridium.client.renderers.blocks.BushBlockRenderer;
 import net.junedev.viridium.client.renderers.blocks.SmallLogBlockRenderer;
+import net.junedev.viridium.client.renderers.blocks.TallPlantBlockRenderer;
 
 import cpw.mods.fml.client.registry.RenderingRegistry;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import net.junedev.viridium.client.renderers.blocks.TallPlantBlockRenderer;
 
 public class ViriRenderers {
 

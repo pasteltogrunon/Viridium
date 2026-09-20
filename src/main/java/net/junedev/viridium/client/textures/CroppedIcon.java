@@ -2,8 +2,8 @@ package net.junedev.viridium.client.textures;
 
 import net.minecraft.util.IIcon;
 
-public class CroppedIcon implements IIcon
-{
+public class CroppedIcon implements IIcon {
+
     private final IIcon parent;
     private final String name;
 
@@ -12,8 +12,7 @@ public class CroppedIcon implements IIcon
     private final int x;
     private final int part;
 
-    public CroppedIcon(IIcon parent, int part, int x, int segmentWidth, int segmentHeight)
-    {
+    public CroppedIcon(IIcon parent, int part, int x, int segmentWidth, int segmentHeight) {
         this.parent = parent;
 
         this.name = parent.getIconName() + "#" + x + "," + part;

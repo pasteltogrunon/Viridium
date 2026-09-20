@@ -1,17 +1,15 @@
 package net.junedev.viridium;
 
-import net.junedev.viridium.blocks.*;
-import net.minecraft.block.Block;
-import net.minecraft.creativetab.CreativeTabs;
-
-import net.minecraft.init.Items;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemBlock;
-import net.minecraft.item.ItemStack;
-
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+
+import net.junedev.viridium.blocks.*;
+import net.minecraft.block.Block;
+import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
+import net.minecraft.item.ItemStack;
 
 public class ViriTab extends CreativeTabs {
 
@@ -55,12 +53,12 @@ public class ViriTab extends CreativeTabs {
             }
 
             // Use a ponderated sistem for blocks
-            if(((item2 instanceof ItemBlock itemBlock1)) && ((item1 instanceof ItemBlock itemBlock2))) {
+            if (((item2 instanceof ItemBlock itemBlock1)) && ((item1 instanceof ItemBlock itemBlock2))) {
                 typeValue1 = getTypeValue(itemBlock1);
                 typeValue2 = getTypeValue(itemBlock2);
 
-                if(typeValue1 > typeValue2) return -1;
-                if(typeValue2 > typeValue1) return 1;
+                if (typeValue1 > typeValue2) return -1;
+                if (typeValue2 > typeValue1) return 1;
             }
 
             // Else alphabetically
@@ -71,16 +69,15 @@ public class ViriTab extends CreativeTabs {
             return result;
         }
 
-        public int getTypeValue(ItemBlock item)
-        {
+        public int getTypeValue(ItemBlock item) {
             Block block = item.field_150939_a;
-            if(block instanceof BushBlock) return 10;
-            if(block instanceof BaseFullLog) return 20;
-            if(block instanceof SmallLogBlock) return 30;
-            if(block instanceof BaseLeaves) return 40;
-            if(block instanceof BasePlanks) return 50;
-            if(block instanceof BaseSaplingBlock) return 60;
-            if(block instanceof TallPlantBlock) return 70;
+            if (block instanceof BushBlock) return 10;
+            if (block instanceof BaseFullLog) return 20;
+            if (block instanceof SmallLogBlock) return 30;
+            if (block instanceof BaseLeaves) return 40;
+            if (block instanceof BasePlanks) return 50;
+            if (block instanceof BaseSaplingBlock) return 60;
+            if (block instanceof TallPlantBlock) return 70;
 
             return 0;
         }

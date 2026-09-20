@@ -1,14 +1,13 @@
 package net.junedev.viridium.blocks;
 
-import cpw.mods.fml.relauncher.Side;
-import cpw.mods.fml.relauncher.SideOnly;
+import java.util.Random;
+
 import net.junedev.viridium.Viridium;
 import net.junedev.viridium.client.renderers.ViriRenderIds;
 import net.junedev.viridium.client.textures.CroppedIcon;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;
-import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
@@ -17,9 +16,11 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.IIcon;
 import net.minecraft.world.World;
 
-import java.util.Random;
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
 
 public class TallPlantBlock extends Block {
+
     private final int verticalBlockSize;
     private final int pixelWidth;
     private final int textureX;
@@ -50,18 +51,17 @@ public class TallPlantBlock extends Block {
         this(verticalBlockSize, 16);
     }
 
-
     @Override
     public boolean canPlaceBlockAt(World worldIn, int x, int y, int z) {
-        for(int i = 1; i < verticalBlockSize; i++){
-            if(!worldIn.isAirBlock(x, y + i, z)) return false;
+        for (int i = 1; i < verticalBlockSize; i++) {
+            if (!worldIn.isAirBlock(x, y + i, z)) return false;
         }
         return super.canPlaceBlockAt(worldIn, x, y, z);
     }
 
     @Override
     public void onBlockPlacedBy(World worldIn, int x, int y, int z, EntityLivingBase placer, ItemStack itemIn) {
-        for(int i = 1; i < verticalBlockSize; i++){
+        for (int i = 1; i < verticalBlockSize; i++) {
             worldIn.setBlock(x, y + i, z, this, i, 2);
         }
     }
@@ -69,24 +69,22 @@ public class TallPlantBlock extends Block {
     @Override
     public void onBlockHarvested(World worldIn, int x, int y, int z, int meta, EntityPlayer player) {
 
-        for(int i = 0; i < verticalBlockSize; i++) {
-            if(i != meta) worldIn.setBlockToAir(x, y - meta + i, z);
+        for (int i = 0; i < verticalBlockSize; i++) {
+            if (i != meta) worldIn.setBlockToAir(x, y - meta + i, z);
         }
 
         super.onBlockHarvested(worldIn, x, y, z, meta, player);
     }
 
-    public Item getItemDropped(int meta, Random random, int fortune)
-    {
+    public Item getItemDropped(int meta, Random random, int fortune) {
         if (!isBottom(meta)) {
             return null;
-        }
-        else {
+        } else {
             return Item.getItemFromBlock(this);
         }
     }
 
-    public boolean isTop(int meta){
+    public boolean isTop(int meta) {
         return meta == verticalBlockSize - 1;
     }
 
@@ -94,7 +92,7 @@ public class TallPlantBlock extends Block {
         return meta == 0;
     }
 
-    public boolean isMiddle(int meta){
+    public boolean isMiddle(int meta) {
         return !isTop(meta) && !isBottom(meta);
     }
 
@@ -123,8 +121,12 @@ public class TallPlantBlock extends Block {
 
         double halfWidth = getPixelWidth() / 32D;
         return AxisAlignedBB.getBoundingBox(
-            x + 0.5D - halfWidth, y, z + 0.5D - halfWidth,
-            x + 0.5D + halfWidth, y + 1, z + 0.5D + halfWidth);
+            x + 0.5D - halfWidth,
+            y,
+            z + 0.5D - halfWidth,
+            x + 0.5D + halfWidth,
+            y + 1,
+            z + 0.5D + halfWidth);
     }
 
     @Override
@@ -143,7 +145,7 @@ public class TallPlantBlock extends Block {
         fullIcon = reg.registerIcon(getTextureName());
 
         croppedIcons = new IIcon[verticalBlockSize];
-        for(int i = 0; i< verticalBlockSize; i++){
+        for (int i = 0; i < verticalBlockSize; i++) {
             croppedIcons[i] = new CroppedIcon(fullIcon, i, textureX, getPixelWidth(), 16);
         }
     }
@@ -167,7 +169,7 @@ public class TallPlantBlock extends Block {
     @SideOnly(Side.CLIENT)
     public static double getRandomOffset(long hash, int shift, double range) {
         double normalized = ((hash >> shift) & 15L) / 15.0D; // 0..1
-        return (normalized - 0.5D) * range;                  // -range/2..+range/2
+        return (normalized - 0.5D) * range; // -range/2..+range/2
     }
 
     @SideOnly(Side.CLIENT)

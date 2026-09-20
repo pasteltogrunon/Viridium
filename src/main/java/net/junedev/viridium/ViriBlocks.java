@@ -1,15 +1,12 @@
 package net.junedev.viridium;
 
-
-import net.junedev.viridium.blocks.BushBlock;
-import net.junedev.viridium.blocks.TallPlantBlock;
-import net.junedev.viridium.blocks.sets.SmallTreeBlockSet;
-
 import net.junedev.viridium.blocks.BaseFullLog;
 import net.junedev.viridium.blocks.BaseLeaves;
 import net.junedev.viridium.blocks.BasePlanks;
 import net.junedev.viridium.blocks.BaseSaplingBlock;
-
+import net.junedev.viridium.blocks.BushBlock;
+import net.junedev.viridium.blocks.TallPlantBlock;
+import net.junedev.viridium.blocks.sets.SmallTreeBlockSet;
 import net.minecraft.block.Block;
 
 import cpw.mods.fml.common.registry.GameRegistry;
@@ -388,7 +385,6 @@ public class ViriBlocks {
         yewPlanks = registerPlanks("yew_planks");
         yewSapling = registerLargeSapling("yew_sapling");
     }
-
 
     // Bushes
     private Block registerBush(String name) {
