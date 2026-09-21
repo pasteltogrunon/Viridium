@@ -34,7 +34,13 @@ public class TallPlantBlock extends Block {
     public TallPlantBlock(int verticalBlockSize, int pixelWidth, int textureX) {
         super(Material.grass);
 
-        this.verticalBlockSize = verticalBlockSize;
+        if (verticalBlockSize <= 0) {
+            Viridium.LOGGER.warn("Tall Plant: Vertical block size must be strictly positive. Falling back to default.");
+            this.verticalBlockSize = 1;
+        } else {
+            this.verticalBlockSize = verticalBlockSize;
+        }
+
         this.pixelWidth = pixelWidth;
         this.textureX = textureX;
 
@@ -153,6 +159,10 @@ public class TallPlantBlock extends Block {
     @Override
     @SideOnly(Side.CLIENT)
     public IIcon getIcon(int side, int meta) {
+        if (meta < 0 || meta >= croppedIcons.length) {
+            Viridium.LOGGER.warn("Tall Plant: Meta={} out of expected bounds. Falling back to default icon.", meta);
+            return croppedIcons[0];
+        }
         return croppedIcons[meta];
     }
 

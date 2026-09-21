@@ -40,11 +40,14 @@ public class SmallLogBlock extends Block {
         super(Material.wood);
 
         if (halfWidth < 1 || halfWidth > 8 || faceHalfWidth < 1 || faceHalfWidth > 8) {
-            throw new IllegalArgumentException("Small log half widths must be between 1 and 8 pixels");
+            Viridium.LOGGER.warn("Small Log: Half widths must be between 1 and 8 pixels. Falling back to default.");
+            this.halfWidth = 4;
+            this.faceHalfWidth = 4;
+        } else {
+            this.halfWidth = halfWidth;
+            this.faceHalfWidth = faceHalfWidth;
         }
 
-        this.halfWidth = halfWidth;
-        this.faceHalfWidth = faceHalfWidth;
         this.connectSides = connectSides;
 
         this.setHardness(1.0F);
