@@ -4,7 +4,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import net.junedev.viridium.blocks.*;
+import net.junedev.viridium.blocks.BaseFullLog;
+import net.junedev.viridium.blocks.BaseLeaves;
+import net.junedev.viridium.blocks.BasePlanks;
+import net.junedev.viridium.blocks.BaseSaplingBlock;
+import net.junedev.viridium.blocks.BushBlock;
+import net.junedev.viridium.blocks.SmallLogBlock;
+import net.junedev.viridium.blocks.TallPlantBlock;
 import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
