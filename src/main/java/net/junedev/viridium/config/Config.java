@@ -1,4 +1,4 @@
-package net.junedev.viridium;
+package net.junedev.viridium.config;
 
 import java.io.File;
 
@@ -7,6 +7,7 @@ import net.minecraftforge.common.config.Configuration;
 public class Config {
 
     public static String greeting = "Hello World";
+    public static BiomeConfig biomeConfig = new BiomeConfig();
 
     public static void synchronizeConfiguration(File configFile) {
         Configuration configuration = new Configuration(configFile);

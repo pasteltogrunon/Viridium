@@ -35,6 +35,9 @@ public class Viridium {
         items = new ViriItems();
         items.preInit();
 
+        biomes = new ViriBiomes();
+        biomes.preInit();
+
         proxy.preInit(event);
     }
 
@@ -58,5 +61,6 @@ public class Viridium {
 
     ViriBlocks blocks;
     ViriItems items;
+    ViriBiomes biomes;
 
 }
