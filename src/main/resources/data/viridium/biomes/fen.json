@@ -1,0 +1,28 @@
+{
+  "name": "Fen",
+  "generation": {
+    "weight": 10,
+    "climateType": "WARM",
+    "dictionaryTypes": ["WET", "PLAINS", "SPARSE"]
+  },
+  "climate": {
+    "temperature": 0.9,
+    "rainfall": 0.4,
+    "rain": false
+  },
+  "terrain": {
+    "height": {
+      "baseHeight": 0.05,
+      "heightVariation": 0.05
+    }
+  },
+  "decoration": {
+    "treesPerChunk": -1,
+    "grassPerChunk": 15,
+    "flowersPerChunk": 1
+  },
+  "appearance": {
+    "grassColor": "#A4BE94",
+    "foliageColor": "#99B687"
+  }
+}

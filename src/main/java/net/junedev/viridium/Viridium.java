@@ -28,6 +28,7 @@ public class Viridium {
     public void preInit(FMLPreInitializationEvent event) {
 
         MinecraftForge.EVENT_BUS.register(this);
+        proxy.preInit(event);
 
         blocks = new ViriBlocks();
         blocks.preInit();
@@ -38,7 +39,6 @@ public class Viridium {
         biomes = new ViriBiomes();
         biomes.preInit();
 
-        proxy.preInit(event);
     }
 
     @Mod.EventHandler
