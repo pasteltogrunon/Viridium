@@ -1,9 +1,11 @@
 package net.junedev.viridium;
 
-import net.junedev.viridium.utils.ColorParser;
+import net.junedev.viridium.utils.parser.BlockParser;
+import net.junedev.viridium.utils.parser.ColorParser;
 import net.junedev.viridium.biomes.ViridiumBiomeDefinition;
 import net.junedev.viridium.biomes.ViridiumBiomeDefinitionLoader;
 import net.junedev.viridium.biomes.ViridiumBiomeGen;
+import net.minecraft.block.Block;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
@@ -52,6 +54,17 @@ public class ViriBiomes {
         if (definition.appearance.grassColor != null) biome.setGrassColorOverride(ColorParser.parseRgb(definition.appearance.grassColor));
         if (definition.appearance.foliageColor != null) biome.setFoliageColorOverride(ColorParser.parseRgb(definition.appearance.foliageColor));
 
+        if(definition.terrain.surface.topBlockId != null){
+            Block topBlock = BlockParser.getBlock(definition.terrain.surface.topBlockId);
+            if(topBlock != null) biome.baseTopBlock = topBlock;
+        }
+
+        if(definition.terrain.surface.fillerBlockId != null){
+            Block fillerBlock = BlockParser.getBlock(definition.terrain.surface.fillerBlockId);
+            if(fillerBlock != null) biome.baseFillerBlock = fillerBlock;
+        }
+
+        biome.setSurfacePatches(definition.terrain.surface.patches);
 
         biome.theBiomeDecorator.treesPerChunk = definition.decoration.treesPerChunk;
         biome.theBiomeDecorator.grassPerChunk = definition.decoration.grassPerChunk;

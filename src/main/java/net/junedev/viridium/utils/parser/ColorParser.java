@@ -1,4 +1,4 @@
-package net.junedev.viridium.utils;
+package net.junedev.viridium.utils.parser;
 
 import net.junedev.viridium.Viridium;
 

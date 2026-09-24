@@ -11,20 +11,24 @@ public class ViridiumBiomeDefinition {
     public Decoration decoration = new Decoration();
     public Appearance appearance = new Appearance();
 
+    /// Generation
     public static final class Generation{
         public int weight = 10;
         public BiomeManager.BiomeType climateType = BiomeManager.BiomeType.WARM;
         public BiomeDictionary.Type[] dictionaryTypes = new BiomeDictionary.Type[0];
     }
 
+    ///Climate
     public static final class Climate{
         public float temperature = 0.8F;
         public float rainfall = 0.4f;
         public boolean rain = true;
     }
 
+    /// Terrain
     public static final class Terrain{
         public Height height = new Height();
+        public Surface surface = new Surface();
     }
 
     public static final class Height{
@@ -32,12 +36,26 @@ public class ViridiumBiomeDefinition {
         public float heightVariation = 0.2f;
     }
 
+    public static final class Surface{
+        public String topBlockId;
+        public String fillerBlockId;
+        public SurfacePatch[] patches = new SurfacePatch[0];
+    }
+
+    public static final class SurfacePatch{
+        public double minNoise;
+        public String topBlockId;
+        public String fillerBlockId;
+    }
+
+    /// Decoration
     public static final class Decoration{
         public int treesPerChunk = 0;
         public int grassPerChunk = 4;
         public int flowersPerChunk = 1;
     }
 
+    ///Appearance
     public static final class Appearance {
         public String mapColor;
         public String grassColor;
