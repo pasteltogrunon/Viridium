@@ -13,7 +13,13 @@ public class Config {
         Configuration configuration = new Configuration(configFile);
 
         greeting = configuration.getString("greeting", Configuration.CATEGORY_GENERAL, greeting, "How shall I greet?");
-        firstBiomeId = configuration.getInt("firstBiomeId", Configuration.CATEGORY_GENERAL, firstBiomeId, 0, 255, "First Id value for the biome definitions");
+        firstBiomeId = configuration.getInt(
+            "firstBiomeId",
+            Configuration.CATEGORY_GENERAL,
+            firstBiomeId,
+            0,
+            255,
+            "First Id value for the biome definitions");
 
         if (configuration.hasChanged()) {
             configuration.save();

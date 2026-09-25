@@ -11,9 +11,10 @@ import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
 
 public class ViriBiomes {
+
     private int currentBiomeIndex = 100;
 
-    public void preInit(){
+    public void preInit() {
 
         currentBiomeIndex = Config.firstBiomeId;
 
@@ -24,44 +25,47 @@ public class ViriBiomes {
 
     public static BiomeGenBase chaparral;
 
-    void registerBiomeFromFile(String path){
+    void registerBiomeFromFile(String path) {
         ViridiumBiomeDefinition definition = ViridiumBiomeDefinitionLoader.loadBuiltin(path);
 
-        if(definition == null) return;
+        if (definition == null) return;
         // Should the game crash?
 
         registerBiome(definition);
     }
 
     void registerBiome(ViridiumBiomeDefinition definition) {
-        if(currentBiomeIndex > 255) {
+        if (currentBiomeIndex > 255) {
             throw new IllegalStateException("Maximum biome index reached. Cannot add another biome.");
         }
         if (BiomeGenBase.getBiomeGenArray()[currentBiomeIndex] != null) {
-            throw new IllegalStateException(
-                "Biome ID " + currentBiomeIndex + " is already occupied.");
+            throw new IllegalStateException("Biome ID " + currentBiomeIndex + " is already occupied.");
         }
 
         ViridiumBiomeGen biome = new ViridiumBiomeGen(currentBiomeIndex);
 
         biome.setBiomeName(definition.name);
         biome.setTemperatureRainfall(definition.climate.temperature, definition.climate.rainfall);
-        if(!definition.climate.rain) biome.setDisableRain();
+        if (!definition.climate.rain) biome.setDisableRain();
 
-        biome.setHeight(new BiomeGenBase.Height(definition.terrain.height.baseWeight, definition.terrain.height.heightVariation));
+        biome.setHeight(
+            new BiomeGenBase.Height(definition.terrain.height.baseWeight, definition.terrain.height.heightVariation));
 
-        if (definition.appearance.mapColor != null) biome.setMapColor(ColorParser.parseRgb(definition.appearance.mapColor));
-        if (definition.appearance.grassColor != null) biome.setGrassColorOverride(ColorParser.parseRgb(definition.appearance.grassColor));
-        if (definition.appearance.foliageColor != null) biome.setFoliageColorOverride(ColorParser.parseRgb(definition.appearance.foliageColor));
+        if (definition.appearance.mapColor != null)
+            biome.setMapColor(ColorParser.parseRgb(definition.appearance.mapColor));
+        if (definition.appearance.grassColor != null)
+            biome.setGrassColorOverride(ColorParser.parseRgb(definition.appearance.grassColor));
+        if (definition.appearance.foliageColor != null)
+            biome.setFoliageColorOverride(ColorParser.parseRgb(definition.appearance.foliageColor));
 
-        if(definition.terrain.surface.topBlockId != null){
+        if (definition.terrain.surface.topBlockId != null) {
             Block topBlock = BlockParser.getBlock(definition.terrain.surface.topBlockId);
-            if(topBlock != null) biome.baseTopBlock = topBlock;
+            if (topBlock != null) biome.baseTopBlock = topBlock;
         }
 
-        if(definition.terrain.surface.fillerBlockId != null){
+        if (definition.terrain.surface.fillerBlockId != null) {
             Block fillerBlock = BlockParser.getBlock(definition.terrain.surface.fillerBlockId);
-            if(fillerBlock != null) biome.baseFillerBlock = fillerBlock;
+            if (fillerBlock != null) biome.baseFillerBlock = fillerBlock;
         }
 
         biome.setSurfacePatches(definition.terrain.surface.patches);
@@ -73,7 +77,9 @@ public class ViriBiomes {
         biome.theBiomeDecorator.flowersPerChunk = definition.decoration.flowersPerChunk;
 
         BiomeDictionary.registerBiomeType(biome, definition.generation.dictionaryTypes);
-        BiomeManager.addBiome(definition.generation.climateType, new BiomeManager.BiomeEntry(biome, definition.generation.weight));
+        BiomeManager.addBiome(
+            definition.generation.climateType,
+            new BiomeManager.BiomeEntry(biome, definition.generation.weight));
 
         currentBiomeIndex++;
     }

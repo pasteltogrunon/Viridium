@@ -1,11 +1,12 @@
 package net.junedev.viridium.worldgen.biomes;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonParseException;
-import net.junedev.viridium.Viridium;
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+
+import net.junedev.viridium.Viridium;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 
 public final class ViridiumBiomeDefinitionLoader {
 
@@ -14,11 +15,9 @@ public final class ViridiumBiomeDefinitionLoader {
     // TODO: Add checks when loading!
 
     public static ViridiumBiomeDefinition load(File file) {
-        try (Reader reader = new InputStreamReader(
-            new FileInputStream(file), StandardCharsets.UTF_8)) {
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
 
-            ViridiumBiomeDefinition definition =
-                GSON.fromJson(reader, ViridiumBiomeDefinition.class);
+            ViridiumBiomeDefinition definition = GSON.fromJson(reader, ViridiumBiomeDefinition.class);
 
             if (definition == null || definition.name == null || definition.name.isEmpty()) {
                 Viridium.LOGGER.error("Biome definition has no name: {}", file.getAbsolutePath());
@@ -42,8 +41,7 @@ public final class ViridiumBiomeDefinitionLoader {
             }
 
             try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-                ViridiumBiomeDefinition definition =
-                    GSON.fromJson(reader, ViridiumBiomeDefinition.class);
+                ViridiumBiomeDefinition definition = GSON.fromJson(reader, ViridiumBiomeDefinition.class);
 
                 if (definition == null || definition.name == null || definition.name.isEmpty()) {
                     Viridium.LOGGER.error("Biome definition has no name: {}", path);

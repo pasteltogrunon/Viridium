@@ -4,8 +4,10 @@ import net.junedev.viridium.Viridium;
 import net.minecraft.block.Block;
 
 public final class BlockParser {
-    public static Block getBlock(String id){
-        if (id == null || id.trim().isEmpty()) {
+
+    public static Block getBlock(String id) {
+        if (id == null || id.trim()
+            .isEmpty()) {
             Viridium.LOGGER.warn("Block id must not be empty");
             return null;
         }
@@ -20,9 +22,9 @@ public final class BlockParser {
         return block;
     }
 
-    public static Block getBlock(String id, Block fallback){
+    public static Block getBlock(String id, Block fallback) {
         Block result = getBlock(id);
-        if(result == null) return fallback;
+        if (result == null) return fallback;
         return result;
     }
 }
