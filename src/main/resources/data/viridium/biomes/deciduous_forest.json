@@ -8,7 +8,7 @@
   "climate": {
     "temperature": 0.4,
     "rainfall": 0.8,
-    "rain": false
+    "rain": true
   },
   "terrain": {
     "height": {

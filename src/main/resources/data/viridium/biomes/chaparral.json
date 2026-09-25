@@ -1,14 +1,14 @@
 {
   "name": "Chaparral",
   "generation": {
-    "weight": 100,
+    "weight": 10,
     "climateType": "WARM",
     "dictionaryTypes": ["PLAINS", "SPARSE", "SAVANNA"]
   },
   "climate": {
     "temperature": 1.2,
     "rainfall": 0.0,
-    "rain": false
+    "rain": true
   },
   "terrain": {
     "height": {

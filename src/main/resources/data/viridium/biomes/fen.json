@@ -8,18 +8,18 @@
   "climate": {
     "temperature": 0.9,
     "rainfall": 0.4,
-    "rain": false
+    "rain": true
   },
   "terrain": {
     "height": {
-      "baseHeight": 0.00,
-      "heightVariation": 0.025
+      "baseHeight": 0.05,
+      "heightVariation": 0.05
     }
   },
   "decoration": {
     "treesPerChunk": -1,
-    "grassPerChunk": 15,
-    "flowersPerChunk": 1,
+    "grassPerChunk": 5,
+    "flowersPerChunk": 0,
     "features": {
       "blobs": [
         {
