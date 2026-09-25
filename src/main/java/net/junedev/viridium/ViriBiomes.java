@@ -18,23 +18,21 @@ public class ViriBiomes {
 
         currentBiomeIndex = Config.firstBiomeId;
 
-        registerBiomeFromFile("chaparral.json");
-        registerBiomeFromFile("deciduous_forest.json");
-        registerBiomeFromFile("fen.json");
+        chaparral = registerBiomeFromFile("chaparral.json");
+        deciduous_forest = registerBiomeFromFile("deciduous_forest.json");
+        fen = registerBiomeFromFile("fen.json");
     }
 
-    public static BiomeGenBase chaparral;
-
-    void registerBiomeFromFile(String path) {
+    BiomeGenBase registerBiomeFromFile(String path) {
         ViridiumBiomeDefinition definition = ViridiumBiomeDefinitionLoader.loadBuiltin(path);
 
-        if (definition == null) return;
+        if (definition == null) return null;
         // Should the game crash?
 
-        registerBiome(definition);
+        return registerBiome(definition);
     }
 
-    void registerBiome(ViridiumBiomeDefinition definition) {
+    BiomeGenBase registerBiome(ViridiumBiomeDefinition definition) {
         if (currentBiomeIndex > 255) {
             throw new IllegalStateException("Maximum biome index reached. Cannot add another biome.");
         }
@@ -82,5 +80,11 @@ public class ViriBiomes {
             new BiomeManager.BiomeEntry(biome, definition.generation.weight));
 
         currentBiomeIndex++;
+
+        return biome;
     }
+
+    public static BiomeGenBase chaparral;
+    public static BiomeGenBase deciduous_forest;
+    public static BiomeGenBase fen;
 }
