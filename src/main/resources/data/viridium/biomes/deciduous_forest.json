@@ -13,7 +13,7 @@
   "terrain": {
     "height": {
       "baseHeight": 0.1,
-      "heightVariation": 0.3
+      "heightVariation": 0.15
     }
   },
   "decoration": {

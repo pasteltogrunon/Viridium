@@ -19,4 +19,10 @@ public final class BlockParser {
 
         return block;
     }
+
+    public static Block getBlock(String id, Block fallback){
+        Block result = getBlock(id);
+        if(result == null) return fallback;
+        return result;
+    }
 }

@@ -1,6 +1,7 @@
-package net.junedev.viridium.biomes;
+package net.junedev.viridium.worldgen.biomes;
 
 import net.junedev.viridium.utils.parser.BlockParser;
+import net.junedev.viridium.worldgen.features.WorldGenSmallPatch;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
@@ -22,6 +23,8 @@ public class ViridiumBiomeGen extends BiomeGenBase {
     public Block baseTopBlock = Blocks.grass;
     public Block baseFillerBlock = Blocks.dirt;
     private ViridiumBiomeDefinition.SurfacePatch[] patches = new ViridiumBiomeDefinition.SurfacePatch[0];
+    private ViridiumBiomeDefinition.SmallPatch[] smallPatches = new ViridiumBiomeDefinition.SmallPatch[0];
+    private ViridiumBiomeDefinition.Blob[] blobs = new ViridiumBiomeDefinition.Blob[0];
 
     public ViridiumBiomeGen(int id) {
         super(id);
@@ -113,6 +116,7 @@ public class ViridiumBiomeGen extends BiomeGenBase {
     // Decoration
     @Override
     public void decorate(World world, Random random, int chunkX, int chunkZ) {
+
         super.decorate(world, random, chunkX, chunkZ);
 
         if (!TerrainGen.decorate(
@@ -120,14 +124,39 @@ public class ViridiumBiomeGen extends BiomeGenBase {
             DecorateBiomeEvent.Decorate.EventType.CUSTOM)) {
             return;
         }
+        
+        for(ViridiumBiomeDefinition.SmallPatch patch : smallPatches){
+            if (random.nextInt(patch.frequency) == 0) {
+                int x = chunkX + random.nextInt(16) + 8;
+                int z = chunkZ + random.nextInt(16) + 8;
+                int y = world.getHeightValue(x, z);
 
-        if (random.nextInt(6) == 0) {
-            int x = chunkX + random.nextInt(16) + 8;
-            int z = chunkZ + random.nextInt(16) + 8;
-            int y = world.getHeightValue(x, z);
-
-            new WorldGenBlockBlob(Blocks.mossy_cobblestone, 1)
-                .generate(world, random, x, y, z);
+                new WorldGenSmallPatch(BlockParser.getBlock(patch.blockId, Blocks.beacon), patch.radius)
+                    .generate(world, random, x, y, z);
+            }
         }
+
+        for(ViridiumBiomeDefinition.Blob blob : blobs){
+            if (random.nextInt(blob.frequency) == 0) {
+                int x = chunkX + random.nextInt(16) + 8;
+                int z = chunkZ + random.nextInt(16) + 8;
+                int y = world.getHeightValue(x, z);
+
+                new WorldGenBlockBlob(BlockParser.getBlock(blob.blockId, Blocks.diamond_block), blob.radius)
+                    .generate(world, random, x, y, z);
+            }
+        }
+
+
     }
+
+    public void setSmallPatches(ViridiumBiomeDefinition.SmallPatch[] smallPatches){
+        this.smallPatches = smallPatches;
+    }
+
+    public void setBlobs(ViridiumBiomeDefinition.Blob[] blobs){
+        this.blobs = blobs;
+    }
+
+
 }

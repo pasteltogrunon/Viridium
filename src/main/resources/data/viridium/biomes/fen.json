@@ -12,14 +12,23 @@
   },
   "terrain": {
     "height": {
-      "baseHeight": 0.05,
-      "heightVariation": 0.05
+      "baseHeight": 0.00,
+      "heightVariation": 0.025
     }
   },
   "decoration": {
     "treesPerChunk": -1,
     "grassPerChunk": 15,
-    "flowersPerChunk": 1
+    "flowersPerChunk": 1,
+    "features": {
+      "blobs": [
+        {
+          "blockId": "minecraft:cobblestone",
+          "radius": 1,
+          "frequency": 6
+        }
+      ]
+    }
   },
   "appearance": {
     "grassColor": "#A4BE94",

@@ -1,4 +1,4 @@
-package net.junedev.viridium.biomes;
+package net.junedev.viridium.worldgen.biomes;
 
 import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
@@ -53,6 +53,24 @@ public class ViridiumBiomeDefinition {
         public int treesPerChunk = 0;
         public int grassPerChunk = 4;
         public int flowersPerChunk = 1;
+        public Features features = new Features();
+    }
+
+    public static final class Features{
+        public Blob[] blobs = new Blob[0];
+        public SmallPatch[] smallPatches = new SmallPatch[0];
+    }
+
+    public static final class SmallPatch{
+        public String blockId;
+        public int radius;
+        public int frequency;
+    }
+
+    public static final class Blob{
+        public String blockId;
+        public int radius;
+        public int frequency;
     }
 
     ///Appearance

@@ -1,4 +1,4 @@
-package net.junedev.viridium.biomes;
+package net.junedev.viridium.worldgen.biomes;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
@@ -10,6 +10,8 @@ import java.nio.charset.StandardCharsets;
 public final class ViridiumBiomeDefinitionLoader {
 
     private static final Gson GSON = new Gson();
+
+    // TODO: Add checks when loading!
 
     public static ViridiumBiomeDefinition load(File file) {
         try (Reader reader = new InputStreamReader(

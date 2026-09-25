@@ -2,9 +2,9 @@ package net.junedev.viridium;
 
 import net.junedev.viridium.utils.parser.BlockParser;
 import net.junedev.viridium.utils.parser.ColorParser;
-import net.junedev.viridium.biomes.ViridiumBiomeDefinition;
-import net.junedev.viridium.biomes.ViridiumBiomeDefinitionLoader;
-import net.junedev.viridium.biomes.ViridiumBiomeGen;
+import net.junedev.viridium.worldgen.biomes.ViridiumBiomeDefinition;
+import net.junedev.viridium.worldgen.biomes.ViridiumBiomeDefinitionLoader;
+import net.junedev.viridium.worldgen.biomes.ViridiumBiomeGen;
 import net.minecraft.block.Block;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraftforge.common.BiomeDictionary;
@@ -65,6 +65,8 @@ public class ViriBiomes {
         }
 
         biome.setSurfacePatches(definition.terrain.surface.patches);
+        biome.setSmallPatches(definition.decoration.features.smallPatches);
+        biome.setBlobs(definition.decoration.features.blobs);
 
         biome.theBiomeDecorator.treesPerChunk = definition.decoration.treesPerChunk;
         biome.theBiomeDecorator.grassPerChunk = definition.decoration.grassPerChunk;

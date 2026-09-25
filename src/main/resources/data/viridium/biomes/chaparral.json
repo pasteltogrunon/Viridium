@@ -33,6 +33,27 @@
   "decoration": {
     "treesPerChunk": 0,
     "grassPerChunk": 20,
-    "flowersPerChunk": 4
+    "flowersPerChunk": 4,
+    "features": {
+      "smallPatches": [
+        {
+          "blockId": "minecraft:sand",
+          "radius": 7,
+          "frequency": 5
+        },
+        {
+          "blockId": "minecraft:stone",
+          "radius": 10,
+          "frequency": 10
+        }
+      ],
+      "blobs": [
+        {
+          "blockId": "minecraft:mossy_cobblestone",
+          "radius": 1,
+          "frequency": 6
+        }
+      ]
+    }
   }
 }
