@@ -1,0 +1,32 @@
+{
+  "name": "Deciduous Forest",
+  "generation": {
+    "weight": 10,
+    "climateType": "COOL",
+    "dictionaryTypes": ["WET", "FOREST", "DENSE"]
+  },
+  "climate": {
+    "temperature": 0.4,
+    "rainfall": 0.8,
+    "rain": true
+  },
+  "terrain": {
+    "height": {
+      "baseHeight": 0.1,
+      "heightVariation": 0.15
+    }
+  },
+  "decoration": {
+    "treesPerChunk": 6,
+    "trees": [
+      { "id": "minecraft:oak", "weight": 16 },
+      { "id": "minecraft:birch", "weight": 1 }
+    ],
+    "grassPerChunk": 4,
+    "flowersPerChunk": 1
+  },
+  "appearance": {
+    "grassColor": "#A0AF5E",
+    "foliageColor": "#A0AF5E"
+  }
+}

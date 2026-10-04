@@ -1,0 +1,32 @@
+{
+  "name": "Fungi Forest",
+  "generation": {
+    "weight": 10,
+    "climateType": "WARM",
+    "dictionaryTypes": ["WET", "FOREST", "DENSE"]
+  },
+  "climate": {
+    "temperature": 0.8,
+    "rainfall": 1.0,
+    "rain": true
+  },
+  "terrain": {
+    "height": {
+      "baseHeight": 0.1,
+      "heightVariation": 0.05
+    }
+  },
+  "decoration": {
+    "treesPerChunk": 0,
+    "trees": [
+      { "id": "minecraft:oak", "weight": 8 },
+      { "id": "minecraft:birch", "weight": 3 }
+    ],
+    "grassPerChunk": 4,
+    "flowersPerChunk": 0
+  },
+  "appearance": {
+    "grassColor": "#52CE4E",
+    "foliageColor": "#52CE4E"
+  }
+}
