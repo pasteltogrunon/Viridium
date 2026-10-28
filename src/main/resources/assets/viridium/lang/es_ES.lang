@@ -1,0 +1,11 @@
+# Vista previa de arboles en NEI
+nei.viridium.tree.title=Vista del árbol
+nei.viridium.tree.regenerate=Otro árbol
+nei.viridium.tree.pause=Pausar
+nei.viridium.tree.rotate=Girar
+nei.viridium.tree.blocks=Familia de bloques
+nei.viridium.tree.generated=Ejemplar generado
+nei.viridium.tree.illustrative=Forma provisional (prototipo)
+nei.viridium.tree.failed=Error: prueba otro árbol
+nei.viridium.tree.related=Bloque asociado (fuera del ejemplar)
+nei.viridium.tree.count=Bloques en este ejemplar: %s

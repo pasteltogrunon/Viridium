@@ -2,9 +2,11 @@ package net.junedev.viridium;
 
 import net.junedev.viridium.client.renderers.ViriRenderers;
 import net.junedev.viridium.client.renderers.world.sky.CustomSkyRenderer;
+import net.junedev.viridium.compat.nei.NEIViridiumConfig;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -29,6 +31,10 @@ public class ClientProxy extends CommonProxy {
 
         renderers.init(event);
         MinecraftForge.EVENT_BUS.register(this);
+        // NEI publishes handler layout information at loadComplete, before it loads its plugins.
+        if (Loader.isModLoaded("NotEnoughItems")) {
+            MinecraftForge.EVENT_BUS.register(new NEIViridiumConfig());
+        }
     }
 
     @Override

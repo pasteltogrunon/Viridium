@@ -41,13 +41,14 @@ public class CoconutPalmTreeGen extends LargeTreeWorldGenBase {
 
     @Override
     public boolean generate(World world, Random rand, int x, int y, int z) {
-        // Store the seed
-        lastSeed = rand.nextLong();
+        // Keep this call's seed local: a client preview can run alongside integrated-server worldgen.
+        final long seed = rand.nextLong();
+        lastSeed = seed;
 
         // Make sure the tree can generate
-        if (!checkTree(world, new Random(lastSeed), x, y, z)) return false;
+        if (!checkTree(world, new Random(seed), x, y, z)) return false;
 
-        return generateTree(world, new Random(lastSeed), x, y, z);
+        return generateTree(world, new Random(seed), x, y, z);
     }
 
     // Variables to control the generation

@@ -607,3 +607,15 @@ tile.umbrella_tree_planks_slab.name=Umbrella Tree Slab
 tile.weeping_willow_planks_slab.name=Weeping Willow Slab
 tile.white_poplar_planks_slab.name=White Poplar Slab
 tile.yew_planks_slab.name=Yew Slab
+
+# NEI tree preview
+nei.viridium.tree.title=Tree preview
+nei.viridium.tree.regenerate=New tree
+nei.viridium.tree.pause=Pause
+nei.viridium.tree.rotate=Rotate
+nei.viridium.tree.blocks=Tree blocks and wood family
+nei.viridium.tree.generated=Generated example
+nei.viridium.tree.illustrative=Illustrative shape (prototype)
+nei.viridium.tree.failed=Preview failed; try New tree
+nei.viridium.tree.related=Related block (not in this example)
+nei.viridium.tree.count=Blocks in this example: %s
