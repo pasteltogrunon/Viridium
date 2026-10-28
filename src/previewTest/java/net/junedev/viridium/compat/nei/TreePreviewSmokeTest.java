@@ -2,6 +2,8 @@ package net.junedev.viridium.compat.nei;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.IntStream;
@@ -18,6 +20,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ScreenShotHelper;
+import net.minecraft.util.StatCollector;
 import net.minecraftforge.common.util.ForgeDirection;
 
 import org.lwjgl.opengl.GL11;
@@ -99,6 +102,8 @@ public final class TreePreviewSmokeTest {
                 require(handler.numRecipes() > 0, "R lookup missed " + entry.id);
                 int index = 0;
                 while (read(handler.arecipes.get(index), "entry") != entry) index++;
+                checkTooltip(handler, index, null, null);
+                checkTooltip(handler, index, new ItemStack(entry.log), null);
                 mc.getFramebuffer()
                     .bindFramebuffer(true);
                 GL11.glClearColor(0.84F, 0.87F, 0.82F, 1);
@@ -115,6 +120,17 @@ public final class TreePreviewSmokeTest {
                 require(!(Boolean) read(recipe, "failed"), "Generation failed: " + entry.id);
                 TreePreviewWorld world = (TreePreviewWorld) read(recipe, "world");
                 Map<Item, Integer> counts = (Map<Item, Integer>) read(recipe, "counts");
+                checkTooltip(handler, index, null, null);
+                checkTooltip(handler, index, new ItemStack(Blocks.stone), null);
+                for (ItemStack stack : entry.blocks) {
+                    Integer count = counts.get(stack.getItem());
+                    checkTooltip(
+                        handler,
+                        index,
+                        stack,
+                        count == null ? StatCollector.translateToLocal("nei.viridium.tree.related")
+                            : StatCollector.translateToLocalFormatted("nei.viridium.tree.count", count));
+                }
                 require(
                     counts.values()
                         .stream()
@@ -199,6 +215,26 @@ public final class TreePreviewSmokeTest {
             result = 31 * result + java.util.Objects.hash(cell.x, cell.y, cell.z, cell.block, cell.meta);
         }
         return result;
+    }
+
+    private static void checkTooltip(TreePreviewHandler handler, int recipe, ItemStack stack, String expected) {
+        List<String> tooltip = new ArrayList<>();
+        tooltip.add("Existing tooltip");
+        try {
+            require(handler.handleItemTooltip(null, stack, tooltip, recipe) == tooltip, "Tooltip list was replaced");
+            require(
+                tooltip.get(0)
+                    .equals("Existing tooltip"),
+                "Existing tooltip was changed");
+            require(tooltip.size() == (expected == null ? 1 : 2), "Unexpected tree tooltip on empty/unrelated hover");
+            if (expected != null) require(expected.equals(tooltip.get(1)), "Incorrect tree block count tooltip");
+        } catch (RuntimeException | AssertionError e) {
+            Viridium.LOGGER.error("TREE_PREVIEW_TOOLTIP_REGRESSION_FAILED", e);
+            // CoreTweaks can recover from GUI exceptions; still terminate this diagnostic run on failure.
+            Minecraft.getMinecraft()
+                .shutdown();
+            throw e;
+        }
     }
 
     private static Object read(Object target, String name) throws Exception {

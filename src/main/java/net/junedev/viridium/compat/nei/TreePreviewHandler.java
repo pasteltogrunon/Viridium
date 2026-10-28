@@ -150,7 +150,11 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
 
     @Override
     public List<String> handleItemTooltip(GuiRecipe<?> gui, ItemStack stack, List<String> tooltip, int recipe) {
+        // NEI also calls this over the recipe background, with no hovered item.
+        if (stack == null) return tooltip;
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
+        // Do not annotate unrelated items or report counts before generation/after a failure.
+        if (!preview.entry.matches(stack) || preview.world == null || preview.failed) return tooltip;
         Integer count = preview.counts.get(stack.getItem());
         tooltip.add(
             count == null ? text("related")

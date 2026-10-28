@@ -42,8 +42,13 @@ desde `src/previewTest/java`. Necesita OpenGL, espera al menú principal, carga 
 comprueba las consultas por bloques, genera tres ejemplares de cada entrada y renderiza una muestra
 de cada una. También comprueba metadatos, coordenadas negativas, eliminación de bloques y límites del
 buffer, además de comparar generación secuencial y concurrente de los generadores deterministas.
+Comprueba los tooltips antes y después de generar el árbol: cursor sobre una zona vacía, bloques
+ajenos al árbol, bloques asociados y recuentos del ejemplar. Las líneas de tooltip existentes deben
+conservarse. Para ejecutar la prueba sin compartir configuración con un cliente abierto, añade
+`-PrunClientWorkingDirectory=run/nei-tooltip-smoke`.
 Guarda capturas en `build/screenshots`, escribe `TREE_PREVIEW_SMOKE_OK` en el log y cierra
-el cliente. Un fallo produce una excepción. Esta opción no debe usarse para empaquetar una versión
+el cliente. Un fallo produce una excepción. Comprueba el marcador de éxito en el log: CoreTweaks
+puede recuperar una excepción de interfaz aunque Gradle termine con código cero. Esta opción no debe usarse para empaquetar una versión
 distribuible; ejecuta `build` sin la propiedad para obtener un JAR sin el mod de diagnóstico.
 
 La prueba automatizada no sustituye estas comprobaciones de interacción:
@@ -66,3 +71,15 @@ caché de geometría para árboles especialmente grandes.
 - Capturas de castaño americano, roble pedunculado, cocotero y abeto negro inspeccionadas.
 - La captura de ventanas de Windows falló por tiempo de espera: queda pendiente la comprobación
   manual de teclas, botones y distintas escalas de GUI dentro de un mundo.
+
+## Regresión de tooltips (28 de octubre de 2026)
+
+Los cinco informes de las 22:08–22:09 señalan una `NullPointerException` en
+`TreePreviewHandler.handleItemTooltip`: NEI llama a ese método con `ItemStack == null` al pasar
+el cursor por el fondo de la receta. Según dónde quede el cursor al abrir la pestaña, el fallo se
+produce inmediatamente o tras moverlo. La prueba inicial sólo cubría generación y renderizado;
+la regresión de tooltips añade este caso al diagnóstico del cliente.
+
+La corrección devuelve el tooltip existente cuando no hay objeto bajo el cursor, cuando no pertenece
+al árbol o cuando todavía no hay un ejemplar válido. La regresión reproduce el fallo con la versión
+anterior y comprueba que los recuentos y las líneas de tooltip existentes siguen siendo correctos.
