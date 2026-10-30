@@ -9,3 +9,6 @@ nei.viridium.tree.illustrative=Forma provisional (prototipo)
 nei.viridium.tree.failed=Error: prueba otro árbol
 nei.viridium.tree.related=Bloque asociado (fuera del ejemplar)
 nei.viridium.tree.count=Bloques en este ejemplar: %s
+nei.viridium.tree.layout.single=1x1
+nei.viridium.tree.layout.two_by_two=2x2
+nei.viridium.tree.layout.four_by_four_plus=4x4 (+)

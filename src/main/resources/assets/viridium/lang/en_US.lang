@@ -619,3 +619,6 @@ nei.viridium.tree.illustrative=Illustrative shape (prototype)
 nei.viridium.tree.failed=Preview failed; try New tree
 nei.viridium.tree.related=Related block (not in this example)
 nei.viridium.tree.count=Blocks in this example: %s
+nei.viridium.tree.layout.single=1x1
+nei.viridium.tree.layout.two_by_two=2x2
+nei.viridium.tree.layout.four_by_four_plus=4x4 (+)

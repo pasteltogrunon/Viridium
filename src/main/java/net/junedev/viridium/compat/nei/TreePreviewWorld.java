@@ -28,6 +28,10 @@ final class TreePreviewWorld extends World {
     private final Block soil;
 
     TreePreviewWorld(boolean sand) {
+        this(sand ? Blocks.sand : Blocks.grass);
+    }
+
+    TreePreviewWorld(Block soil) {
         // Use the client constructor; deliberately do not call finishSetup (dimension/chunk initialization).
         super(
             new SaveHandlerMP(),
@@ -36,7 +40,7 @@ final class TreePreviewWorld extends World {
             new WorldSettings(0, WorldSettings.GameType.CREATIVE, false, false, WorldType.FLAT),
             new Profiler());
         isRemote = true;
-        soil = sand ? Blocks.sand : Blocks.grass;
+        this.soil = soil;
     }
 
     private static long key(int x, int y, int z) {
@@ -84,6 +88,11 @@ final class TreePreviewWorld extends World {
     @Override
     public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) {
         return true;
+    }
+
+    @Override
+    public boolean blockExists(int x, int y, int z) {
+        return Math.abs(x) <= RADIUS && Math.abs(z) <= RADIUS && y >= 0 && y < 256;
     }
 
     @Override

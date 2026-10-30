@@ -46,7 +46,8 @@ final class TreePreviewRenderer {
             int top = bottom + 118 * factor;
             // Respect NEI's own clip rectangle when its recipe widget is partially scrolled out of view.
             if (GL11.glIsEnabled(GL11.GL_SCISSOR_TEST)) {
-                IntBuffer clip = BufferUtils.createIntBuffer(4);
+                // LWJGL 2 requires room for 16 values for glGetInteger, even for a four-value query.
+                IntBuffer clip = BufferUtils.createIntBuffer(16);
                 GL11.glGetInteger(GL11.GL_SCISSOR_BOX, clip);
                 left = Math.max(left, clip.get(0));
                 bottom = Math.max(bottom, clip.get(1));

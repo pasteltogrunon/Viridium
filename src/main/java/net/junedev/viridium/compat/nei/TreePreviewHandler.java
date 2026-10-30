@@ -3,11 +3,14 @@ package net.junedev.viridium.compat.nei;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import net.junedev.viridium.Viridium;
+import net.junedev.viridium.blocks.sets.WoodBlockSet;
 import net.junedev.viridium.worldgen.treegen.TreeRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -22,7 +25,7 @@ import codechicken.nei.recipe.TemplateRecipeHandler;
 
 public final class TreePreviewHandler extends TemplateRecipeHandler {
 
-    static final int HEIGHT = 218;
+    static final int HEIGHT = 236;
     private static final String OVERLAY = "viridium.tree_preview";
 
     @Override
@@ -53,8 +56,9 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
     @Override
     public void loadCraftingRecipes(String outputId, Object... results) {
         if (OVERLAY.equals(outputId) || "all".equals(outputId)) {
+            Set<WoodBlockSet> added = new HashSet<>();
             for (TreePreviewCatalog.Entry entry : TreePreviewCatalog.entries()) {
-                arecipes.add(new PreviewRecipe(entry));
+                if (added.add(entry.set)) arecipes.add(new PreviewRecipe(entry));
             }
         } else {
             super.loadCraftingRecipes(outputId, results);
@@ -63,8 +67,20 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
 
     @Override
     public void loadCraftingRecipes(ItemStack result) {
+        Set<WoodBlockSet> added = new HashSet<>();
         for (TreePreviewCatalog.Entry entry : TreePreviewCatalog.entries()) {
-            if (entry.matches(result)) arecipes.add(new PreviewRecipe(entry));
+            if (entry.matches(result) && added.add(entry.set)) {
+                PreviewRecipe preview = new PreviewRecipe(entry);
+                for (int i = 0; i < preview.variants.size(); i++) {
+                    TreePreviewCatalog.Entry variant = preview.variants.get(i);
+                    if (result.getItem() == Item.getItemFromBlock(variant.sapling)
+                        || result.getItem() == Item.getItemFromBlock(variant.leaves)) {
+                        preview.selectVariant(i);
+                        break;
+                    }
+                }
+                arecipes.add(preview);
+            }
         }
     }
 
@@ -78,10 +94,12 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
         preview.ensureGenerated();
         Gui.drawRect(3, 14, 163, 132, 0xFF192923);
-        button(3, 136, 63, text("regenerate"));
-        button(66, 136, 124, text(preview.rotating ? "pause" : "rotate"));
-        button(127, 136, 143, "-");
-        button(146, 136, 163, "+");
+        button(3, 136, 21, "<");
+        button(145, 136, 163, ">");
+        button(3, 154, 63, text("regenerate"));
+        button(66, 154, 124, text(preview.rotating ? "pause" : "rotate"));
+        button(127, 154, 143, "-");
+        button(146, 154, 163, "+");
         for (PositionedStack stack : preview.stacks) {
             Gui.drawRect(stack.relx - 1, stack.rely - 1, stack.relx + 17, stack.rely + 17, 0xFF8A978D);
             Gui.drawRect(stack.relx, stack.rely, stack.relx + 16, stack.rely + 16, 0xFFCBD3C6);
@@ -109,29 +127,51 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
         String name = new ItemStack(preview.entry.sapling).getDisplayName();
         Minecraft.getMinecraft().fontRenderer
             .drawString(Minecraft.getMinecraft().fontRenderer.trimStringToWidth(name, 160), 3, 2, 0x263D2E);
-        Minecraft.getMinecraft().fontRenderer.drawString(text("blocks"), 3, 155, 0x263D2E);
+        String variantLabel = (preview.variantIndex + 1) + "/"
+            + preview.variants.size()
+            + "  "
+            + text(
+                "layout." + preview.entry.layout.name()
+                    .toLowerCase(java.util.Locale.ROOT));
+        Minecraft.getMinecraft().fontRenderer.drawString(
+            variantLabel,
+            83 - Minecraft.getMinecraft().fontRenderer.getStringWidth(variantLabel) / 2,
+            139,
+            0x263D2E);
+        Minecraft.getMinecraft().fontRenderer.drawString(text("blocks"), 3, 173, 0x263D2E);
         Minecraft.getMinecraft().fontRenderer.drawString(
             text(preview.failed ? "failed" : preview.entry.illustrative ? "illustrative" : "generated"),
             3,
-            207,
+            225,
             0x52634F);
     }
 
     @Override
     public boolean mouseClicked(GuiRecipe<?> gui, int button, int recipe) {
         Point mouse = gui.getRecipeMousePosition(recipe);
-        if (button != 0 || mouse.y < 136 || mouse.y >= 150) return false;
+        return clickControl(mouse.x, mouse.y, button, recipe);
+    }
+
+    boolean clickControl(int x, int y, int button, int recipe) {
+        if (button != 0) return false;
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
-        if (mouse.x >= 3 && mouse.x < 63) {
-            preview.world = null;
-            preview.failed = false;
-        } else if (mouse.x >= 66 && mouse.x < 124) {
+        if (y >= 136 && y < 150) {
+            if (x >= 3 && x < 21) preview.selectVariant(preview.variantIndex - 1);
+            else if (x >= 145 && x < 163) preview.selectVariant(preview.variantIndex + 1);
+            else return false;
+            return true;
+        }
+        if (y < 154 || y >= 168) return false;
+        if (x >= 3 && x < 63) {
+            preview.seed = new Random().nextLong();
+            preview.invalidate();
+        } else if (x >= 66 && x < 124) {
             preview.fixedAngle = preview.angle();
             preview.rotationStart = System.nanoTime();
             preview.rotating = !preview.rotating;
-        } else if (mouse.x >= 127 && mouse.x < 143) {
+        } else if (x >= 127 && x < 143) {
             preview.zoom = Math.max(0.5F, preview.zoom - 0.15F);
-        } else if (mouse.x >= 146 && mouse.x < 163) {
+        } else if (x >= 146 && x < 163) {
             preview.zoom = Math.min(2.5F, preview.zoom + 0.15F);
         } else {
             return false;
@@ -175,9 +215,12 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
             0xFFFFFF);
     }
 
-    private final class PreviewRecipe extends CachedRecipe {
+    final class PreviewRecipe extends CachedRecipe {
 
-        private final TreePreviewCatalog.Entry entry;
+        private TreePreviewCatalog.Entry entry;
+        final List<TreePreviewCatalog.Entry> variants = new ArrayList<>();
+        private int variantIndex;
+        private long seed = new Random().nextLong();
         private final List<PositionedStack> stacks = new ArrayList<>();
         private final Map<Item, Integer> counts = new HashMap<>();
         private TreePreviewWorld world;
@@ -189,13 +232,17 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
 
         private PreviewRecipe(TreePreviewCatalog.Entry entry) {
             this.entry = entry;
+            for (TreePreviewCatalog.Entry variant : TreePreviewCatalog.entries()) {
+                if (variant.set == entry.set) variants.add(variant);
+            }
+            variantIndex = variants.indexOf(entry);
             for (int i = 0; i < entry.blocks.size(); i++) {
                 stacks.add(
                     new PositionedStack(
                         entry.blocks.get(i)
                             .copy(),
                         3 + (i % 9) * 18,
-                        168 + (i / 9) * 18));
+                        186 + (i / 9) * 18));
             }
         }
 
@@ -203,15 +250,27 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
             return fixedAngle + (rotating ? (float) ((System.nanoTime() - rotationStart) / 1.0e9 * 18 % 360) : 0);
         }
 
+        void selectVariant(int index) {
+            variantIndex = Math.floorMod(index, variants.size());
+            entry = variants.get(variantIndex);
+            invalidate();
+        }
+
+        private void invalidate() {
+            world = null;
+            failed = false;
+            counts.clear();
+        }
+
         private void ensureGenerated() {
             if (world != null || failed) return;
             counts.clear();
             try {
-                Random random = new Random();
-                world = new TreePreviewWorld(TreeRegistry.growsOnSand(entry.id));
+                Random random = new Random(seed);
+                world = new TreePreviewWorld(entry.previewSoil());
                 if (entry.illustrative) {
                     generateIllustration(random);
-                } else if (!TreeRegistry.createGenerator(entry.id, entry.set)
+                } else if (!TreeRegistry.createGenerator(entry.id, entry.set, entry.layout, false)
                     .generate(world, random, 0, TreePreviewWorld.BASE_Y, 0)) {
                         throw new IllegalStateException("Generator rejected the preview site");
                     }

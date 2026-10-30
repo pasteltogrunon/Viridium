@@ -12,6 +12,10 @@ import net.junedev.viridium.blocks.sets.SmallTreeBlockSet;
 import net.junedev.viridium.blocks.sets.WoodBlockSet;
 import net.junedev.viridium.blocks.sets.large_tree.LargeTreeBlockSet;
 import net.junedev.viridium.blocks.sets.large_tree.WhitePoplarBlockSet;
+import net.junedev.viridium.blocks.vanilike.BaseSaplingBlock;
+import net.junedev.viridium.worldgen.SoilType;
+import net.junedev.viridium.worldgen.treegen.SaplingLayout;
+import net.junedev.viridium.worldgen.treegen.TreeRegistry;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -33,15 +37,13 @@ final class TreePreviewCatalog {
                 }
                 WoodBlockSet set = (WoodBlockSet) field.get(null);
                 if (set instanceof LargeTreeBlockSet tree) {
-                    result.add(new Entry(field.getName(), set, tree.log, tree.leaves, tree.sapling, false));
+                    addVariants(result, set, tree.log, tree.leaves, tree.sapling, false);
                 } else if (set instanceof SmallTreeBlockSet tree) {
-                    result.add(new Entry(field.getName(), set, tree.log, tree.leaves, tree.sapling, true));
+                    addVariants(result, set, tree.log, tree.leaves, tree.sapling, true);
                 } else if (set instanceof WhitePoplarBlockSet tree) {
-                    result
-                        .add(new Entry(field.getName(), set, tree.log, tree.leaves_yellow, tree.sapling_yellow, true));
-                    result
-                        .add(new Entry(field.getName(), set, tree.log, tree.leaves_orange, tree.sapling_orange, true));
-                    result.add(new Entry(field.getName(), set, tree.log, tree.leaves_red, tree.sapling_red, true));
+                    addVariants(result, set, tree.log, tree.leaves_yellow, tree.sapling_yellow, true);
+                    addVariants(result, set, tree.log, tree.leaves_orange, tree.sapling_orange, true);
+                    addVariants(result, set, tree.log, tree.leaves_red, tree.sapling_red, true);
                 }
             }
         } catch (IllegalAccessException e) {
@@ -55,6 +57,19 @@ final class TreePreviewCatalog {
         return entries;
     }
 
+    private static void addVariants(List<Entry> result, WoodBlockSet set, Block log, Block leaves, Block sapling,
+        boolean illustrative) throws IllegalAccessException {
+        String id = ((BaseSaplingBlock) sapling).getTreeId();
+        result.add(new Entry(id, set, log, leaves, sapling, illustrative, SaplingLayout.SINGLE));
+        if (!illustrative) {
+            for (SaplingLayout layout : SaplingLayout.values()) {
+                if (layout != SaplingLayout.SINGLE && TreeRegistry.hasLayout(id, layout)) {
+                    result.add(new Entry(id, set, log, leaves, sapling, false, layout));
+                }
+            }
+        }
+    }
+
     static final class Entry {
 
         final String id;
@@ -63,16 +78,18 @@ final class TreePreviewCatalog {
         final Block leaves;
         final Block sapling;
         final boolean illustrative;
+        final SaplingLayout layout;
         final List<ItemStack> blocks;
 
-        Entry(String id, WoodBlockSet set, Block log, Block leaves, Block sapling, boolean illustrative)
-            throws IllegalAccessException {
+        Entry(String id, WoodBlockSet set, Block log, Block leaves, Block sapling, boolean illustrative,
+            SaplingLayout layout) throws IllegalAccessException {
             this.id = id;
             this.set = set;
             this.log = log;
             this.leaves = leaves;
             this.sapling = sapling;
             this.illustrative = illustrative;
+            this.layout = layout;
             List<ItemStack> stacks = new ArrayList<>();
             stacks.add(new ItemStack(sapling));
             stacks.add(new ItemStack(log));
@@ -98,6 +115,15 @@ final class TreePreviewCatalog {
         boolean matches(ItemStack stack) {
             return stack != null && blocks.stream()
                 .anyMatch(block -> block.getItem() == stack.getItem());
+        }
+
+        Block previewSoil() {
+            for (SoilType type : SoilType.values()) {
+                for (Block soil : type.getBlocks()) {
+                    if (TreeRegistry.isValidSoil(id, soil)) return soil;
+                }
+            }
+            throw new IllegalStateException("No preview soil registered for " + id);
         }
     }
 }

@@ -2,6 +2,7 @@ package net.junedev.viridium.compat.nei;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.util.StatCollector;
 import net.minecraftforge.common.util.ForgeDirection;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
 import codechicken.nei.NEIClientConfig;
@@ -99,9 +101,11 @@ public final class TreePreviewSmokeTest {
             for (int sample = 0; sample < 3; sample++) {
                 TreePreviewHandler handler = new TreePreviewHandler();
                 handler.loadCraftingRecipes(new ItemStack(entry.sapling));
-                require(handler.numRecipes() > 0, "R lookup missed " + entry.id);
+                require(handler.numRecipes() == 1, "Tree variants must share one recipe: " + entry.id);
                 int index = 0;
-                while (read(handler.arecipes.get(index), "entry") != entry) index++;
+                TreePreviewHandler.PreviewRecipe selected = (TreePreviewHandler.PreviewRecipe) handler.arecipes
+                    .get(index);
+                selected.selectVariant(selected.variants.indexOf(entry));
                 checkTooltip(handler, index, null, null);
                 checkTooltip(handler, index, new ItemStack(entry.log), null);
                 mc.getFramebuffer()
@@ -151,7 +155,20 @@ public final class TreePreviewSmokeTest {
                 generated++;
                 if (sample == 0) {
                     while (GL11.glGetError() != GL11.GL_NO_ERROR) {}
+                    // NEI enables scissoring around recipe widgets. Exercise that production path,
+                    // not just a standalone rendering with scissoring disabled.
+                    GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                    GL11.glScissor(0, 0, mc.displayWidth, mc.displayHeight);
                     TreePreviewRenderer.draw(world, 35, 1, 3, 14);
+                    IntBuffer clip = BufferUtils.createIntBuffer(16);
+                    GL11.glGetInteger(GL11.GL_SCISSOR_BOX, clip);
+                    require(
+                        GL11.glIsEnabled(GL11.GL_SCISSOR_TEST) && clip.get(0) == 0
+                            && clip.get(1) == 0
+                            && clip.get(2) == mc.displayWidth
+                            && clip.get(3) == mc.displayHeight,
+                        "Preview did not restore NEI's clipping rectangle");
+                    GL11.glDisable(GL11.GL_SCISSOR_TEST);
                     require(GL11.glGetError() == GL11.GL_NO_ERROR, "OpenGL error: " + entry.id);
                     handler.drawForeground(index);
                     RenderHelper.enableGUIStandardItemLighting();
@@ -166,17 +183,18 @@ public final class TreePreviewSmokeTest {
                     }
                     RenderHelper.disableStandardItemLighting();
                     rendered++;
-                    if (entry.id.equals("american_chestnut") || entry.id.equals("coconut_palm")
-                        || entry.id.equals("pedunculate_oak")
-                        || entry.id.equals("black_spruce")) {
+                    if (entry.id.equals("viridium:american_chestnut") || entry.id.equals("viridium:coconut_palm")
+                        || entry.id.equals("viridium:pedunculate_oak")
+                        || entry.id.equals("viridium:black_spruce")) {
                         ScreenShotHelper.saveScreenshot(
                             new File(mc.mcDataDir, "../../build"),
-                            "tree-preview-" + entry.id + ".png",
+                            "tree-preview-" + entry.id.replace(':', '-') + "-" + entry.layout.name() + ".png",
                             mc.displayWidth,
                             mc.displayHeight,
                             mc.getFramebuffer());
                     }
                 }
+                if (sample == 0) checkVariantControls(handler, selected, entry);
             }
             for (ItemStack block : entry.blocks) {
                 TreePreviewHandler handler = new TreePreviewHandler();
@@ -189,7 +207,7 @@ public final class TreePreviewSmokeTest {
         require(unrelated.numRecipes() == 0, "Unrelated block matched tree preview");
         // Preview generation and integrated-server generation must not exchange random seeds.
         for (TreePreviewCatalog.Entry entry : TreePreviewCatalog.entries()) {
-            if (entry.illustrative || entry.id.equals("coconut_palm")) continue;
+            if (entry.illustrative || entry.id.equals("viridium:coconut_palm")) continue;
             int[] expected = IntStream.range(0, 12)
                 .map(seed -> fingerprint(entry, seed))
                 .toArray();
@@ -205,9 +223,9 @@ public final class TreePreviewSmokeTest {
     }
 
     private static int fingerprint(TreePreviewCatalog.Entry entry, long seed) {
-        TreePreviewWorld world = new TreePreviewWorld(false);
+        TreePreviewWorld world = new TreePreviewWorld(entry.previewSoil());
         require(
-            TreeRegistry.createGenerator(entry.id, entry.set)
+            TreeRegistry.createGenerator(entry.id, entry.set, entry.layout, false)
                 .generate(world, new Random(seed), 0, 64, 0),
             "Seeded generation failed");
         int result = 1;
@@ -215,6 +233,33 @@ public final class TreePreviewSmokeTest {
             result = 31 * result + java.util.Objects.hash(cell.x, cell.y, cell.z, cell.block, cell.meta);
         }
         return result;
+    }
+
+    private static void checkVariantControls(TreePreviewHandler handler, TreePreviewHandler.PreviewRecipe preview,
+        TreePreviewCatalog.Entry entry) throws Exception {
+        int original = preview.variants.indexOf(entry);
+        long seed = (Long) read(preview, "seed");
+        require(handler.clickControl(153, 142, 0, 0), "Next variant click was not consumed");
+        require(
+            read(preview, "entry") == preview.variants.get((original + 1) % preview.variants.size()),
+            "Next variant selected the wrong layout/foliage");
+        require(
+            read(preview, "world") == null && ((Map<?, ?>) read(preview, "counts")).isEmpty(),
+            "Variant change retained the previous tree/counts");
+        checkTooltip(handler, 0, new ItemStack(entry.log), null);
+        handler.drawBackground(0);
+        require(!(Boolean) read(preview, "failed"), "Next variant failed to generate");
+        require(handler.clickControl(10, 142, 0, 0), "Previous variant click was not consumed");
+        require(read(preview, "entry") == entry, "Previous variant did not return to original");
+        require((Long) read(preview, "seed") == seed, "Variant navigation unexpectedly changed the seed");
+        handler.drawBackground(0);
+        require(!(Boolean) read(preview, "failed"), "Previous variant failed to generate");
+        require(!handler.clickControl(153, 142, 1, 0), "Right mouse button changed the variant");
+        require(!handler.clickControl(83, 142, 0, 0), "Variant label behaved as a button");
+        handler.clickControl(20, 160, 0, 0);
+        require(read(preview, "world") == null, "Regenerate did not invalidate the tree");
+        handler.drawBackground(0);
+        require(!(Boolean) read(preview, "failed"), "Regeneration failed");
     }
 
     private static void checkTooltip(TreePreviewHandler handler, int recipe, ItemStack stack, String expected) {
