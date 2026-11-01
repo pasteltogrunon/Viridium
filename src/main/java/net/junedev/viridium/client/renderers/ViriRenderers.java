@@ -1,5 +1,7 @@
 package net.junedev.viridium.client.renderers;
 
+import net.junedev.viridium.client.color.BlockColorsCommand;
+import net.junedev.viridium.client.color.ColorCloud;
 import net.junedev.viridium.client.renderers.blocks.BushBlockRenderer;
 import net.junedev.viridium.client.renderers.blocks.FernBlockRenderer;
 import net.junedev.viridium.client.renderers.blocks.GroundPlaneBlockRenderer;
@@ -32,6 +34,8 @@ public class ViriRenderers {
 
     public void init(FMLInitializationEvent event) {
         ClientCommandHandler.instance.registerCommand(new DesignerCommand());
+        ClientCommandHandler.instance.registerCommand(new BlockColorsCommand());
+        MinecraftForge.EVENT_BUS.register(ColorCloud.INSTANCE);
     }
 
     public void loadComplete(FMLLoadCompleteEvent event) {

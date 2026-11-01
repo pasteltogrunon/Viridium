@@ -3,17 +3,15 @@ package net.junedev.viridium.compat.nei;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
 import net.junedev.viridium.Viridium;
-import net.junedev.viridium.blocks.sets.WoodBlockSet;
 import net.junedev.viridium.worldgen.treegen.TreeRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiButton;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
@@ -25,7 +23,7 @@ import codechicken.nei.recipe.TemplateRecipeHandler;
 
 public final class TreePreviewHandler extends TemplateRecipeHandler {
 
-    static final int HEIGHT = 236;
+    static final int HEIGHT = 224;
     private static final String OVERLAY = "viridium.tree_preview";
 
     @Override
@@ -56,9 +54,8 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
     @Override
     public void loadCraftingRecipes(String outputId, Object... results) {
         if (OVERLAY.equals(outputId) || "all".equals(outputId)) {
-            Set<WoodBlockSet> added = new HashSet<>();
             for (TreePreviewCatalog.Entry entry : TreePreviewCatalog.entries()) {
-                if (added.add(entry.set)) arecipes.add(new PreviewRecipe(entry));
+                arecipes.add(new PreviewRecipe(entry));
             }
         } else {
             super.loadCraftingRecipes(outputId, results);
@@ -67,21 +64,22 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
 
     @Override
     public void loadCraftingRecipes(ItemStack result) {
-        Set<WoodBlockSet> added = new HashSet<>();
+        // One recipe per variant lets NEI's own page arrows handle navigation.
+        // Put the queried foliage first, while retaining every variant of its wood family.
         for (TreePreviewCatalog.Entry entry : TreePreviewCatalog.entries()) {
-            if (entry.matches(result) && added.add(entry.set)) {
-                PreviewRecipe preview = new PreviewRecipe(entry);
-                for (int i = 0; i < preview.variants.size(); i++) {
-                    TreePreviewCatalog.Entry variant = preview.variants.get(i);
-                    if (result.getItem() == Item.getItemFromBlock(variant.sapling)
-                        || result.getItem() == Item.getItemFromBlock(variant.leaves)) {
-                        preview.selectVariant(i);
-                        break;
-                    }
-                }
-                arecipes.add(preview);
+            if (entry.matches(result)) {
+                arecipes.add(new PreviewRecipe(entry));
             }
         }
+        if (result != null) arecipes.sort(
+            (left, right) -> Boolean.compare(
+                isQueriedFoliage(((PreviewRecipe) right).entry, result),
+                isQueriedFoliage(((PreviewRecipe) left).entry, result)));
+    }
+
+    private static boolean isQueriedFoliage(TreePreviewCatalog.Entry entry, ItemStack stack) {
+        return stack.getItem() == Item.getItemFromBlock(entry.sapling)
+            || stack.getItem() == Item.getItemFromBlock(entry.leaves);
     }
 
     @Override
@@ -93,20 +91,21 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
     public void drawBackground(int recipe) {
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
         preview.ensureGenerated();
-        Gui.drawRect(3, 14, 163, 132, 0xFF192923);
-        button(3, 136, 21, "<");
-        button(145, 136, 163, ">");
-        button(3, 154, 63, text("regenerate"));
-        button(66, 154, 124, text(preview.rotating ? "pause" : "rotate"));
-        button(127, 154, 143, "-");
-        button(146, 154, 163, "+");
-        for (PositionedStack stack : preview.stacks) {
-            Gui.drawRect(stack.relx - 1, stack.rely - 1, stack.relx + 17, stack.rely + 17, 0xFF8A978D);
-            Gui.drawRect(stack.relx, stack.rely, stack.relx + 16, stack.rely + 16, 0xFFCBD3C6);
+        // Leave the preview transparent to the Minecraft/NEI menu background.
+        Point relativeMouse = Minecraft.getMinecraft().currentScreen instanceof GuiRecipe<?>gui
+            ? gui.getRecipeMousePosition(recipe)
+            : new Point(-1, -1);
+        preview.buttons.get(1).displayString = text(preview.rotating ? "pause" : "rotate");
+        for (GuiButton button : preview.buttons) {
+            button.drawButton(Minecraft.getMinecraft(), relativeMouse.x, relativeMouse.y);
         }
-        if (!preview.failed && Minecraft.getMinecraft().currentScreen instanceof GuiRecipe<?>gui) {
+        for (PositionedStack stack : preview.stacks) {
+            Gui.drawRect(stack.relx - 1, stack.rely - 1, stack.relx + 17, stack.rely + 17, 0xFF373737);
+            Gui.drawRect(stack.relx, stack.rely, stack.relx + 17, stack.rely + 17, 0xFFFFFFFF);
+            Gui.drawRect(stack.relx, stack.rely, stack.relx + 16, stack.rely + 16, 0xFF8B8B8B);
+        }
+        if (!preview.failed && Minecraft.getMinecraft().currentScreen instanceof GuiRecipe<?>) {
             Point mouse = GuiDraw.getMousePosition();
-            Point relativeMouse = gui.getRecipeMousePosition(recipe);
             try {
                 TreePreviewRenderer.draw(
                     preview.world,
@@ -125,25 +124,22 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
     public void drawForeground(int recipe) {
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
         String name = new ItemStack(preview.entry.sapling).getDisplayName();
-        Minecraft.getMinecraft().fontRenderer
-            .drawString(Minecraft.getMinecraft().fontRenderer.trimStringToWidth(name, 160), 3, 2, 0x263D2E);
-        String variantLabel = (preview.variantIndex + 1) + "/"
-            + preview.variants.size()
-            + "  "
-            + text(
-                "layout." + preview.entry.layout.name()
-                    .toLowerCase(java.util.Locale.ROOT));
+        String variantLabel = text(
+            "layout." + preview.entry.layout.name()
+                .toLowerCase(java.util.Locale.ROOT));
+        int labelWidth = Minecraft.getMinecraft().fontRenderer.getStringWidth(variantLabel);
         Minecraft.getMinecraft().fontRenderer.drawString(
-            variantLabel,
-            83 - Minecraft.getMinecraft().fontRenderer.getStringWidth(variantLabel) / 2,
-            139,
-            0x263D2E);
-        Minecraft.getMinecraft().fontRenderer.drawString(text("blocks"), 3, 173, 0x263D2E);
+            Minecraft.getMinecraft().fontRenderer.trimStringToWidth(name, 154 - labelWidth),
+            3,
+            2,
+            0x404040);
+        Minecraft.getMinecraft().fontRenderer.drawString(variantLabel, 163 - labelWidth, 2, 0x404040);
+        Minecraft.getMinecraft().fontRenderer.drawString(text("blocks"), 3, 161, 0x404040);
         Minecraft.getMinecraft().fontRenderer.drawString(
             text(preview.failed ? "failed" : preview.entry.illustrative ? "illustrative" : "generated"),
             3,
-            225,
-            0x52634F);
+            213,
+            0x555555);
     }
 
     @Override
@@ -155,23 +151,27 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
     boolean clickControl(int x, int y, int button, int recipe) {
         if (button != 0) return false;
         PreviewRecipe preview = (PreviewRecipe) arecipes.get(recipe);
-        if (y >= 136 && y < 150) {
-            if (x >= 3 && x < 21) preview.selectVariant(preview.variantIndex - 1);
-            else if (x >= 145 && x < 163) preview.selectVariant(preview.variantIndex + 1);
-            else return false;
-            return true;
+        GuiButton pressed = null;
+        for (GuiButton control : preview.buttons) {
+            if (control.mousePressed(Minecraft.getMinecraft(), x, y)) {
+                pressed = control;
+                break;
+            }
         }
-        if (y < 154 || y >= 168) return false;
-        if (x >= 3 && x < 63) {
+        if (pressed == null) return false;
+        pressed.func_146113_a(
+            Minecraft.getMinecraft()
+                .getSoundHandler());
+        if (pressed.id == 0) {
             preview.seed = new Random().nextLong();
             preview.invalidate();
-        } else if (x >= 66 && x < 124) {
+        } else if (pressed.id == 1) {
             preview.fixedAngle = preview.angle();
             preview.rotationStart = System.nanoTime();
             preview.rotating = !preview.rotating;
-        } else if (x >= 127 && x < 143) {
+        } else if (pressed.id == 2) {
             preview.zoom = Math.max(0.5F, preview.zoom - 0.15F);
-        } else if (x >= 146 && x < 163) {
+        } else if (pressed.id == 3) {
             preview.zoom = Math.min(2.5F, preview.zoom + 0.15F);
         } else {
             return false;
@@ -206,20 +206,10 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
         return StatCollector.translateToLocal("nei.viridium.tree." + key);
     }
 
-    private static void button(int left, int top, int right, String label) {
-        Gui.drawRect(left, top, right, top + 14, 0xFF647D68);
-        Minecraft.getMinecraft().fontRenderer.drawString(
-            label,
-            (left + right - Minecraft.getMinecraft().fontRenderer.getStringWidth(label)) / 2,
-            top + 3,
-            0xFFFFFF);
-    }
-
     final class PreviewRecipe extends CachedRecipe {
 
-        private TreePreviewCatalog.Entry entry;
-        final List<TreePreviewCatalog.Entry> variants = new ArrayList<>();
-        private int variantIndex;
+        private final TreePreviewCatalog.Entry entry;
+        private final List<GuiButton> buttons = new ArrayList<>();
         private long seed = new Random().nextLong();
         private final List<PositionedStack> stacks = new ArrayList<>();
         private final Map<Item, Integer> counts = new HashMap<>();
@@ -232,28 +222,22 @@ public final class TreePreviewHandler extends TemplateRecipeHandler {
 
         private PreviewRecipe(TreePreviewCatalog.Entry entry) {
             this.entry = entry;
-            for (TreePreviewCatalog.Entry variant : TreePreviewCatalog.entries()) {
-                if (variant.set == entry.set) variants.add(variant);
-            }
-            variantIndex = variants.indexOf(entry);
+            buttons.add(new GuiButton(0, 3, 136, 60, 20, text("regenerate")));
+            buttons.add(new GuiButton(1, 66, 136, 58, 20, text("pause")));
+            buttons.add(new GuiButton(2, 127, 136, 16, 20, "-"));
+            buttons.add(new GuiButton(3, 145, 136, 18, 20, "+"));
             for (int i = 0; i < entry.blocks.size(); i++) {
                 stacks.add(
                     new PositionedStack(
                         entry.blocks.get(i)
                             .copy(),
                         3 + (i % 9) * 18,
-                        186 + (i / 9) * 18));
+                        174 + (i / 9) * 18));
             }
         }
 
         private float angle() {
             return fixedAngle + (rotating ? (float) ((System.nanoTime() - rotationStart) / 1.0e9 * 18 % 360) : 0);
-        }
-
-        void selectVariant(int index) {
-            variantIndex = Math.floorMod(index, variants.size());
-            entry = variants.get(variantIndex);
-            invalidate();
         }
 
         private void invalidate() {

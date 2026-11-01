@@ -7,8 +7,9 @@ Rama: `codex/nei-tree-preview`.
 1. Arranca el cliente con `./gradlew.bat runClient` y entra en un mundo de prueba.
 2. Abre el inventario, busca un bloque de Viridium en NEI y pulsa **R** con el cursor sobre él.
 3. Selecciona la pestaña **Tree preview / Vista del árbol**. También está disponible con **U**.
-4. Las flechas **< / >** recorren las variantes del árbol, con indicador de posición y disposición
-   de retoños. Castaño americano y roble pedunculado tienen variantes **1×1 y 2×2**; el álamo blanco
+4. Las flechas de página **< / > de la parte superior de NEI** recorren las variantes del árbol.
+   El contador de páginas indica la posición y junto al nombre se muestra la disposición de retoños.
+   Castaño americano y roble pedunculado tienen variantes **1×1 y 2×2**; el álamo blanco
    permite recorrer sus tres colores. Las flechas vuelven al principio/final al llegar a un extremo.
 5. **New tree / Otro árbol** genera otro ejemplar de la variante seleccionada. **Pause / Pausar** detiene el giro.
 6. Usa **+ / -** o la rueda sobre la vista 3D para cambiar el zoom.
@@ -22,12 +23,14 @@ colocado en el mundo. Las recetas normales siguen disponibles en sus propias pes
 
 - Los conjuntos `LargeTreeBlockSet` reutilizan `TreeRegistry`, incluidos los generadores específicos
   del castaño americano y roble pedunculado en 2×2, el cocotero y el generador genérico para 1×1.
-  Cada especie ocupa una única receta de NEI; sus variantes se descubren con `SaplingLayout` y
+  Cada variante ocupa una página de NEI; se descubren con `SaplingLayout` y
   `TreeRegistry.hasLayout`, usando el identificador completo del retoño (por ejemplo, `viridium:pedunculate_oak`).
 - El suelo de previsualización se elige entre los suelos admitidos por el registro. Se comprueba
   cada posición de suelo de los layouts y se genera sin notificaciones a vecinos.
-- Cambiar de variante conserva el zoom, la rotación y la semilla del ejemplar y actualiza los
-  recuentos. Consultar directamente una hoja o retoño de álamo selecciona su color.
+- Cada página conserva su ejemplar, zoom, rotación y recuentos al navegar entre variantes.
+  Consultar directamente una hoja o retoño de álamo muestra primero su color.
+- Los controles usan `GuiButton`, con las texturas, resaltado y sonido de Minecraft. La vista 3D
+  deja visible el fondo del menú de NEI; texto y casillas usan los grises de Minecraft.
 - Los árboles pequeños y las tres variantes del álamo blanco usan una forma provisional, indicada
   expresamente en pantalla, porque los generadores actuales no admiten esos conjuntos.
 - Se conservan las coordenadas y metadatos del generador para dibujar orientación y conexiones.
@@ -51,8 +54,8 @@ desde `src/previewTest/java`. Necesita OpenGL, espera al menú principal, carga 
 comprueba las consultas por bloques, genera tres ejemplares de cada entrada y renderiza una muestra
 de cada una. También comprueba metadatos, coordenadas negativas, eliminación de bloques y límites del
 buffer, además de comparar generación secuencial y concurrente de los generadores deterministas.
-También recorre las variantes mediante los mismos controles que las flechas, comprueba sus límites,
-la regeneración y el borrado de recuentos antiguos. El render se prueba con el recorte OpenGL activo,
+También recorre las variantes con el gestor real de páginas de NEI, comprueba sus límites,
+la pausa, el zoom, la regeneración y el borrado de recuentos antiguos. El render se prueba con el recorte OpenGL activo,
 como lo utiliza NEI, y se verifica que el rectángulo de recorte se restaure.
 Comprueba los tooltips antes y después de generar el árbol: cursor sobre una zona vacía, bloques
 ajenos al árbol, bloques asociados y recuentos del ejemplar. Las líneas de tooltip existentes deben
@@ -103,3 +106,12 @@ Se integró `master` (`7b24269`) y se adaptó la previsualización a la nueva AP
 identificadores y suelos. El buffer implementa `blockExists` para las comprobaciones de suelo sin
 cargar chunks. La consulta del rectángulo OpenGL reserva los 16 enteros que exige LWJGL 2,
 aunque `GL_SCISSOR_BOX` sólo devuelva cuatro valores. Se conserva el aspecto del render original.
+
+## Controles nativos de NEI y Minecraft
+
+Las variantes se presentan como páginas independientes, navegables con las flechas superiores de
+NEI. Se eliminó la fila de flechas personalizada y se sustituyeron los controles planos verdes por
+botones nativos de Minecraft. El fondo del render deja ver el menú, con casillas y textos grises.
+La prueba del cliente verifica las páginas y su navegación circular con `RecipePageManager`,
+además de generar 246 ejemplares y renderizar las 82 variantes. Se inspeccionó la captura del cocotero
+con el nuevo estilo. Queda pendiente la comprobación manual de la pantalla completa dentro de un mundo.
