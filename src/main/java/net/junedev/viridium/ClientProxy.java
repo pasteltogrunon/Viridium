@@ -1,5 +1,6 @@
 package net.junedev.viridium;
 
+import net.junedev.viridium.client.map.MapKeyHandler;
 import net.junedev.viridium.client.renderers.ViriRenderers;
 import net.junedev.viridium.client.renderers.world.sky.CustomSkyRenderer;
 import net.minecraftforge.common.MinecraftForge;
@@ -29,6 +30,7 @@ public class ClientProxy extends CommonProxy {
 
         renderers.init(event);
         MinecraftForge.EVENT_BUS.register(this);
+        MapKeyHandler.register();
     }
 
     @Override

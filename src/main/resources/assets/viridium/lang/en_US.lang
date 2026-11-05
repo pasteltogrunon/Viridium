@@ -624,3 +624,5 @@ options.viridium.light_ray_radius=Light Ray Range
 options.viridium.light_ray_radius.tooltip=How many shafts are drawn around you. Higher values cost more CPU.
 
 generator.viridium=Viridium
+key.categories.viridium=Viridium
+key.viridium.map=World map
