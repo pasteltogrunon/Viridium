@@ -105,9 +105,7 @@ public class CubeFiller {
                 b = Blocks.water;
             } else if (y == top && sc.snow && iceTop == NONE && water == NONE && y == sy + 1) {
                 b = Blocks.snow_layer;
-            } else if (y == top && iceTop != NONE && plan.temperature[i] < -4 && y == iceTop + 1) {
-                b = Blocks.snow_layer;
-            } else continue;
+            } else continue; // no snow on ice: a snow layer cannot stand on ice and breaks in a cascade
             ebs.func_150818_a(lx, ly, lz, b);
             if (meta != 0) ebs.setExtBlockMetadata(lx, ly, lz, meta);
         }

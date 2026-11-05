@@ -75,6 +75,7 @@ public class Viridium {
         if ("1".equals(System.getenv("VIRIDIUM_BENCH_ON_START"))) {
             net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
             net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand cmd = new net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand();
+            cmd.processCommand(server, new String[] { "stats", "reset" }); // what the spawn area cost
             cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // cold (JIT, caches)
             cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // warm
         }

@@ -27,7 +27,7 @@ public class ViridiumCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/viridium bench [radius=4] [cubesDown=8] [cubesUp=8]";
+        return "/viridium bench [radius=4] [cubesDown=8] [cubesUp=8] | /viridium stats [reset]";
     }
 
     @Override
@@ -42,6 +42,13 @@ public class ViridiumCommand extends CommandBase {
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("stats")) {
+            String r = net.junedev.viridium.worldgen.terrain.GenStats.report();
+            Viridium.LOGGER.info("Viridium generation stats:\n{}", r);
+            for (String l : r.split("\n")) say(sender, l);
+            if (args.length > 1 && args[1].equals("reset")) net.junedev.viridium.worldgen.terrain.GenStats.reset();
+            return;
+        }
         if (args.length == 0 || !args[0].equals("bench")) {
             say(sender, getCommandUsage(sender));
             return;

@@ -67,6 +67,7 @@ public class RiverStage extends GenStage {
             long t0 = System.nanoTime();
             RiverNet n = new RiverNetBuilder(gen).build(pi, pj, new GenScratch()); // builder holds per-build state
             buildNanos.addAndGet(System.nanoTime() - t0);
+            net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET.add(System.nanoTime() - t0);
             builds.incrementAndGet();
             return n;
         });

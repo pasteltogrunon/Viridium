@@ -49,7 +49,10 @@ public final class ColumnPlanCache {
 
         FutureTask<ColumnPlan> created = new FutureTask<>(() -> {
             computed.incrementAndGet();
-            return planner.plan(chunkX, chunkZ);
+            long t0 = System.nanoTime();
+            ColumnPlan p = planner.plan(chunkX, chunkZ);
+            net.junedev.viridium.worldgen.terrain.GenStats.PLAN.add(System.nanoTime() - t0);
+            return p;
         });
         FutureTask<ColumnPlan> task = inProgress.putIfAbsent(key, created);
         if (task == null) {

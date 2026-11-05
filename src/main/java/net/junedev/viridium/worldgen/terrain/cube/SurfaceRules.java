@@ -100,6 +100,9 @@ public final class SurfaceRules {
             default -> set(c, Blocks.grass, Blocks.dirt, 3);
         }
         if (slope > 0.7 && c.top == Blocks.grass) c.depth = Math.min(c.depth, 1); // thin soil on steep ground
+        // a snow layer only stays on an opaque, non-ice block (BlockSnow.canPlaceBlockAt); anything else would break
+        // on the first neighbour update and take the whole snow field with it (stack overflow)
+        if (c.top != null && (!c.top.isOpaqueCube() || c.top == Blocks.ice || c.top == Blocks.packed_ice)) c.snow = false;
     }
 
     private static void set(Column c, Block top, Block under, int depth) {

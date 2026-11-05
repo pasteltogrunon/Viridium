@@ -118,7 +118,12 @@ public class SurfaceDecorator {
             int y = groundY(x, z);
             if (y < y0 || y > y1) continue;
             WorldGenerator g = tree(b, r, t);
-            if (g != null) g.generate(world, r, x, y, z);
+            if (g != null) {
+                long tg = System.nanoTime();
+                boolean ok = g.generate(world, r, x, y, z);
+                (ok ? net.junedev.viridium.worldgen.terrain.GenStats.TREES : net.junedev.viridium.worldgen.terrain.GenStats.TREES_FAILED)
+                    .add(System.nanoTime() - tg);
+            }
         }
         int grass = grassCount(b);
         for (int k = 0; k < grass; k++) {

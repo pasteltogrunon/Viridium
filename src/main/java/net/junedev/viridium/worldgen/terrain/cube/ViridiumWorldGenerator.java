@@ -8,6 +8,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.junedev.viridium.Viridium;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
+import net.junedev.viridium.worldgen.terrain.GenStats;
 import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
@@ -84,13 +85,25 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
 
     @Override
     public GenerationResult<Cube> provideCube(@Nullable Chunk column, int cubeX, int cubeY, int cubeZ) {
+        long t0 = System.nanoTime();
         ColumnPlan plan = plans.get(cubeX, cubeZ);
+        long t1 = System.nanoTime();
+        GenStats.PLAN_WAIT.add(t1 - t0);
         List<Chunk> sideColumns = Collections.emptyList();
         if (column == null) {
             column = newColumn(cubeX, cubeZ, plan);
             sideColumns = Collections.singletonList(column);
         }
+        CubeFiller.Kind kind = CubeFiller.classify(plan, cubeY);
+        long t2 = System.nanoTime();
         Cube cube = new Cube(column, cubeY, filler.fill(plan, cubeX, cubeY, cubeZ));
+        long dt = System.nanoTime() - t2;
+        switch (kind) {
+            case AIR -> GenStats.FILL_AIR.add(dt);
+            case CRUST -> GenStats.FILL_CRUST.add(dt);
+            case MIXED -> GenStats.FILL_MIXED.add(dt);
+            case BEDROCK -> GenStats.FILL_BEDROCK.add(dt);
+        }
         return new GenerationResult<>(cube, sideColumns, null);
     }
 
@@ -107,15 +120,25 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         ICubeLoader loader = ((ICubicWorldInternal.Server) world).getCubeCache()
             .getCubeLoader();
         int cx = cube.getX(), cy = cube.getY(), cz = cube.getZ();
+        long t0 = System.nanoTime();
         try {
             if (cube.isPopulated()) return;
             if (touchesSurface(cx, cy, cz)) {
                 // features may reach into +X/+Z and up to two cubes above: generate (not populate) those first
+                long tn = System.nanoTime();
                 for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) for (int dy = 0; dy <= 2; dy++)
                     loader.getCube(cx + dx, cy + dy, cz + dz, Requirement.GENERATE);
+                GenStats.POP_NEIGHBOURS.add(System.nanoTime() - tn);
                 loader.cacheCubes(new Box(cx, cy, cz, cx + 1, cy + 2, cz + 1));
                 try {
+                    long td = System.nanoTime();
                     decorator.decorate(world, world.getSeed(), cx, cy, cz);
+                    GenStats.POP_DECORATE.add(System.nanoTime() - td);
+                    // drain the light updates the decoration queued (CC would do it at first light anyway): measured apart
+                    long tl = System.nanoTime();
+                    ((ICubicWorldInternal) world).getLightingManager()
+                        .processUpdates();
+                    GenStats.POP_LIGHT.add(System.nanoTime() - tl);
                 } finally {
                     loader.uncacheCubes();
                 }
@@ -123,6 +146,7 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         } catch (Throwable t) {
             Viridium.LOGGER.error("Viridium population failed at cube {},{},{}", cx, cy, cz, t);
         } finally {
+            GenStats.POPULATE.add(System.nanoTime() - t0);
             cube.markPopulated(Cube.POP_ALL);
             loader.onCubeGenerated(cube);
         }
