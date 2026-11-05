@@ -1,5 +1,6 @@
 package net.junedev.viridium;
 
+import net.junedev.viridium.worldgen.terrain.cube.ViridiumWorldType;
 import net.junedev.viridium.worldgen.treegen.TreeRegistry;
 import net.minecraftforge.common.MinecraftForge;
 
@@ -45,6 +46,7 @@ public class Viridium {
         items.preInit();
 
         TreeRegistry.preInit();
+        ViridiumWorldType.init();
 
         proxy.preInit(event);
     }

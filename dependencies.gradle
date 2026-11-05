@@ -47,6 +47,10 @@ dependencies {
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.163-GTNH:dev")
     runtimeOnlyNonPublishable(rfg.deobf("com.github.GTNewHorizons:CoreTweaks:0.3.4.7-GTNH"))
 
+    // Worldgen parity test and headless benchmark (src/test)
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     // Profiling (spark is reobfuscated, therefore rfg.deobf). Jar lives in libs/, which is git-ignored. (If there is a better option for this let us know.)
     // devOnlyNonPublishable(rfg.deobf(project.files("libs/spark-1.10.19-forge1710.jar")))
 }
