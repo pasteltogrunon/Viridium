@@ -62,6 +62,8 @@ public final class GenPoint {
 
     // 10. rivers, lakes, valleys, deltas, estuaries
     public double riverD = 1e9, riverHW, riverZ, riverAcc, valley, delta, estu, lakeZ, glac, gorge;
+    /** Water surface of the river channel (never above the uncarved terrain; Java-only, not in the JS). */
+    public double riverWL;
     /** 1 inside a river channel. */
     public int river;
     /** 0 none, 1 lake, 2 salt flat. */

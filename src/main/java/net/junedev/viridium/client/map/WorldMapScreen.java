@@ -145,18 +145,80 @@ public class WorldMapScreen extends GuiScreen {
             return;
         }
         if (x < 120 || gen == null) return;
-        if (button == 0 && isShiftKeyDown()) {
-            teleport(worldX(x), worldZ(y));
+        if (menuOpen) { // a click while the menu is open picks an entry or closes it
+            int entry = menuEntryAt(x, y);
+            menuOpen = false;
+            if (entry == 0 && canTeleport()) teleport(menuX, menuZ);
+            else if (entry == 1) {
+                centerX = menuX;
+                centerZ = menuZ;
+            }
+            return;
+        }
+        if (button == 1) {
+            openMenu(x, y);
             return;
         }
         dragging = true;
+        dragDistance = 0;
         lastMouseX = x;
         lastMouseY = y;
+    }
+
+    // ------------------------------------------------------------------ click menu
+
+    private static final int MENU_W = 130, MENU_ROW = 12;
+    private boolean menuOpen;
+    private int menuGX, menuGY, dragDistance;
+    private double menuX, menuZ;
+
+    private void openMenu(int x, int y) {
+        menuOpen = true;
+        menuX = worldX(x);
+        menuZ = worldZ(y);
+        menuGX = Math.min(x, width - MENU_W - 2);
+        menuGY = Math.min(y, height - 3 * MENU_ROW - 6);
+    }
+
+    /** Entry under (x, y): 0 teleport, 1 centre, 2 close, -1 outside. */
+    private int menuEntryAt(int x, int y) {
+        if (x < menuGX || x >= menuGX + MENU_W || y < menuGY + 14) return -1;
+        int e = (y - menuGY - 14) / MENU_ROW;
+        return e < 3 ? e : -1;
+    }
+
+    /** Commands allowed for this player (singleplayer with cheats, or op). */
+    private boolean canTeleport() {
+        MinecraftServer server = MinecraftServer.getServer();
+        return server != null && server.getConfigurationManager() != null
+            && server.getConfigurationManager()
+                .func_152596_g(mc.thePlayer.getGameProfile());
+    }
+
+    private void drawMenu(int mx, int my) {
+        boolean tp = canTeleport();
+        String[] entries = { tp ? "Teleport here" : "Teleport (needs cheats)", "Centre map here", "Close" };
+        int h = 14 + entries.length * MENU_ROW + 2;
+        drawRect(menuGX - 1, menuGY - 1, menuGX + MENU_W + 1, menuGY + h + 1, 0xff808080);
+        drawRect(menuGX, menuGY, menuGX + MENU_W, menuGY + h, 0xf0101010);
+        drawString(fontRendererObj, String.format("X %d  Z %d", (int) Math.floor(menuX), (int) Math.floor(menuZ)),
+            menuGX + 4, menuGY + 3, 0xa0a0a0);
+        int hover = menuEntryAt(mx, my);
+        for (int i = 0; i < entries.length; i++) {
+            int y = menuGY + 14 + i * MENU_ROW;
+            boolean enabled = i != 0 || tp;
+            if (hover == i && enabled) drawRect(menuGX + 1, y - 1, menuGX + MENU_W - 1, y + MENU_ROW - 1, 0x80508050);
+            drawString(fontRendererObj, entries[i], menuGX + 6, y + 1, !enabled ? 0x707070 : hover == i ? 0xffff80 : 0xe0e0e0);
+        }
+        // marker on the chosen point
+        int px = (int) (width / 2.0 + (menuX - centerX) / bpu()), pz = (int) (height / 2.0 + (menuZ - centerZ) / bpu());
+        drawRect(px - 2, pz - 2, px + 3, pz + 3, 0xffffff00);
     }
 
     @Override
     protected void mouseClickMove(int x, int y, int button, long time) {
         if (!dragging) return;
+        dragDistance += Math.abs(x - lastMouseX) + Math.abs(y - lastMouseY);
         centerX -= (x - lastMouseX) * bpu();
         centerZ -= (y - lastMouseY) * bpu();
         lastMouseX = x;
@@ -166,11 +228,18 @@ public class WorldMapScreen extends GuiScreen {
     @Override
     protected void mouseMovedOrUp(int x, int y, int which) {
         super.mouseMovedOrUp(x, y, which);
-        if (which >= 0) dragging = false;
+        if (which >= 0 && dragging) {
+            dragging = false;
+            if (which == 0 && dragDistance <= 3 && x >= 120) openMenu(x, y); // a plain click, not a drag
+        }
     }
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (key == Keyboard.KEY_ESCAPE && menuOpen) {
+            menuOpen = false;
+            return;
+        }
         if (key == Keyboard.KEY_M) {
             mc.displayGuiScreen(null);
             return;
@@ -221,7 +290,8 @@ public class WorldMapScreen extends GuiScreen {
             drawString(fontRendererObj, l.name, 6, ly, sel ? 0xffff80 : hover ? 0xffffff : 0xa0a0a0);
         }
         super.drawScreen(mouseX, mouseY, partial);
-        drawInspector(mouseX, mouseY);
+        if (menuOpen) drawMenu(mouseX, mouseY);
+        else drawInspector(mouseX, mouseY);
     }
 
     private void drawTiles() {
@@ -373,7 +443,7 @@ public class WorldMapScreen extends GuiScreen {
                 .toLowerCase(), o.erod),
             full ? String.format("Biome %s   water %s", Biome.VALUES[o.biome].displayName, water)
                 : "Biome: river network not built yet",
-            "Shift+click: teleport" };
+            "Click or right-click: menu" };
         int w = 0;
         for (String s : lines) w = Math.max(w, fontRendererObj.getStringWidth(s));
         int x0 = width - w - 10, y0 = height - 18 - lines.length * 10;
