@@ -20,6 +20,7 @@ import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.core.Seeds;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
+import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
 
 /**
  * Builds a {@link RiverNet}: coarse grid over the plate → priority-flood (fills depressions, gives each cell a
@@ -225,6 +226,13 @@ final class RiverNetBuilder {
                 double mm = rr / nc * 1000, frac = ss(250, 700, mm);
                 boolean salt = frac < 0.12;
                 double level = bot + (lev - bot) * (salt ? 0.1 : 0.25 + 0.75 * frac);
+                // anchor the lake to the real (eroded) basin floor: the coarse grid only knows the smoothed relief
+                double botF = 1e9;
+                for (int q = 0, step = Math.max(1, nc / 24); q < nc; q += step) {
+                    int c = cells[q], ci = c % nx, cj = (c - ci) / nx;
+                    botF = Math.min(botF, finalHeight(x0 + (ci + 0.5) * g, y0 + (cj + 0.5) * g, s));
+                }
+                if (botF < bot) level += botF - bot;
                 for (int q = 0; q < nc; q++) {
                     int c = cells[q];
                     if (hgt[c] < level) lakes.put(c, salt ? -level : level);
@@ -259,6 +267,16 @@ final class RiverNetBuilder {
             if (!isRiv[idx]) continue;
             int r = recv[idx], m = mainUp[r];
             if (m < 0 || acc[idx] > acc[m]) mainUp[r] = idx;
+        }
+
+        // water profile projected onto the final terrain: each river node takes the floor of the eroded valley
+        // around it (cross-section samples), then the profile is made monotone downstream (water never climbs).
+        // The coarse "filled" profile only knows the smoothed relief and sits above the real valley floor.
+        float[] wl = filled.clone();
+        for (int idx = 0; idx < n; idx++) if (isRiv[idx]) wl[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], s));
+        for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
+            int idx = order[k], r = recv[idx];
+            if (isRiv[idx] && r >= 0 && isRiv[r] && wl[idx] < wl[r]) wl[r] = wl[idx];
         }
 
         // meanders: only on gentle, well-fed reaches and never on a sharp bend
@@ -377,9 +395,9 @@ final class RiverNetBuilder {
                     Math.max(Math.abs(by0 - cyc), Math.abs(by1 - cyc))));
             w0[sl] = mu >= 0 ? hw[mu] : 0.6f;
             w1[sl] = hw[idx];
-            z0[sl] = mu >= 0 ? (float) (0.5 * ((double) filled[mu] + filled[idx])) : filled[idx];
+            z0[sl] = mu >= 0 ? (float) (0.5 * ((double) wl[mu] + wl[idx])) : wl[idx];
             z1[sl] = !isRiv[r] ? 0
-                : mainUp[r] == idx ? (float) (0.5 * ((double) filled[idx] + filled[r]))
+                : mainUp[r] == idx ? (float) (0.5 * ((double) wl[idx] + wl[r]))
                     : (float) (0.5 * ((double) z0[slot[r]] + z1[slot[r]]));
             sacc[sl] = (float) (acc[idx] / thr);
             // mouth: sediment (flow × basin relief) vs tide decides delta or estuary
@@ -470,7 +488,7 @@ final class RiverNetBuilder {
                 int ii = ci + di, jj = cj + dj;
                 if (ii >= 0 && jj >= 0 && ii < nx && jj < ny && hgt[jj * nx + ii] > mxh) mxh = hgt[jj * nx + ii];
             }
-            lrel[idx] = (float) Math.max(0, mxh - filled[idx]);
+            lrel[idx] = (float) Math.max(0, mxh - wl[idx]);
         }
         char[] vd = new char[n];
         Arrays.fill(vd, (char) 65535);
@@ -480,7 +498,7 @@ final class RiverNetBuilder {
             int sI = src[idx];
             if (sI < 0 || dd[idx] >= VLIM) continue;
             vd[idx] = (char) Math.round(dd[idx]);
-            vz[idx] = (short) clamp(Math.round(filled[sI] * 16.0), -32000, 32000);
+            vz[idx] = (short) clamp(Math.round(wl[sI] * 16.0), -32000, 32000);
             vw[idx] = (byte) Math.min(255, Math.round(hw[sI] * 10.0));
             va[idx] = (byte) Math.min(255, Math.round(cellA[sI] * 4.0));
             vr[idx] = (byte) Math.min(255, Math.round(lrel[sI] / 2.0));
@@ -519,6 +537,39 @@ final class RiverNetBuilder {
         net.lakes = lakes;
         net.bytes = 4L * n + 2L * n * 2 + 4L * n + (long) pts.length * 4 + (long) count * 4 * 14 + lakes.size() * 48L;
         return net;
+    }
+
+    private final GenPoint finalPoint = new GenPoint();
+
+    /** Terrain height after erosion, before any river carving (what the player would see without rivers). */
+    private double finalHeight(double x, double y, GenScratch s) {
+        return gen.evaluate(x, y, Stage.EROSION, 1, finalPoint, s).h;
+    }
+
+    /**
+     * Floor of the eroded valley around river node idx: minimum of the final terrain on a cross-section perpendicular
+     * to the flow, as wide as the valley a river of that size carves.
+     */
+    private double valleyFloor(int idx, int r, double hw, GenScratch s) {
+        double px = jx(idx), py = jy(idx);
+        double dx = jx(r) - px, dy = jy(r) - py, l = hypot(dx, dy);
+        if (l == 0) {
+            dx = 1;
+            l = 1;
+        }
+        double ux = -dy / l, uy = dx / l, R = Math.max(10, 3 * hw + 6);
+        double floor = Double.POSITIVE_INFINITY;
+        // three cross-sections: at the node and on the way to its receiver (the reach runs between them)
+        for (int a = 0; a < 3; a++) {
+            double cx = px + dx * a / 3, cy = py + dy * a / 3;
+            floor = Math.min(floor, finalHeight(cx, cy, s));
+            for (int k = 1; k <= 3; k++) {
+                double t = R * k / 3;
+                floor = Math.min(floor, finalHeight(cx + ux * t, cy + uy * t, s));
+                floor = Math.min(floor, finalHeight(cx - ux * t, cy - uy * t, s));
+            }
+        }
+        return floor;
     }
 
     private static void relax(float[] dd, int[] src, int idx, int nb, double w) {

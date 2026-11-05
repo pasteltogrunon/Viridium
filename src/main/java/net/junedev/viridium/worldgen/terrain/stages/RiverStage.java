@@ -355,7 +355,7 @@ public class RiverStage extends GenStage {
                 qy = y + 3 * perlin(x / 50 + 3.3, y / 50 + 7.7, SD.rivW + 1);
             int g = net.g, gi = floor((qx - net.x0) / g), gj = floor((qy - net.y0) / g);
             float[] pts = net.pts, BB = net.bb;
-            double best = 1e9, bhw = 0, bz = 0, bacc = 0, bW = 1, bwl = 0;
+            double best = 1e9, bhw = 0, bz = 0, bacc = 0, bW = 1, bwl = 0, bws = 0;
             double h = o.h, VMAX = 2 * g;
             int RC = (int) Math.ceil((VMAX + 24 + net.reach) / g);
             double wMul = lerp(0.45, 2.0, ef), bankSlope = lerp(1.5, 0.25, ef);
@@ -396,7 +396,8 @@ public class RiverStage extends GenStage {
                             bz = z;
                             bacc = net.acc[sl];
                             bW = W;
-                            bwl = Math.min(h, lerp(z, zu, G)); // water fills the channel up to the bank, not to the coarse bed
+                            bws = lerp(z, zu, G); // water surface of the nearest reach
+                            bwl = Math.min(h, bws); // water fills the channel up to the bank
                         }
                         double hc;
                         if (v <= 0) {
@@ -419,6 +420,8 @@ public class RiverStage extends GenStage {
                 }
                 o.riverZ = bz;
                 o.riverWL = bwl;
+                // a low bank right next to the water would let it spill: keep the first blocks at least at water level
+                if (best > 0 && best < 3) o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
                 o.h = hmin;
                 if (best <= 0) o.river = 1;
                 else o.valley = Math.max(o.valley, 1 - best / bW);

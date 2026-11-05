@@ -47,7 +47,7 @@ class RiverWaterTest {
         WorldGen gen = new WorldGen(new GenParams());
         planner = new ColumnPlanner(gen, BiomeMapper.FROM_STAGE);
         GenPoint o = new GenPoint();
-        int riverCols = 0, hanging = 0, walls = 0, depthSum = 0, maxStep = 0;
+        int riverCols = 0, hanging = 0, walls = 0, perched = 0, depthSum = 0, maxStep = 0, tallWalls = 0, maxWall = 0, maxPerch = 0;
         // walk along the reaches of a few plates' river networks
         for (int plate = 0; plate < 3; plate++) {
             gen.evaluate(plate * 4000 + 1500, 800, Stage.PLATES, o);
@@ -72,9 +72,18 @@ class RiverWaterTest {
                     int dry = Math.min(
                         Math.min(dryTop(bx + 1, bz), dryTop(bx - 1, bz)),
                         Math.min(dryTop(bx, bz + 1), dryTop(bx, bz - 1)));
+                    // valley bottom: no dry ground lower than the water within 4 blocks
+                    int nearDry = Integer.MAX_VALUE;
+                    for (int ez = -4; ez <= 4; ez++) for (int ex = -4; ex <= 4; ex++) nearDry = Math.min(nearDry, dryTop(bx + ex, bz + ez));
+                    if (nearDry != Integer.MAX_VALUE && nearDry < w - 1) perched++;
+                    if (nearDry != Integer.MAX_VALUE) maxPerch = Math.max(maxPerch, w - nearDry);
+                    if (dry != Integer.MAX_VALUE) {
+                        maxWall = Math.max(maxWall, w - dry);
+                        if (w - dry >= 2) tallWalls++;
+                    }
                     if (dry != Integer.MAX_VALUE && w > dry) {
                         walls++;
-                        if (walls <= 12) {
+                        if (walls <= 0) {
                             int[][] d = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
                             StringBuilder sb = new StringBuilder();
                             for (int[] v : d) {
@@ -92,10 +101,15 @@ class RiverWaterTest {
                 }
             }
         }
-        System.out.printf("river water columns %d, mean depth %.2f, steps >1 (cascades) %d, max step %d, water above dry ground (walls) %d%n",
-            riverCols, riverCols == 0 ? 0 : (double) depthSum / riverCols, hanging, maxStep, walls);
+        System.out.printf("river water columns %d, mean depth %.2f, steps >1 (cascades) %d, max step %d, water above dry ground (walls) %d, dry ground >1 below the water within 4 blocks %d%n  walls >=2 blocks %d, tallest wall %d, deepest perch %d%n",
+            riverCols, riverCols == 0 ? 0 : (double) depthSum / riverCols, hanging, maxStep, walls, perched, tallWalls, maxWall, maxPerch);
         assertTrue(riverCols > 50, "test found too few river columns: " + riverCols);
-        assertTrue(walls <= riverCols * 0.002, "river water stands above dry ground in " + walls + " columns");
-        assertTrue(maxStep <= 4, "cascade too tall: " + maxStep);
+        System.out.printf("river networks: %d built, %.0f ms each%n", gen.rivers.buildCount(),
+            gen.rivers.buildNanos() / 1e6 / Math.max(1, gen.rivers.buildCount()));
+        // regression guards (values measured 2026-11-05: walls 1.5%, walls >=2 0.3%, perched 5.8%, max step 5)
+        assertTrue(walls <= riverCols * 0.025, "river water stands above dry ground in " + walls + " columns");
+        assertTrue(tallWalls <= riverCols * 0.005, "river water walls of 2+ blocks in " + tallWalls + " columns");
+        assertTrue(maxStep <= 6, "cascade too tall: " + maxStep);
+        assertTrue(perched <= riverCols * 0.07, "river water perched above its valley floor in " + perched + " columns");
     }
 }

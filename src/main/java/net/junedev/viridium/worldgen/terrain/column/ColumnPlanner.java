@@ -29,75 +29,15 @@ public final class ColumnPlanner {
     public ColumnPlan plan(int chunkX, int chunkZ) {
         ColumnPlan plan = new ColumnPlan(chunkX, chunkZ);
         GenPoint p = point.get();
-        float[] riverD = new float[ColumnPlan.AREA];
         int x0 = chunkX * ColumnPlan.SIZE, z0 = chunkZ * ColumnPlan.SIZE;
         for (int lz = 0; lz < ColumnPlan.SIZE; lz++) {
             for (int lx = 0; lx < ColumnPlan.SIZE; lx++) {
                 gen.evaluate(x0 + lx, z0 + lz, Stage.BIOMES, p);
-                int i = ColumnPlan.index(lx, lz);
-                fillColumn(plan, i, x0 + lx, z0 + lz, p);
-                riverD[i] = (float) p.riverD;
+                fillColumn(plan, ColumnPlan.index(lx, lz), x0 + lx, z0 + lz, p);
             }
         }
-        buildBanks(plan, riverD);
         plan.finish();
         return plan;
-    }
-
-    /** Distance to a river (blocks) under which a column may border river water. */
-    private static final double NEAR_RIVER = 4;
-
-    /**
-     * No hanging water: every dry column next to higher water (river or lake) is raised up to that water level, like
-     * a natural levee. The rule only reads the unmodified water level and surface of the column and its 4 neighbours,
-     * all pure functions of position, so both sides of a chunk border agree. Neighbours outside the chunk are only
-     * evaluated for edge columns close to a river.
-     */
-    void buildBanks(ColumnPlan plan, float[] riverD) {
-        java.util.Map<Long, Integer> halo = null;
-        int x0 = plan.chunkX * ColumnPlan.SIZE, z0 = plan.chunkZ * ColumnPlan.SIZE;
-        int[] raise = new int[ColumnPlan.AREA];
-        for (int i = 0; i < ColumnPlan.AREA; i++) {
-            raise[i] = NONE;
-            if (plan.waterY[i] != NONE || plan.iceTop[i] != NONE) continue; // only dry columns get banks
-            int lx = i & 15, lz = i >> 4, w = NONE;
-            if (lx > 0) w = Math.max(w, plan.waterY[i - 1]);
-            if (lx < 15) w = Math.max(w, plan.waterY[i + 1]);
-            if (lz > 0) w = Math.max(w, plan.waterY[i - 16]);
-            if (lz < 15) w = Math.max(w, plan.waterY[i + 16]);
-            if ((lx == 0 || lx == 15 || lz == 0 || lz == 15) && riverD[i] < NEAR_RIVER + 30) {
-                if (halo == null) halo = new java.util.HashMap<>();
-                if (lx == 0) w = Math.max(w, outsideWater(halo, x0 - 1, z0 + lz));
-                if (lx == 15) w = Math.max(w, outsideWater(halo, x0 + 16, z0 + lz));
-                if (lz == 0) w = Math.max(w, outsideWater(halo, x0 + lx, z0 - 1));
-                if (lz == 15) w = Math.max(w, outsideWater(halo, x0 + lx, z0 + 16));
-            }
-            if (w != NONE && w > plan.surfaceY[i] && w >= SEA_LEVEL - 1) raise[i] = w;
-        }
-        for (int i = 0; i < ColumnPlan.AREA; i++) {
-            if (raise[i] == NONE) continue;
-            plan.surfaceY[i] = raise[i];
-            plan.height[i] = raise[i] + 1 - SEA_LEVEL;
-        }
-    }
-
-    private final ThreadLocal<GenPoint> haloPoint = ThreadLocal.withInitial(GenPoint::new);
-
-    /** Unmodified water level of a column outside the chunk (same rule as {@link #fillColumn}), or NONE. */
-    private int outsideWater(java.util.Map<Long, Integer> memo, int x, int z) {
-        return memo.computeIfAbsent(((long) x << 32) | (z & 0xffffffffL), k -> {
-            GenPoint q = gen.evaluate(x, z, Stage.BIOMES, haloPoint.get());
-            return waterLevel(q, TerrainLayout.surfaceY(q.h));
-        });
-    }
-
-    /** Water level of a column from its evaluated point (river, lake, sea), or NONE when dry. */
-    static int waterLevel(GenPoint p, int surface) {
-        int water = NONE;
-        if (p.lake == 1) water = TerrainLayout.surfaceY(p.lakeZ);
-        if (p.river != 0) water = Math.max(water, TerrainLayout.surfaceY(p.riverWL));
-        if (surface < SEA_LEVEL - 1) water = Math.max(water, SEA_LEVEL - 1);
-        return water != NONE && water > surface ? water : NONE;
     }
 
     /** Converts one evaluated point into the column's absolute layout. */

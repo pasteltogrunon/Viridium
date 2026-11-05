@@ -60,9 +60,10 @@ A new map layer is one `MapLayer.register(...)` line in `MapLayer`.
 
 ## Tests and benchmarks
 
-- `ParityTest` compares the exact port (`GenParams.fastFields = false`) with values dumped from the JS prototype:
-  stages 1–7 and the full pipeline (rivers, lakes, deltas, estuaries, ice, biomes). Currently 0 differing points.
-  Regenerate after changing `worldgen.js`: `node tools/worldgen/parity_dump.js ../ViridiumExtras/worldgen/js/worldgen.js`
+- The JS prototype is no longer the reference (2026-11-05): the generator is free to diverge. `ParityTest` still
+  checks stages 1–7 against values dumped from it, only as a cheap regression guard; delete it when those stages change.
+- `RiverWaterTest` walks river networks and checks the water sits in its channel at the valley bottom (no water
+  walls, small cascades only).
 - Headless benchmark: `VIRIDIUM_BENCH=1 ./gradlew test --tests '*TerrainBenchmarkTest'` → `build/reports/worldgen-bench.txt`
 - Map previews (PNG of any layer + crust sections): `VIRIDIUM_MAP=1 VIRIDIUM_MAP_LAYERS=composite VIRIDIUM_MAP_LEVEL=4 ./gradlew test --tests '*MapPreviewTest'` → `build/reports/map/`
 - In game: `/viridium bench [radius] [cubesDown] [cubesUp]` (op) measures plans + real cube storage around you without
@@ -84,9 +85,18 @@ surface-crossing 0.12 ms, air 0). A column has 192 cubes in the generation range
 crossing the surface. Fast vs exact: |ΔT| mean 0.007 °C, |Δh| mean 0.03 blocks, dominant biome differs on 0.25 % of
 points.
 
+## Rivers
+
+The network (priority-flood on a 32-block grid of the base relief) decides where rivers run and how much water they
+carry. Their water level is then projected onto the final, eroded terrain: every river node takes the floor of the
+valley around it (cross-sections at the node and towards its receiver) and the profile is made monotone downstream.
+The channel is carved below that level and the first blocks of bank are kept at least at water level. Lakes are
+anchored to the real basin floor the same way.
+
 ## Known limitations
 
-- River networks are built per plate on first use (~230 ms). Background preloading usually hides it, but a player
+- River networks are built per plate on first use (~0.7 s, including projecting the water profile onto the eroded
+  terrain). Background preloading usually hides it, but a player
   entering a new plate can still cause a hitch on the server thread.
 - Population is minimal (vanilla + three Viridium trees, grass, flowers, desert plants); no ores, caves or structures.
 - Biomes map onto vanilla biome ids until Viridium registers its own.

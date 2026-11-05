@@ -86,7 +86,11 @@ public final class WorldGen {
      * alias when the result is viewed from far away (map); use 1 for the game.
      */
     public GenPoint evaluate(double x, double z, Stage upTo, double bpp, GenPoint o) {
-        GenScratch s = scratch();
+        return evaluate(x, z, upTo, bpp, o, scratch());
+    }
+
+    /** As above with explicit temporaries (for evaluations nested inside another one, e.g. river network builds). */
+    public GenPoint evaluate(double x, double z, Stage upTo, double bpp, GenPoint o, GenScratch s) {
         o.x = x;
         o.z = z;
         climate.apply(x, z, o);
