@@ -10,11 +10,11 @@ public final class Seeds {
         "temp", "prec", "wind", "rock", "rockP", "rockW", "ero", "rivJ", "rivW", "coll", "isl", "micro", "arcN", "hot",
         "ice", "berg", "delta", "wind2", "lake", "cur", "estu", "mea",
         // Java-only from here on (crust)
-        "crust", "strata", "pluton", "dike", "pipe", "fold" };
+        "crust", "strata", "pluton", "dike", "pipe", "fold", "basin", "basinW" };
 
     public final int warp, plate, vel, cont, contN, hills, mmask, mtn, sea, seaR, temp, prec, wind, rock, rockP, rockW,
         ero, rivJ, rivW, coll, isl, micro, arcN, hot, ice, berg, delta, wind2, lake, cur, estu, mea;
-    public final int crust, strata, pluton, dike, pipe, fold;
+    public final int crust, strata, pluton, dike, pipe, fold, basin, basinW;
 
     public Seeds(int seed) {
         int[] s = new int[NAMES.length];
@@ -58,5 +58,7 @@ public final class Seeds {
         dike = s[k++];
         pipe = s[k++];
         fold = s[k++];
+        basin = s[k++];
+        basinW = s[k++];
     }
 }

@@ -13,11 +13,11 @@ public final class GenParams implements Cloneable {
     public int seed = 12345;
 
     // climate
-    public double tempPeriod = 16000; // full equator→pole→equator cycle along z
-    public double precipPeriod = 12000; // full wet→dry cycle along x
+    public double tempPeriod = 48000; // full equator→pole→equator cycle along z (prototype: 16000)
+    public double precipPeriod = 36000; // full wet→dry cycle along x (prototype: 12000)
 
     // tectonics
-    public double plateSize = 4000;
+    public double plateSize = 12000; // continents are one per plate (prototype: 4000)
     public double plateWarp = 0.28;
     public double continentSize = 0.55;
     public double ridgeStrength = 1.0;
@@ -37,6 +37,12 @@ public final class GenParams implements Cloneable {
     public double erosionScale = 96;
     public double riverThreshold = 1.0;
     public int riverGrid = 32;
+    /** Size (blocks) of the drainage basin cells that divide the continents. */
+    public double basinSize = 3000;
+    /** How strongly cells converge into large basins (0 = each cell runs straight to the nearest coast). */
+    public double basinMerge = 0.8;
+    /** Upper bound of a river half-width (blocks) and of a delta radius: big basins make huge mouths. */
+    public double riverMaxHalfWidth = 48, deltaMaxRadius = 1600;
     public double biomeSharpness = 3;
     public double monsoon = 1.0;
     public double deltaSize = 1.0;

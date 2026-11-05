@@ -431,7 +431,7 @@ public class WorldMapScreen extends GuiScreen {
         double x = worldX(mx), z = worldZ(my);
         GenPoint o = gen.evaluate(x, z, Stage.PLATES, inspect);
         // never build a river network on the render thread: fall back to the stages before rivers
-        boolean full = gen.rivers.isCached(o.pi, o.pj) || o.L < -0.5;
+        boolean full = o.L < -0.5 || gen.rivers.isReadyAt(x, z);
         if (full) gen.evaluate(x, z, Stage.BIOMES, o);
         else gen.evaluate(x, z, Stage.EROSION, o);
         String water = o.lake == 1 ? "lake" : o.lake == 2 ? "salt flat" : o.river != 0 ? "river" : o.h < 0 ? "sea" : "-";

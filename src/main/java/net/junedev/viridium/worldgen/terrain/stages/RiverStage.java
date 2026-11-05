@@ -25,7 +25,10 @@ import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
  */
 public class RiverStage extends GenStage {
 
-    public static final int CACHE_MAX = 24;
+    public static final int CACHE_MAX = 64;
+
+    /** Drainage basins: which cell a point belongs to, how cells drain into each other. */
+    public final BasinGraph basins;
 
     /** Finished networks with their last-use stamp (lock-free reads; eviction by least recent use). */
     private final ConcurrentHashMap<Long, Cached> cache = new ConcurrentHashMap<>();
@@ -46,6 +49,7 @@ public class RiverStage extends GenStage {
 
     public RiverStage(WorldGen gen) {
         super(gen);
+        this.basins = new BasinGraph(gen);
     }
 
     // ------------------------------------------------------------------ network cache
@@ -54,9 +58,9 @@ public class RiverStage extends GenStage {
         return ((long) pi << 32) | (pj & 0xffffffffL);
     }
 
-    /** River network of plate (pi, pj), building it if needed (other threads wait for the same build). */
-    public RiverNet net(int pi, int pj) {
-        long key = key(pi, pj);
+    /** River network of basin cell (ci, cj), building it if needed (other threads wait for the same build). */
+    public RiverNet net(int ci, int cj) {
+        long key = key(ci, cj);
         Cached hit = cache.get(key);
         if (hit != null) {
             long now = clock.get(); // the clock only ticks on inserts: plain reads write nothing
@@ -65,7 +69,7 @@ public class RiverStage extends GenStage {
         }
         FutureTask<RiverNet> created = new FutureTask<>(() -> {
             long t0 = System.nanoTime();
-            RiverNet n = new RiverNetBuilder(gen).build(pi, pj, new GenScratch()); // builder holds per-build state
+            RiverNet n = new RiverNetBuilder(gen).build(basins.cell(ci, cj), basins, new GenScratch()); // builder holds per-build state
             buildNanos.addAndGet(System.nanoTime() - t0);
             net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET.add(System.nanoTime() - t0);
             builds.incrementAndGet();
@@ -108,8 +112,20 @@ public class RiverStage extends GenStage {
         }
     }
 
-    public boolean isCached(int pi, int pj) {
-        return cache.containsKey(key(pi, pj));
+    public boolean isCached(int ci, int cj) {
+        return cache.containsKey(key(ci, cj));
+    }
+
+    /** Basin cells whose networks shape (x, y). */
+    public long[] basinsAt(double x, double y) {
+        return basins.nearCells(x, y, RiverNetBuilder.MARGIN);
+    }
+
+    /** True when every network that shapes (x, y) is already built (evaluating there will not build one). */
+    public boolean isReadyAt(double x, double y) {
+        for (long k : basins.nearCells(x, y, RiverNetBuilder.MARGIN))
+            if (!cache.containsKey(k) && !basins.cell(k).ocean) return false;
+        return true;
     }
 
     public void clearCache() {
@@ -301,7 +317,7 @@ public class RiverStage extends GenStage {
         s.FOK = true;
         s.FD = D;
         s.FZ = z / wv / 16;
-        s.FW = w / wv / 10;
+        s.FW = w / wv / 4; // half-width stored ×4 (rivers up to ~64 blocks)
         s.FA = a / wv / 4;
         s.FR = rl / wv * 2;
     }
@@ -343,15 +359,43 @@ public class RiverStage extends GenStage {
         o.glac = 0;
         o.gorge = 0;
         if (o.L < -0.5) return;
-        RiverNet net = net(o.pi, o.pj);
+        // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
+        long[] near = basins.nearCells(x, y, RiverNetBuilder.MARGIN);
+        RiverNet[] nets = new RiverNet[near.length];
+        int nn = 0;
+        for (long k : near) {
+            BasinGraph.Cell c = basins.cell(k);
+            if (c.ocean) continue;
+            RiverNet net = net(c.ci, c.cj);
+            if (net.count > 0 || !net.lakes.isEmpty()) nets[nn++] = net;
+        }
+        // in phases across networks: all valleys first, then all channels (so each channel measures its water against
+        // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
+        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase);
+        if (o.h < -1 && o.river != 0 && o.delta == 0) { // last reach drowned by the sea (fjord, estuary)
+            o.river = 0;
+            o.riverD = 1e9;
+        }
+    }
+
+    /** Applies one phase of one basin network: 0 delta + broad valley, 1 channel, 2 estuary + lakes. */
+    protected void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase) {
+        if (phase == 2) {
+            if (net.estSeg.length > 0) estuaries(x, y, o, net);
+            if (!net.lakes.isEmpty()) lakes(x, y, o, net, s);
+            return;
+        }
         if (net.count == 0) return;
-        if (net.nMouth > 0) deltas(x, y, o, net);
+        if (phase == 0 && net.nMouth > 0) deltas(x, y, o, net);
         // valley shape from the rock (interpolated from the network grid so it changes smoothly between patches)
         netField(x, y, net, s);
         double ef = clamp(lerp(0.5, (lerp(o.erod, s.FE, s.FEW) - 0.2) / 0.7, P.valleyRock), 0, 1);
         o.gorge = 1 - ef;
         if (o.L >= -0.04) {
-            broadValley(o, ef, s);
+            if (phase == 0) {
+                broadValley(o, ef, s);
+                return;
+            }
             double qx = x + 3 * perlin(x / 50, y / 50, SD.rivW),
                 qy = y + 3 * perlin(x / 50 + 3.3, y / 50 + 7.7, SD.rivW + 1);
             int g = net.g, gi = floor((qx - net.x0) / g), gj = floor((qy - net.y0) / g);
@@ -428,12 +472,6 @@ public class RiverStage extends GenStage {
                 else o.valley = Math.max(o.valley, 1 - best / bW);
             }
         }
-        if (net.estSeg.length > 0) estuaries(x, y, o, net);
-        if (o.h < -1 && o.river != 0 && o.delta == 0) { // last reach drowned by the sea (fjord, estuary)
-            o.river = 0;
-            o.riverD = 1e9;
-        }
-        if (!net.lakes.isEmpty()) lakes(x, y, o, net, s);
     }
 
     // ------------------------------------------------------------------ 10c. lakes and salt flats
@@ -477,6 +515,7 @@ public class RiverStage extends GenStage {
             return;
         }
         double rim = Z + 30 * (thr - m);
-        if (o.h < rim) o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m));
+        // the rim never crosses a river channel and its banks: rivers flow into and out of the lake freely
+        if (o.h < rim) o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m) * ss(2, 14, o.riverD - o.riverHW));
     }
 }

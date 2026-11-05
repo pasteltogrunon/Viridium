@@ -41,7 +41,7 @@ public final class PlanPrefetcher {
     private static final int TICK_INTERVAL = 5;
     private static final int MAX_QUEUED = 1024;
     /** Distances (blocks) at which neighbouring plates are probed for their river networks. */
-    private static final int[] NET_PROBE = { 1200, 2400 };
+    private static final int[] NET_PROBE = { 1500, 3000 };
 
     private static final Map<World, PlanPrefetcher> BY_WORLD = new WeakHashMap<>();
     private static boolean handlersRegistered;
@@ -175,16 +175,22 @@ public final class PlanPrefetcher {
         });
     }
 
-    /** Builds the river networks of the plates around the player before any column needs them. */
+    /** Builds the river networks of the drainage basins around the player before any column needs them. */
     private void queueNets(double px, double pz) {
-        gen.evaluate(px, pz, Stage.PLATES, probe);
-        submitNet(probe.pi, probe.pj);
+        queueNetsAt(px, pz);
         for (int d : NET_PROBE) {
             for (int a = 0; a < 8; a++) {
                 double ang = a * Math.PI / 4;
-                gen.evaluate(px + Math.cos(ang) * d, pz + Math.sin(ang) * d, Stage.PLATES, probe);
-                submitNet(probe.pi, probe.pj);
+                queueNetsAt(px + Math.cos(ang) * d, pz + Math.sin(ang) * d);
             }
+        }
+    }
+
+    private void queueNetsAt(double x, double z) {
+        for (long k : gen.rivers.basinsAt(x, z)) {
+            int ci = net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyA(k),
+                cj = net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyB(k);
+            if (!gen.rivers.basins.cell(ci, cj).ocean) submitNet(ci, cj);
         }
     }
 

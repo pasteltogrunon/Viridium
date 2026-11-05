@@ -83,8 +83,9 @@ public class ClimateStage extends GenStage {
         double lat = o.lat * 57.2958;
         double sub = band(lat, 12, 40, 3), subp = band(lat, 44, 68, 3);
         double here = ss(-0.15, 0.25, o.L);
-        double lE2 = landAt(x + 2000, y, s), lW2 = landAt(x - 2000, y, s);
-        double lE3 = landAt(x + 3600, y, s), lW3 = landAt(x - 3600, y, s);
+        double sc = P.plateSize / 4000; // coast probes scale with the continents
+        double lE2 = landAt(x + 2000 * sc, y, s), lW2 = landAt(x - 2000 * sc, y, s);
+        double lE3 = landAt(x + 3600 * sc, y, s), lW3 = landAt(x - 3600 * sc, y, s);
         double toE = Math.max(o.lE, Math.max(0.8 * lE2, 0.55 * lE3)),
             toW = Math.max(o.lW, Math.max(0.8 * lW2, 0.55 * lW3));
         // eastern edge of the ocean = WEST coast of a continent (California, Peru, Namibia)

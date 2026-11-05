@@ -33,7 +33,7 @@ CC's background threads through `IPreloadFailureDelegate`). `CubeFiller` then cl
 - otherwise (≈ 3 cubes per column) → surface rules, water, ice and snow.
 
 `PlanPrefetcher` computes the plans of the columns around every player (view distance + 3, nearest first, a bit
-ahead of the movement) and the river networks of nearby plates on its own threads, so the server thread rarely waits.
+ahead of the movement) and the river networks of nearby drainage basins on its own threads, so the server thread rarely waits.
 
 Vegetation is **planned, not populated**: `FloraPlanner` decides each column's trees and plants from its plan alone
 (deterministic per column), and every air or surface cube draws the parts of the features of the 3×3 surrounding
@@ -85,7 +85,7 @@ A new map layer is one `MapLayer.register(...)` line in `MapLayer`.
 | erosion | 16.5 µs | 11.1 µs | 3.1 µs |
 | column plan (16×16, + crust), 1 thread, Java 25 | — | ~12 ms | 1.8 ms |
 | column plan, 47 threads | — | — | 0.48 ms wall |
-| river network build (per plate) | ~390 ms | — | ~230 ms, ~1.7 MiB |
+| river network build (per drainage basin) | ~390 ms (per plate) | — | ~260 ms |
 
 In the dev server (`runServer`, **Java 8**): 4.9 ms per column plan, 0.17 ms per cube (crust-only 0.23 ms,
 surface-crossing 0.12 ms, air 0). A column has 192 cubes in the generation range: 31 % air, 67 % crust only, ≈ 3.3
@@ -100,9 +100,22 @@ valley around it (cross-sections at the node and towards its receiver) and the p
 The channel is carved below that level and the first blocks of bank are kept at least at water level. Lakes are
 anchored to the real basin floor the same way.
 
+Continents are split into **drainage basins** (`BasinGraph`): Voronoi cells of warped coordinates, `basinSize`
+(3000 blocks) apart. Coastal cells drain to the sea; an inland cell drains into the lower neighbour with the lowest
+"potential" (its land height plus a large-scale noise weighted by `basinMerge`, so basins chain into a few very large
+systems), through the lowest point of their shared divide. Every basin gets its own network with a margin around it;
+the water of the upstream basins enters at that divide point with its flow and water level. The size of the whole
+upstream system decides the size of the mouth: river half width up to `riverMaxHalfWidth` (48, ~100-block wide
+rivers) and delta radius up to `deltaMaxRadius` (1600); big rivers build deltas rather than estuaries. Waterfalls at
+confluences are limited to 2.5 blocks per node (glacial hanging valleys can still drop ~10). Lake rims never cross a
+river channel or its banks, so rivers flow into and out of lakes freely.
+
+Scales: plates/continents `plateSize` 12000, temperature period 48000, precipitation period 36000 (3× the prototype;
+`ParityTest` sets the prototype values back).
+
 ## Known limitations
 
-- River networks are built per plate (~0.45 s, parallel) by the prefetcher before players reach them; teleporting
+- River networks are built per drainage basin (~0.26 s, parallel) by the prefetcher before players reach them; teleporting
   far away can still make the server thread wait for one.
 - Vegetation uses simplified shapes (the detailed Viridium tree generators are only used for saplings); no ores,
   caves or structures.

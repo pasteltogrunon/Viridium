@@ -113,6 +113,9 @@ class ParityTest {
         String[] header = rows.get(0);
         GenParams p = new GenParams();
         p.seed = seed;
+        p.plateSize = 4000; // the prototype's scales
+        p.tempPeriod = 16000;
+        p.precipPeriod = 12000;
         p.fastFields = false; // exact port: compare with the prototype
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();

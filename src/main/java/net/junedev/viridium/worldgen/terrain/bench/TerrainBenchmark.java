@@ -19,6 +19,7 @@ import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
+import net.junedev.viridium.worldgen.terrain.stages.BasinGraph;
 import net.junedev.viridium.worldgen.terrain.stages.RiverNet;
 
 /**
@@ -181,21 +182,23 @@ public final class TerrainBenchmark {
 
     private void riverNets() {
         line("");
-        line("River networks (per plate, cold build, 1 thread):");
+        line("River networks (per drainage basin, cold build, parallel):");
         WorldGen g = gen(true);
         long totalBytes = 0;
         int built = 0;
         long t0 = System.nanoTime();
-        for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) {
+        for (int k = 0; k < 6; k++) {
+            long ck = g.rivers.basins.cellAt(2000 + k * 3100, 1500);
             long t = System.nanoTime();
-            RiverNet net = g.rivers.net(i, j);
+            RiverNet net = g.rivers.net(BasinGraph.keyA(ck),
+                BasinGraph.keyB(ck));
             totalBytes += net.bytes;
             built++;
             if (built <= 3) line("  %6.0f ms  %d cells, %d reaches, %d mouths, %d lake cells, ~%d KiB",
                 (System.nanoTime() - t) / 1e6, net.nx * net.ny, net.count, net.nMouth, net.lakes.size(),
                 net.bytes >> 10);
         }
-        line("  %d networks: %.0f ms each, ~%.1f MiB each (cache keeps 24)", built,
+        line("  %d networks: %.0f ms each, ~%.1f MiB each (cache keeps 64)", built,
             (System.nanoTime() - t0) / 1e6 / built, totalBytes / (double) built / (1 << 20));
     }
 

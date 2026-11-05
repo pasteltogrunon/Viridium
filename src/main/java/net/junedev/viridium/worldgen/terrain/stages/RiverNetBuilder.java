@@ -111,21 +111,43 @@ final class RiverNetBuilder {
         return clamp(12 * w + 40, 60, 420);
     }
 
-    RiverNet build(int pi, int pj, GenScratch s) {
-        final double S = P.plateSize;
+    /** Margin (blocks) around a basin cell: the valley field reaches this far into the neighbours, then fades out. */
+    static final double MARGIN = 960;
+
+    /** River half-width for a flow (in threshold units), capped by {@code riverMaxHalfWidth}. */
+    float halfWidth(double flowOverThr) {
+        return (float) Math.min(P.riverMaxHalfWidth, 1.2 + 2.2 * Math.sqrt(flowOverThr));
+    }
+
+    RiverNet build(BasinGraph.Cell cell, BasinGraph graph, GenScratch s) {
+        final double B = graph.size();
         g = P.riverGrid;
-        PlateStage plates = gen.plates;
-        double fx = plates.featX(pi, pj), fy = plates.featY(pi, pj);
-        double R = S * 1.3 + S * P.plateWarp * 0.8;
-        gx0 = floor((fx - R) / g);
-        gy0 = floor((fy - R) / g);
+        final double H = 1.35 * B + MARGIN;
+        gx0 = floor((cell.fx - H) / g);
+        gy0 = floor((cell.fy - H) / g);
         x0 = (double) gx0 * g;
         y0 = (double) gy0 * g;
-        nx = (int) Math.ceil(2 * R / g) + 1;
+        nx = (int) Math.ceil(2 * H / g) + 1;
         final int ny = nx, n = nx * ny;
+        final long ck = BasinGraph.key(cell.ci, cell.cj);
+        final double thr = P.riverThreshold * 45 * (32.0 / g) * (32.0 / g);
         float[] hgt = new float[n], run = new float[n];
-        boolean[] own = new boolean[n];
+        boolean[] own = new boolean[n], entry = new boolean[n];
+        float[] inflow = new float[n];
         byte[] cer = new byte[n];
+        // where the rivers of upstream basins come in, with everything they carry
+        for (BasinGraph.Cell ch : graph.children(cell)) {
+            int ei = BasinGraph.keyA(ch.exitNode) - gx0, ej = BasinGraph.keyB(ch.exitNode) - gy0;
+            if (ei < 1 || ej < 1 || ei >= nx - 1 || ej >= ny - 1) continue;
+            entry[ej * nx + ei] = true;
+            inflow[ej * nx + ei] += (float) graph.flowOut(ch);
+        }
+        int exit = -1;
+        if (cell.drainsToNeighbour()) {
+            int xi = BasinGraph.keyA(cell.exitNode) - gx0, xj = BasinGraph.keyB(cell.exitNode) - gy0;
+            if (xi >= 0 && xj >= 0 && xi < nx && xj < ny) exit = xj * nx + xi;
+        }
+        final int exitIdx = exit;
         // independent per cell: rows run in parallel, each with its own temporaries
         java.util.stream.IntStream.range(0, ny).parallel().forEach(j -> {
             GenPoint rt = new GenPoint();
@@ -133,9 +155,9 @@ final class RiverNetBuilder {
             for (int i = 0; i < nx; i++) {
                 int idx = j * nx + i;
                 double x = x0 + (i + 0.5) * g, y = y0 + (j + 0.5) * g;
-                plates.apply(x, y, rt, rs);
-                if (rt.pi != pi || rt.pj != pj) continue;
+                if (!entry[idx] && graph.cellAt(x, y) != ck) continue;
                 own[idx] = true;
+                gen.plates.apply(x, y, rt, rs);
                 gen.continents.apply(x, y, rt);
                 if (rt.L < 0) {
                     hgt[idx] = -1;
@@ -146,29 +168,25 @@ final class RiverNetBuilder {
                 gen.geology.apply(x, y, rt, rs);
                 cer[idx] = (byte) Math.round(rt.erod * 255);
                 gen.climate.apply(x, y, rt);
-                run[idx] = (float) (rt.Pb * (0.4 + 0.6 * Math.exp(-rt.L / 0.4)) / 1000);
+                run[idx] = (float) (rt.Pb * (0.4 + 0.6 * Math.exp(-rt.L / 0.4)) / 1000) + inflow[idx];
             }
         });
+        if (exitIdx >= 0) own[exitIdx] = true;
 
-        // priority-flood: fills depressions and gives every cell a downstream receiver
+        // priority-flood from the basin's outlets: the sea inside the cell, or the exit node on the divide
         float[] filled = new float[n];
         int[] recv = new int[n], order = new int[n];
         Arrays.fill(recv, -1);
         boolean[] done = new boolean[n];
         Heap heap = new Heap(n);
         int cnt = 0;
-        for (int j = 0; j < ny; j++) {
-            for (int i = 0; i < nx; i++) {
-                int idx = j * nx + i;
-                if (!own[idx]) continue;
-                if (hgt[idx] < 0 || i == 0 || j == 0 || i == nx - 1 || j == ny - 1) {
-                    done[idx] = true;
-                    filled[idx] = hgt[idx];
-                    heap.push(hgt[idx], idx);
-                }
-            }
+        for (int idx = 0; idx < n; idx++) {
+            if (!own[idx] || (hgt[idx] >= 0 && idx != exitIdx)) continue;
+            done[idx] = true;
+            filled[idx] = hgt[idx];
+            heap.push(hgt[idx], idx);
         }
-        if (heap.n == 0) { // plate without ocean (all collisions): drains through its lowest cell
+        if (heap.n == 0) { // endorheic basin: everything drains to its lowest point
             int lo = -1;
             for (int idx = 0; idx < n; idx++) if (own[idx] && (lo < 0 || hgt[idx] < hgt[lo])) lo = idx;
             if (lo >= 0) {
@@ -195,6 +213,13 @@ final class RiverNetBuilder {
 
         // lakes: cells the flood had to fill (closed depressions); arid basins only keep a salt flat
         Map<Integer, Double> lakes = new HashMap<>();
+        // a lake can never stand above the lowest point of the basin's whole divide: it would spill there first
+        double spill = Double.POSITIVE_INFINITY;
+        for (int j = 1; j < ny - 1; j++) for (int i = 1; i < nx - 1; i++) {
+            int idx = j * nx + i;
+            if (!own[idx] || entry[idx] || hgt[idx] < 0) continue;
+            if (!own[idx - 1] || !own[idx + 1] || !own[idx - nx] || !own[idx + nx]) spill = Math.min(spill, hgt[idx]);
+        }
         if (P.lakes > 0) {
             byte[] inL = new byte[n];
             int[] stack = new int[n];
@@ -235,6 +260,8 @@ final class RiverNetBuilder {
                     botF = Math.min(botF, finalHeight(x0 + (ci + 0.5) * g, y0 + (cj + 0.5) * g, s));
                 }
                 if (botF < bot) level += botF - bot;
+                level = Math.min(level, spill - 1);
+                if (level <= Math.min(bot, botF)) continue;
                 for (int q = 0; q < nc; q++) {
                     int c = cells[q];
                     if (hgt[c] < level) lakes.put(c, salt ? -level : level);
@@ -252,7 +279,6 @@ final class RiverNetBuilder {
                 if (relief[idx] > relief[r]) relief[r] = relief[idx];
             }
         }
-        double thr = P.riverThreshold * 45 * (32.0 / g) * (32.0 / g);
         boolean[] isRiv = new boolean[n];
         float[] hw = new float[n];
         int[] mainUp = new int[n];
@@ -262,7 +288,7 @@ final class RiverNetBuilder {
             if (own[idx] && hgt[idx] >= 0 && recv[idx] >= 0 && acc[idx] >= thr) {
                 isRiv[idx] = true;
                 count++;
-                hw[idx] = (float) Math.min(22, 1.2 + 2.2 * Math.sqrt(acc[idx] / thr));
+                hw[idx] = halfWidth(acc[idx] / thr);
             }
         }
         for (int idx = 0; idx < n; idx++) {
@@ -274,14 +300,35 @@ final class RiverNetBuilder {
         // water profile projected onto the final terrain: each river node takes the floor of the eroded valley
         // around it (cross-section samples), then the profile is made monotone downstream (water never climbs).
         // The coarse "filled" profile only knows the smoothed relief and sits above the real valley floor.
+        // the upstream basins already know the level their water leaves at: start from it, so the river never climbs
+        // when it crosses a divide (builds them if needed; no cycles, a basin only depends on those draining into it)
+        float[] entryLevel = new float[n];
+        Arrays.fill(entryLevel, Float.NaN);
+        for (BasinGraph.Cell ch : graph.children(cell)) {
+            int ei = BasinGraph.keyA(ch.exitNode) - gx0, ej = BasinGraph.keyB(ch.exitNode) - gy0;
+            if (ei < 1 || ej < 1 || ei >= nx - 1 || ej >= ny - 1) continue;
+            float lv = gen.rivers.net(ch.ci, ch.cj).exitLevel;
+            if (lv == lv) entryLevel[ej * nx + ei] = lv;
+        }
         float[] wl = filled.clone();
         final float[] wlf = wl;
         java.util.stream.IntStream.range(0, n).parallel().forEach(idx -> { // independent per river node
-            if (isRiv[idx]) wlf[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
+            if (entry[idx]) // divide node shared with the upstream basin: its exit level, or the same floor sample
+                wlf[idx] = entryLevel[idx] == entryLevel[idx] ? entryLevel[idx]
+                    : (float) Math.max(0, valleyFloor(idx, idx, halfWidth(inflow[idx] / thr), null));
+            else if (isRiv[idx]) wlf[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
         });
+        if (exitIdx >= 0) wl[exitIdx] = (float) Math.max(0, valleyFloor(exitIdx, exitIdx, halfWidth((float) graph.flowOut(cell) / thr), null));
         for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
             int idx = order[k], r = recv[idx];
-            if (isRiv[idx] && r >= 0 && isRiv[r] && wl[idx] < wl[r]) wl[r] = wl[idx];
+            if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
+        }
+        // ...and no reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level of
+        // the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
+        final double MAX_DROP = 2.5;
+        for (int k = 0; k < cnt; k++) {
+            int idx = order[k], r = recv[idx];
+            if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] > wl[r] + MAX_DROP) wl[idx] = (float) (wl[r] + MAX_DROP);
         }
 
         // meanders: only on gentle, well-fed reaches and never on a sharp bend
@@ -319,10 +366,10 @@ final class RiverNetBuilder {
             int mu = mainUp[idx];
             double sx = mu >= 0 ? (ax + jx(mu)) * 0.5 : ax, sy = mu >= 0 ? (ay + jy(mu)) * 0.5 : ay;
             double ex, ey, A1, P1, M1;
-            if (!isRiv[r]) { // mouth
+            if (!isRiv[r]) { // mouth, or the exit node on the divide (no meander there: the next basin starts on it)
                 ex = jx(r);
                 ey = jy(r);
-                A1 = ampAt(idx, r, filled, isRiv, hw, straight, AMAX, MA);
+                A1 = hgt[r] < 0 ? ampAt(idx, r, filled, isRiv, hw, straight, AMAX, MA) : 0;
                 P1 = 0;
                 M1 = 0;
             } else if (mainUp[r] == idx) { // main stem
@@ -342,7 +389,7 @@ final class RiverNetBuilder {
             }
             double A0 = mu >= 0 ? ampAt(mu, idx, filled, isRiv, hw, straight, AMAX, MA) : 0;
             aUp[sl] = (float) A0;
-            head[sl] = (byte) (mu < 0 ? 1 : 0);
+            head[sl] = (byte) (mu < 0 && !entry[idx] ? 1 : 0);
             cellA[idx] = (float) Math.max(A0, A1);
             double Lt = 0;
             for (int t = 0; t < NPT; t++) {
@@ -398,15 +445,15 @@ final class RiverNetBuilder {
                 Math.max(
                     Math.max(Math.abs(bx0 - cxc), Math.abs(bx1 - cxc)),
                     Math.max(Math.abs(by0 - cyc), Math.abs(by1 - cyc))));
-            w0[sl] = mu >= 0 ? hw[mu] : 0.6f;
+            w0[sl] = mu >= 0 ? hw[mu] : entry[idx] ? hw[idx] : 0.6f;
             w1[sl] = hw[idx];
             z0[sl] = mu >= 0 ? (float) (0.5 * ((double) wl[mu] + wl[idx])) : wl[idx];
-            z1[sl] = !isRiv[r] ? 0
+            z1[sl] = !isRiv[r] ? (hgt[r] < 0 ? 0 : wl[r])
                 : mainUp[r] == idx ? (float) (0.5 * ((double) wl[idx] + wl[r]))
                     : (float) (0.5 * ((double) z0[slot[r]] + z1[slot[r]]));
             sacc[sl] = (float) (acc[idx] / thr);
             // mouth: sediment (flow × basin relief) vs tide decides delta or estuary
-            if (!isRiv[r] && sacc[sl] >= 3) {
+            if (!isRiv[r] && hgt[r] < 0 && sacc[sl] >= 3) {
                 double ux = ex - ax, uy = ey - ay;
                 double l = hypot(ux, uy);
                 if (l == 0) l = 1;
@@ -414,11 +461,13 @@ final class RiverNetBuilder {
                 uy /= l;
                 double tide = 0.5 + 0.75 * perlin(ex / 2600, ey / 2600, SD.estu);
                 double sed = ss(5, 45, sacc[sl]) * ss(40, 300, relief[idx]);
-                double E = ss(0.42, 0.62, tide - 0.55 * sed + 0.12) * Math.min(P.estuaries, 1) * ss(3, 5, sacc[sl]);
-                double Rd = sacc[sl] >= 6 && P.deltaSize > 0 ? Math.min(260, 26 * Math.sqrt(sacc[sl])) * P.deltaSize
+                // big rivers carry so much sediment that they mostly build deltas (Nile, Mississippi, Ganges)
+                double E = ss(0.42, 0.62, tide - 0.55 * sed + 0.12) * Math.min(P.estuaries, 1) * ss(3, 5, sacc[sl])
+                    * (1 - 0.75 * ss(40, 200, sacc[sl]));
+                double Rd = sacc[sl] >= 6 && P.deltaSize > 0 ? Math.min(P.deltaMaxRadius, 60 * Math.sqrt(sacc[sl])) * P.deltaSize
                     : 0;
-                double Lest = Math.min(900, 140 + 34 * hw[idx]) * Math.max(P.estuaries, 0.3);
-                double Wm = Math.min(2.6 * g, 10 + 4.2 * hw[idx]);
+                double Lest = Math.min(3000, 140 + 34 * hw[idx]) * Math.max(P.estuaries, 0.3);
+                double Wm = Math.min(8.0 * g, 10 + 4.2 * hw[idx]);
                 if (Rd > 0 || E > 0.02) {
                     if ((nm + 1) * 12 > mouths.length) mouths = Arrays.copyOf(mouths, mouths.length * 2);
                     double[] m = { ex, ey, ux, uy, Rd, hw[idx], sacc[sl], idx, E, Lest, Wm, sl };
@@ -464,7 +513,7 @@ final class RiverNetBuilder {
         for (int pass = 0; pass < 2; pass++) {
             for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
                 int idx = j * nx + i;
-                if (!own[idx]) continue;
+                // the distance to the rivers spreads over the margin too: the valley fades out before the grid ends
                 if (i > 0) relax(dd, src, idx, idx - 1, g);
                 if (j > 0) {
                     relax(dd, src, idx, idx - nx, g);
@@ -474,7 +523,6 @@ final class RiverNetBuilder {
             }
             for (int j = ny - 1; j >= 0; j--) for (int i = nx - 1; i >= 0; i--) {
                 int idx = j * nx + i;
-                if (!own[idx]) continue;
                 if (i < nx - 1) relax(dd, src, idx, idx + 1, g);
                 if (j < ny - 1) {
                     relax(dd, src, idx, idx + nx, g);
@@ -504,14 +552,15 @@ final class RiverNetBuilder {
             if (sI < 0 || dd[idx] >= VLIM) continue;
             vd[idx] = (char) Math.round(dd[idx]);
             vz[idx] = (short) clamp(Math.round(wl[sI] * 16.0), -32000, 32000);
-            vw[idx] = (byte) Math.min(255, Math.round(hw[sI] * 10.0));
+            vw[idx] = (byte) Math.min(255, Math.round(hw[sI] * 4.0));
             va[idx] = (byte) Math.min(255, Math.round(cellA[sI] * 4.0));
             vr[idx] = (byte) Math.min(255, Math.round(lrel[sI] / 2.0));
         }
 
         RiverNet net = new RiverNet();
-        net.pi = pi;
-        net.pj = pj;
+        net.exitLevel = exitIdx >= 0 ? wl[exitIdx] : Float.NaN;
+        net.ci = cell.ci;
+        net.cj = cell.cj;
         net.x0 = x0;
         net.y0 = y0;
         net.g = g;

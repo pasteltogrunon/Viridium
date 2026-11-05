@@ -3,14 +3,15 @@ package net.junedev.viridium.worldgen.terrain.stages;
 import java.util.Map;
 
 /**
- * Pre-generated drainage network of one tectonic plate (rivers never cross plate boundaries, so the plate bounds the
- * work). Immutable once built. Arrays use float where the JS prototype uses Float32Array, to keep results identical.
+ * Pre-generated drainage network of one drainage basin cell (see {@link BasinGraph}); rivers coming from upstream basins
+ * enter through the shared divide node with their whole flow. Immutable once built.
  */
 public final class RiverNet {
 
     public static final int SEG = 8, NPT = SEG + 1, HALF = SEG >> 1, MS = 14;
 
-    public int pi, pj;
+    /** Basin cell this network belongs to. */
+    public int ci, cj;
     /** Grid origin (blocks), cell size and size. */
     public double x0, y0;
     public int g, nx, ny;
@@ -40,6 +41,8 @@ public final class RiverNet {
     public byte[] cer;
     /** Lake level per cell (negative = salt flat). */
     public Map<Integer, Double> lakes;
+    /** Water level at the exit node towards the downstream basin (NaN if the basin drains to the sea). */
+    public float exitLevel = Float.NaN;
     /** Approximate retained size, for diagnostics. */
     public long bytes;
 }
