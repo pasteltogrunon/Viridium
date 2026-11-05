@@ -24,6 +24,9 @@ public final class GenScratch {
     public final GenPoint hotspotPoint = new GenPoint();
     public final GenPoint landPoint = new GenPoint();
 
+    /** Small output buffer for field lookups. */
+    public final double[] tmp1 = new double[1];
+
     // erosion: last gully value and gradient
     public double EV, EGX, EGY;
 

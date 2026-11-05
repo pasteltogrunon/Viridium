@@ -48,6 +48,13 @@ public final class GenParams implements Cloneable {
     public double lakes = 1.0;
     public double valleyRock = 1.0;
 
+    // implementation
+    /**
+     * Use cached coarse fields for the neighbourhood samples of the climate and erosion stages (much faster, tiny
+     * differences). False = exact port of the prototype (parity tests).
+     */
+    public boolean fastFields = true;
+
     public GenParams copy() {
         try {
             return (GenParams) clone();

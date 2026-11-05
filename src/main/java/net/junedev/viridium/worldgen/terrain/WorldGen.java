@@ -5,6 +5,8 @@ import java.util.function.Function;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.core.Seeds;
 import net.junedev.viridium.worldgen.terrain.crust.CrustModel;
+import net.junedev.viridium.worldgen.terrain.fields.FastClimateStage;
+import net.junedev.viridium.worldgen.terrain.fields.FastErosionStage;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
@@ -138,8 +140,10 @@ public final class WorldGen {
         private Function<WorldGen, ReliefStage> relief = ReliefStage::new;
         private Function<WorldGen, VolcanismStage> volcanism = VolcanismStage::new;
         private Function<WorldGen, GeologyStage> geology = GeologyStage::new;
-        private Function<WorldGen, ClimateStage> climateFinal = ClimateStage::new;
-        private Function<WorldGen, ErosionStage> erosion = ErosionStage::new;
+        private Function<WorldGen, ClimateStage> climateFinal = g -> g.params.fastFields ? new FastClimateStage(g)
+            : new ClimateStage(g);
+        private Function<WorldGen, ErosionStage> erosion = g -> g.params.fastFields ? new FastErosionStage(g)
+            : new ErosionStage(g);
         private Function<WorldGen, RiverStage> rivers = RiverStage::new;
         private Function<WorldGen, CryoStage> cryo = CryoStage::new;
         private Function<WorldGen, BiomeStage> biomes = BiomeStage::new;

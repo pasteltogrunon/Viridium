@@ -152,6 +152,7 @@ class ParityTest {
         String[] header = rows.get(0);
         GenParams p = new GenParams();
         p.seed = seed;
+        p.fastFields = false; // exact port: compare with the prototype
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
         Map<String, Double> maxErr = new LinkedHashMap<>();
@@ -200,6 +201,7 @@ class ParityTest {
         String[] header = rows.get(0);
         GenParams p = new GenParams();
         p.seed = seed;
+        p.fastFields = false; // exact port: compare with the prototype
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 

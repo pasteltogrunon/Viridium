@@ -10,8 +10,6 @@ import static net.junedev.viridium.worldgen.terrain.core.Noise.rnd;
 import static net.junedev.viridium.worldgen.terrain.stages.RiverNet.NPT;
 import static net.junedev.viridium.worldgen.terrain.stages.RiverNet.SEG;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -29,7 +27,20 @@ public class RiverStage extends GenStage {
 
     public static final int CACHE_MAX = 24;
 
-    private final LinkedHashMap<Long, RiverNet> cache = new LinkedHashMap<>(32, 0.75f, true);
+    /** Finished networks with their last-use stamp (lock-free reads; eviction by least recent use). */
+    private final ConcurrentHashMap<Long, Cached> cache = new ConcurrentHashMap<>();
+    private final AtomicLong clock = new AtomicLong();
+
+    private static final class Cached {
+
+        final RiverNet net;
+        volatile long used;
+
+        Cached(RiverNet net, long used) {
+            this.net = net;
+            this.used = used;
+        }
+    }
     private final ConcurrentHashMap<Long, FutureTask<RiverNet>> building = new ConcurrentHashMap<>();
     private final AtomicLong builds = new AtomicLong(), buildNanos = new AtomicLong();
 
@@ -46,9 +57,11 @@ public class RiverStage extends GenStage {
     /** River network of plate (pi, pj), building it if needed (other threads wait for the same build). */
     public RiverNet net(int pi, int pj) {
         long key = key(pi, pj);
-        synchronized (cache) {
-            RiverNet n = cache.get(key);
-            if (n != null) return n;
+        Cached hit = cache.get(key);
+        if (hit != null) {
+            long now = clock.get(); // the clock only ticks on inserts: plain reads write nothing
+            if (hit.used < now) hit.used = now;
+            return hit.net;
         }
         FutureTask<RiverNet> created = new FutureTask<>(() -> {
             long t0 = System.nanoTime();
@@ -64,15 +77,8 @@ public class RiverStage extends GenStage {
         }
         try {
             RiverNet n = task.get();
-            synchronized (cache) {
-                cache.put(key, n);
-                if (cache.size() > CACHE_MAX) {
-                    Iterator<Long> it = cache.keySet()
-                        .iterator();
-                    it.next();
-                    it.remove();
-                }
-            }
+            cache.putIfAbsent(key, new Cached(n, clock.incrementAndGet()));
+            if (cache.size() > CACHE_MAX) evictOldest();
             return n;
         } catch (InterruptedException e) {
             Thread.currentThread()
@@ -88,16 +94,25 @@ public class RiverStage extends GenStage {
         }
     }
 
-    public boolean isCached(int pi, int pj) {
-        synchronized (cache) {
-            return cache.containsKey(key(pi, pj));
+    private synchronized void evictOldest() {
+        while (cache.size() > CACHE_MAX) {
+            Long oldest = null;
+            long best = Long.MAX_VALUE;
+            for (java.util.Map.Entry<Long, Cached> e : cache.entrySet()) if (e.getValue().used < best) {
+                best = e.getValue().used;
+                oldest = e.getKey();
+            }
+            if (oldest == null) return;
+            cache.remove(oldest);
         }
     }
 
+    public boolean isCached(int pi, int pj) {
+        return cache.containsKey(key(pi, pj));
+    }
+
     public void clearCache() {
-        synchronized (cache) {
-            cache.clear();
-        }
+        cache.clear();
     }
 
     public long buildCount() {

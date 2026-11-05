@@ -14,8 +14,11 @@ import com.google.common.cache.CacheBuilder;
  */
 public final class ColumnPlanCache {
 
-    /** A 32-chunk view covers 65x65 ≈ 4200 columns; keep a typical view resident. */
-    public static final int DEFAULT_MAXIMUM_SIZE = 4096;
+    /**
+     * A plan is ~17.5 KiB (surface + crust profile), so 2048 plans ≈ 36 MiB. Plans are recomputed on a miss (output
+     * is identical), so this only trades memory for repeated planning when players move vertically.
+     */
+    public static final int DEFAULT_MAXIMUM_SIZE = 2048;
 
     private final ColumnPlanner planner;
     private final Cache<Long, ColumnPlan> completed;

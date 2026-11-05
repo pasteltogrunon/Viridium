@@ -1,5 +1,7 @@
 package net.junedev.viridium;
 
+import net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand;
+
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
@@ -25,7 +27,9 @@ public class CommonProxy {
     public void postInit(FMLPostInitializationEvent event) {}
 
     // register server commands in this event handler (Remove if not needed)
-    public void serverStarting(FMLServerStartingEvent event) {}
+    public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new ViridiumCommand());
+    }
 
     public void loadComplete(FMLLoadCompleteEvent event) {}
 }

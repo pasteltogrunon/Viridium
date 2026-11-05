@@ -70,6 +70,17 @@ public class Viridium {
     }
 
     @Mod.EventHandler
+    public void serverStarted(cpw.mods.fml.common.event.FMLServerStartedEvent event) {
+        // dev aid: VIRIDIUM_BENCH_ON_START=1 runs the generator benchmark around the spawn and logs it
+        if ("1".equals(System.getenv("VIRIDIUM_BENCH_ON_START"))) {
+            net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+            net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand cmd = new net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand();
+            cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // cold (JIT, caches)
+            cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // warm
+        }
+    }
+
+    @Mod.EventHandler
     // loadComplete "All mods are loaded, all registries are final." Used to check things that depend on other mods'
     // content.
     public void loadComplete(FMLLoadCompleteEvent event) {

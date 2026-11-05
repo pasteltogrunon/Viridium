@@ -55,11 +55,24 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
         this.decorator = new SurfaceDecorator(plans);
+        BY_WORLD.put(world, this);
         Viridium.LOGGER.info("Viridium terrain generator created (seed {})", params.seed);
     }
 
     public ColumnPlanCache plans() {
         return plans;
+    }
+
+    public CubeFiller filler() {
+        return filler;
+    }
+
+    private static final java.util.Map<World, ViridiumWorldGenerator> BY_WORLD = java.util.Collections
+        .synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** The generator of a server world, or null if it does not use Viridium. */
+    public static ViridiumWorldGenerator forWorld(World world) {
+        return BY_WORLD.get(world);
     }
 
     // ------------------------------------------------------------------ generation
