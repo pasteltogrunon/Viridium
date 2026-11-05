@@ -15,7 +15,7 @@ Press **M** in game (singleplayer) for the world map.
 | `crust` | `CrustModel` (3D lithology by depth), `CrustPlan`, `Lithology`, `Province` | no |
 | `column` | `ColumnPlanner` → immutable `ColumnPlan` (everything X/Z-only for a 16×16 column), `ColumnPlanCache`, `BiomeMapper`, `TerrainLayout` | no |
 | `map` | `MapLayer` (every layer), `MapTileRenderer`, `CrustSectionRenderer` | no |
-| `cube` | `ViridiumWorldType`, `ViridiumWorldGenerator` (CC `IWorldGenerator`), `CubeFiller`, `SurfaceRules`, `SurfaceDecorator`, `LithologyBlocks`, `/viridium bench` | yes |
+| `cube` | `ViridiumWorldType`, `ViridiumWorldGenerator` (CC `IWorldGenerator`), `CubeFiller`, `SurfaceRules`, `flora` (planned vegetation), `PlanPrefetcher`, `LithologyBlocks`, `/viridium bench|stats` | yes |
 | `bench` | `TerrainBenchmark` (headless) | no |
 | `client/map` (outside) | `WorldMapScreen`, `MapTileCache`, key binding | yes |
 
@@ -32,7 +32,14 @@ CC's background threads through `IPreloadFailureDelegate`). `CubeFiller` then cl
 - deeper than the surface rules reach → crust only (lithology per block from the column's crust profile);
 - otherwise (≈ 3 cubes per column) → surface rules, water, ice and snow.
 
-Population (`SurfaceDecorator`) uses the vanilla +8 offset and generates the 2×3×2 cubes it can touch first.
+`PlanPrefetcher` computes the plans of the columns around every player (view distance + 3, nearest first, a bit
+ahead of the movement) and the river networks of nearby plates on its own threads, so the server thread rarely waits.
+
+Vegetation is **planned, not populated**: `FloraPlanner` decides each column's trees and plants from its plan alone
+(deterministic per column), and every air or surface cube draws the parts of the features of the 3×3 surrounding
+columns that fall inside it, straight into its storage. Population therefore touches no other cube, never calls
+`setBlock` and queues no light updates. Tree shapes live in `FeatureType` (vanilla-like oak, birch, spruce, pine,
+jungle, mega jungle, acacia, swamp oak, and simplified Viridium pedunculate oak, chestnut and coconut palm).
 
 ## The crust
 
@@ -95,10 +102,10 @@ anchored to the real basin floor the same way.
 
 ## Known limitations
 
-- River networks are built per plate on first use (~0.7 s, including projecting the water profile onto the eroded
-  terrain). Background preloading usually hides it, but a player
-  entering a new plate can still cause a hitch on the server thread.
-- Population is minimal (vanilla + three Viridium trees, grass, flowers, desert plants); no ores, caves or structures.
+- River networks are built per plate (~0.45 s, parallel) by the prefetcher before players reach them; teleporting
+  far away can still make the server thread wait for one.
+- Vegetation uses simplified shapes (the detailed Viridium tree generators are only used for saplings); no ores,
+  caves or structures.
 - Biomes map onto vanilla biome ids until Viridium registers its own.
 - The map needs the world seed, so it only works in singleplayer.
 - Mountains reach ~Y 650; vanilla tree generators refuse to grow above Y 256 or below Y 1.

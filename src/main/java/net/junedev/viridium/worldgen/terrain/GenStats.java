@@ -50,21 +50,18 @@ public final class GenStats {
     }
 
     public static final Timer PLAN = new Timer("column plan (computed)");
+    public static final Timer PREFETCH = new Timer("column plan prefetched (background)");
     public static final Timer PLAN_WAIT = new Timer("column plan wait on server thread");
     public static final Timer FILL_AIR = new Timer("cube fill: air");
     public static final Timer FILL_CRUST = new Timer("cube fill: crust only");
     public static final Timer FILL_MIXED = new Timer("cube fill: surface");
     public static final Timer FILL_BEDROCK = new Timer("cube fill: bedrock");
     public static final Timer POPULATE = new Timer("populate (total)");
-    public static final Timer POP_NEIGHBOURS = new Timer("populate: generate neighbour cubes");
-    public static final Timer POP_DECORATE = new Timer("populate: decorate (trees, plants)");
-    public static final Timer POP_LIGHT = new Timer("populate: light updates queued by decoration");
-    public static final Timer TREES = new Timer("populate: trees placed");
-    public static final Timer TREES_FAILED = new Timer("populate: tree attempts rejected");
+    public static final Timer FLORA = new Timer("vegetation drawn into cubes");
+    public static final Timer FLORA_FEATURES = new Timer("vegetation features drawn (parts)");
     public static final Timer RIVER_NET = new Timer("river network build");
 
-    public static final Timer[] ALL = { PLAN, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK, POPULATE,
-        POP_NEIGHBOURS, POP_DECORATE, POP_LIGHT, TREES, TREES_FAILED, RIVER_NET };
+    public static final Timer[] ALL = { PLAN, PREFETCH, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK, POPULATE, FLORA, FLORA_FEATURES, RIVER_NET };
 
     private GenStats() {}
 

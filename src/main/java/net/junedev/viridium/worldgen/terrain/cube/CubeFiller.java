@@ -23,12 +23,26 @@ public class CubeFiller {
     private final Block[] lith;
     private final SurfaceRules rules;
     private final ThreadLocal<SurfaceRules.Column> surface = ThreadLocal.withInitial(SurfaceRules.Column::new);
+    private net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora;
 
     public CubeFiller(boolean hasSky, CrustModel crust, Block[] lithologyBlocks) {
         this.hasSky = hasSky;
         this.crust = crust;
         this.lith = lithologyBlocks;
         this.rules = new SurfaceRules(lithologyBlocks);
+    }
+
+    public SurfaceRules rules() {
+        return rules;
+    }
+
+    public boolean hasSky() {
+        return hasSky;
+    }
+
+    /** Planned vegetation drawn into air and surface cubes (null = none). */
+    public void setFlora(net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora) {
+        this.flora = flora;
     }
 
     /** Kind of work a cube needs. */
@@ -50,7 +64,7 @@ public class CubeFiller {
     /** Returns the block storage of the cube, or null for an all-air cube. */
     public @Nullable ExtendedBlockStorage fill(ColumnPlan plan, int cubeX, int cubeY, int cubeZ) {
         Kind kind = classify(plan, cubeY);
-        if (kind == Kind.AIR) return null;
+        if (kind == Kind.AIR) return flora == null ? null : flora.draw(plan, cubeX, cubeY, cubeZ, null);
         int y0 = cubeY << 4;
         ExtendedBlockStorage ebs = new ExtendedBlockStorage(y0, hasSky);
         if (kind == Kind.BEDROCK) {
@@ -73,6 +87,7 @@ public class CubeFiller {
                 }
             }
         }
+        if (kind == Kind.MIXED && flora != null) flora.draw(plan, cubeX, cubeY, cubeZ, ebs);
         ebs.removeInvalidBlocks();
         return ebs;
     }

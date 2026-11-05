@@ -23,15 +23,12 @@ import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
 
 import com.cardinalstar.cubicchunks.api.ICube;
-import com.cardinalstar.cubicchunks.api.util.Box;
 import com.cardinalstar.cubicchunks.api.worldgen.GenerationResult;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
-import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.server.chunkio.IPreloadFailureDelegate;
 import com.cardinalstar.cubicchunks.util.CubePos;
-import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
@@ -46,7 +43,6 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
     private final WorldServer world;
     private final ColumnPlanCache plans;
     private final CubeFiller filler;
-    private final SurfaceDecorator decorator;
 
     public ViridiumWorldGenerator(WorldServer world) {
         this.world = world;
@@ -55,8 +51,12 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         WorldGen gen = new WorldGen(params);
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
-        this.decorator = new SurfaceDecorator(plans);
+        filler.setFlora(new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(plans, filler.rules(), world.getSeed(),
+            filler.hasSky()));
         BY_WORLD.put(world, this);
+        PlanPrefetcher p = PlanPrefetcher.start(world, plans, gen);
+        // the spawn area is prepared before any player joins: warm it right away
+        p.prefetchAround(world.getSpawnPoint().posX >> 4, world.getSpawnPoint().posZ >> 4, 14);
         Viridium.LOGGER.info("Viridium terrain generator created (seed {})", params.seed);
     }
 
@@ -115,51 +115,19 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         return column;
     }
 
+    /**
+     * Nothing to do: vegetation is planned per column and drawn into each cube when it is generated
+     * ({@link net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner}), so population needs no neighbour cubes,
+     * no world access and no light updates. The cube is only marked as populated so lighting can run.
+     */
     @Override
     public void populate(Cube cube) {
-        ICubeLoader loader = ((ICubicWorldInternal.Server) world).getCubeCache()
-            .getCubeLoader();
-        int cx = cube.getX(), cy = cube.getY(), cz = cube.getZ();
         long t0 = System.nanoTime();
-        try {
-            if (cube.isPopulated()) return;
-            if (touchesSurface(cx, cy, cz)) {
-                // features may reach into +X/+Z and up to two cubes above: generate (not populate) those first
-                long tn = System.nanoTime();
-                for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) for (int dy = 0; dy <= 2; dy++)
-                    loader.getCube(cx + dx, cy + dy, cz + dz, Requirement.GENERATE);
-                GenStats.POP_NEIGHBOURS.add(System.nanoTime() - tn);
-                loader.cacheCubes(new Box(cx, cy, cz, cx + 1, cy + 2, cz + 1));
-                try {
-                    long td = System.nanoTime();
-                    decorator.decorate(world, world.getSeed(), cx, cy, cz);
-                    GenStats.POP_DECORATE.add(System.nanoTime() - td);
-                    // drain the light updates the decoration queued (CC would do it at first light anyway): measured apart
-                    long tl = System.nanoTime();
-                    ((ICubicWorldInternal) world).getLightingManager()
-                        .processUpdates();
-                    GenStats.POP_LIGHT.add(System.nanoTime() - tl);
-                } finally {
-                    loader.uncacheCubes();
-                }
-            }
-        } catch (Throwable t) {
-            Viridium.LOGGER.error("Viridium population failed at cube {},{},{}", cx, cy, cz, t);
-        } finally {
-            GenStats.POPULATE.add(System.nanoTime() - t0);
-            cube.markPopulated(Cube.POP_ALL);
-            loader.onCubeGenerated(cube);
-        }
-    }
-
-    /** Does the decoration area of this cube (offset +8) contain dry ground inside the cube's Y range? */
-    private boolean touchesSurface(int cx, int cy, int cz) {
-        int y0 = cy << 4, y1 = y0 + 15;
-        for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) {
-            ColumnPlan p = plans.get(cx + dx, cz + dz);
-            if (p.minSurfaceY + 1 <= y1 && p.maxTopY >= y0) return true;
-        }
-        return false;
+        cube.markPopulated(Cube.POP_ALL);
+        ((ICubicWorldInternal.Server) world).getCubeCache()
+            .getCubeLoader()
+            .onCubeGenerated(cube);
+        GenStats.POPULATE.add(System.nanoTime() - t0);
     }
 
     // ------------------------------------------------------------------ background precalculation

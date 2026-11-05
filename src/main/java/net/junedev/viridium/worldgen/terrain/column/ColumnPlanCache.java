@@ -77,6 +77,16 @@ public final class ColumnPlanCache {
         }
     }
 
+    /** True when the plan is already computed (does not compute it). */
+    public boolean isCached(int chunkX, int chunkZ) {
+        return completed.getIfPresent(key(chunkX, chunkZ)) != null;
+    }
+
+    /** True while some thread is computing the plan. */
+    public boolean isInProgress(int chunkX, int chunkZ) {
+        return inProgress.containsKey(key(chunkX, chunkZ));
+    }
+
     /** Warms the cache; safe to call from any thread. */
     public void precalculate(int chunkX, int chunkZ) {
         get(chunkX, chunkZ);

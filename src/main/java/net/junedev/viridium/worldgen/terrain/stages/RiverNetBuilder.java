@@ -126,12 +126,14 @@ final class RiverNetBuilder {
         float[] hgt = new float[n], run = new float[n];
         boolean[] own = new boolean[n];
         byte[] cer = new byte[n];
-        GenPoint rt = new GenPoint();
-        for (int j = 0; j < ny; j++) {
+        // independent per cell: rows run in parallel, each with its own temporaries
+        java.util.stream.IntStream.range(0, ny).parallel().forEach(j -> {
+            GenPoint rt = new GenPoint();
+            GenScratch rs = new GenScratch();
             for (int i = 0; i < nx; i++) {
                 int idx = j * nx + i;
                 double x = x0 + (i + 0.5) * g, y = y0 + (j + 0.5) * g;
-                plates.apply(x, y, rt, s);
+                plates.apply(x, y, rt, rs);
                 if (rt.pi != pi || rt.pj != pj) continue;
                 own[idx] = true;
                 gen.continents.apply(x, y, rt);
@@ -139,14 +141,14 @@ final class RiverNetBuilder {
                     hgt[idx] = -1;
                     continue;
                 }
-                hgt[idx] = (float) gen.relief.baseHeight(x, y, rt, false, s);
+                hgt[idx] = (float) gen.relief.baseHeight(x, y, rt, false, rs);
                 rt.h0 = hgt[idx];
-                gen.geology.apply(x, y, rt, s);
+                gen.geology.apply(x, y, rt, rs);
                 cer[idx] = (byte) Math.round(rt.erod * 255);
                 gen.climate.apply(x, y, rt);
                 run[idx] = (float) (rt.Pb * (0.4 + 0.6 * Math.exp(-rt.L / 0.4)) / 1000);
             }
-        }
+        });
 
         // priority-flood: fills depressions and gives every cell a downstream receiver
         float[] filled = new float[n];
@@ -273,7 +275,10 @@ final class RiverNetBuilder {
         // around it (cross-section samples), then the profile is made monotone downstream (water never climbs).
         // The coarse "filled" profile only knows the smoothed relief and sits above the real valley floor.
         float[] wl = filled.clone();
-        for (int idx = 0; idx < n; idx++) if (isRiv[idx]) wl[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], s));
+        final float[] wlf = wl;
+        java.util.stream.IntStream.range(0, n).parallel().forEach(idx -> { // independent per river node
+            if (isRiv[idx]) wlf[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
+        });
         for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && isRiv[r] && wl[idx] < wl[r]) wl[r] = wl[idx];
@@ -539,11 +544,13 @@ final class RiverNetBuilder {
         return net;
     }
 
-    private final GenPoint finalPoint = new GenPoint();
+    private final ThreadLocal<GenPoint> finalPoint = ThreadLocal.withInitial(GenPoint::new);
+    private final ThreadLocal<GenScratch> finalScratch = ThreadLocal.withInitial(GenScratch::new);
 
     /** Terrain height after erosion, before any river carving (what the player would see without rivers). */
     private double finalHeight(double x, double y, GenScratch s) {
-        return gen.evaluate(x, y, Stage.EROSION, 1, finalPoint, s).h;
+        // own temporaries per thread: called from parallel workers and from inside another evaluation
+        return gen.evaluate(x, y, Stage.EROSION, 1, finalPoint.get(), finalScratch.get()).h;
     }
 
     /**
