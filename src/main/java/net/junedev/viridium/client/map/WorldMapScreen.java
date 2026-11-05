@@ -7,6 +7,8 @@ import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
 import net.junedev.viridium.worldgen.terrain.column.TerrainLayout;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
+import net.junedev.viridium.worldgen.terrain.crust.Lithology;
+import net.junedev.viridium.worldgen.terrain.map.CrustSectionRenderer;
 import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
@@ -32,11 +34,20 @@ import org.lwjgl.opengl.GL11;
  */
 public class WorldMapScreen extends GuiScreen {
 
-    private static final int BTN_BORDERS = 1000, BTN_CENTER = 1001;
+    private static final int BTN_BORDERS = 1000, BTN_CENTER = 1001, BTN_SECTION = 1002;
+    private static final int SECTION_TOP = 700, SECTION_BOTTOM = TerrainLayout.MIN_Y - 40;
 
     /** View state survives reopening the screen within a session. */
     private static String layerId = MapLayer.COMPOSITE.id;
-    private static boolean borders;
+    private static boolean borders, section;
+
+    // cross-section panel
+    private CrustSectionRenderer sectionRenderer;
+    private DynamicTexture sectionTex;
+    private String sectionKey, sectionPendingKey;
+    private volatile int[] sectionPixels;
+    private volatile String sectionReadyKey;
+    private int sectionW, sectionH;
     private static double centerX = Double.NaN, centerZ;
     /** Blocks per screen pixel. */
     private static double zoom = 8;
@@ -64,6 +75,7 @@ public class WorldMapScreen extends GuiScreen {
         y += 6;
         buttonList.add(new GuiButton(BTN_BORDERS, 4, y, 112, 16, "Plate borders: " + (borders ? "on" : "off")));
         buttonList.add(new GuiButton(BTN_CENTER, 4, y + 17, 112, 16, "Center on player"));
+        buttonList.add(new GuiButton(BTN_SECTION, 4, y + 34, 112, 16, "Crust section: " + (section ? "on" : "off")));
     }
 
     private void setupGenerator() {
@@ -77,6 +89,7 @@ public class WorldMapScreen extends GuiScreen {
         p.seed = GenParams.foldSeed(overworld.getSeed());
         gen = new WorldGen(p);
         cache = new MapTileCache(new MapTileRenderer(gen));
+        sectionRenderer = new CrustSectionRenderer(gen);
         if (Double.isNaN(centerX) || viewSeed != overworld.getSeed()) {
             centerX = mc.thePlayer.posX;
             centerZ = mc.thePlayer.posZ;
@@ -87,6 +100,7 @@ public class WorldMapScreen extends GuiScreen {
     @Override
     protected void actionPerformed(GuiButton b) {
         if (b.id == BTN_BORDERS) borders = !borders;
+        else if (b.id == BTN_SECTION) section = !section;
         else if (b.id == BTN_CENTER) {
             centerX = mc.thePlayer.posX;
             centerZ = mc.thePlayer.posZ;
@@ -176,6 +190,8 @@ public class WorldMapScreen extends GuiScreen {
     public void onGuiClosed() {
         if (cache != null) cache.dispose();
         cache = null;
+        if (sectionTex != null) sectionTex.deleteGlTexture();
+        sectionTex = null;
     }
 
     @Override
@@ -195,6 +211,7 @@ public class WorldMapScreen extends GuiScreen {
         cache.upload();
         drawTiles();
         drawPlayer();
+        if (section) drawSection();
         drawRect(0, 0, 120, height, 0xa0000000);
         drawString(fontRendererObj, "Viridium map", 6, 8, 0xffffff);
         super.drawScreen(mouseX, mouseY, partial);
@@ -261,6 +278,65 @@ public class WorldMapScreen extends GuiScreen {
         t.addVertexWithUV(gx0, gz0, 0, u, v);
         t.draw();
         return true;
+    }
+
+    /** Bottom panel: crust cross-section along the horizontal line through the map centre. */
+    private void drawSection() {
+        int panelTop = height * 3 / 5, left = 120;
+        int cy = height / 2;
+        drawRect(left, cy, width, cy + 1, 0xc0ffffff); // section line on the map
+        drawRect(left, panelTop - 1, width, height, 0xff000000);
+        int sf = scaleFactor();
+        int w = Math.min(768, (width - left) * sf / 2), h = Math.min(384, (height - panelTop) * sf / 2);
+        double x0 = worldX(left), x1 = worldX(width), z = centerZ;
+        String key = String.format("%d|%d|%d|%d|%d", Math.round(x0), Math.round(x1), Math.round(z), w, h);
+        if (!key.equals(sectionKey) && !key.equals(sectionPendingKey) && !dragging) {
+            sectionPendingKey = key;
+            MapTileCache.submit(() -> {
+                int[] px = sectionRenderer.render(x0, x1, z, SECTION_TOP, SECTION_BOTTOM, w, h);
+                sectionPixels = px;
+                sectionReadyKey = key;
+            });
+        }
+        String ready = sectionReadyKey;
+        if (ready != null && !ready.equals(sectionKey) && sectionPixels != null) {
+            int[] px = sectionPixels;
+            if (sectionTex == null || sectionW != w || sectionH != h || px.length != sectionW * sectionH) {
+                if (sectionTex != null) sectionTex.deleteGlTexture();
+                String[] parts = ready.split("\\|");
+                sectionW = Integer.parseInt(parts[3]);
+                sectionH = Integer.parseInt(parts[4]);
+                sectionTex = new DynamicTexture(sectionW, sectionH);
+            }
+            if (px.length == sectionW * sectionH) {
+                System.arraycopy(px, 0, sectionTex.getTextureData(), 0, px.length);
+                sectionTex.updateDynamicTexture();
+                sectionKey = ready;
+            }
+        }
+        if (sectionTex != null) {
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glColor4f(1, 1, 1, 1);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, sectionTex.getGlTextureId());
+            Tessellator t = Tessellator.instance;
+            t.startDrawingQuads();
+            t.addVertexWithUV(left, height, 0, 0, 1);
+            t.addVertexWithUV(width, height, 0, 1, 1);
+            t.addVertexWithUV(width, panelTop, 0, 1, 0);
+            t.addVertexWithUV(left, panelTop, 0, 0, 0);
+            t.draw();
+        }
+        drawString(fontRendererObj, String.format("Crust section · Z %d · Y %d to %d", (int) z, SECTION_TOP,
+            SECTION_BOTTOM), left + 4, panelTop + 3, 0xffffff);
+        // lithology under the cursor in the panel
+        int mx = Mouse.getX() * width / mc.displayWidth, my = height - Mouse.getY() * height / mc.displayHeight - 1;
+        if (mx >= left && my >= panelTop) {
+            double wx = worldX(mx);
+            int y = (int) Math.round(SECTION_TOP - (double) (my - panelTop) / (height - panelTop) * (SECTION_TOP - SECTION_BOTTOM));
+            Lithology l = sectionRenderer.lithologyAt(wx, y, z);
+            drawString(fontRendererObj, String.format("Y %d: %s", y, l == null ? "air / water"
+                : l.name().toLowerCase().replace('_', ' ')), mx + 8, my - 10, 0xffff80);
+        }
     }
 
     private void drawPlayer() {

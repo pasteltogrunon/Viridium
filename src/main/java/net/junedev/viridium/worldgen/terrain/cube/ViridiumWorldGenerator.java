@@ -47,8 +47,9 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         this.world = world;
         GenParams params = new GenParams();
         params.seed = GenParams.foldSeed(world.getSeed());
-        this.plans = new ColumnPlanCache(new ColumnPlanner(new WorldGen(params), BiomeMapper.VANILLA));
-        this.filler = new CubeFiller(!world.provider.hasNoSky);
+        WorldGen gen = new WorldGen(params);
+        this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.VANILLA));
+        this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
         Viridium.LOGGER.info("Viridium terrain generator created (seed {})", params.seed);
     }
 
@@ -71,7 +72,7 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
             column = newColumn(cubeX, cubeZ, plan);
             sideColumns = Collections.singletonList(column);
         }
-        Cube cube = new Cube(column, cubeY, filler.fill(plan, cubeY));
+        Cube cube = new Cube(column, cubeY, filler.fill(plan, cubeX, cubeY, cubeZ));
         return new GenerationResult<>(cube, sideColumns, null);
     }
 

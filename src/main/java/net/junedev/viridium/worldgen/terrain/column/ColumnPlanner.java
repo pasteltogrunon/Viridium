@@ -1,5 +1,7 @@
 package net.junedev.viridium.worldgen.terrain.column;
 
+import net.junedev.viridium.worldgen.terrain.crust.CrustPlan;
+
 import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
@@ -27,6 +29,7 @@ public final class ColumnPlanner {
         float[] rain = new float[ColumnPlan.AREA];
         byte[] rock = new byte[ColumnPlan.AREA];
         byte[] biome = new byte[ColumnPlan.AREA];
+        CrustPlan crust = new CrustPlan();
         GenPoint p = point.get();
         int x0 = chunkX * ColumnPlan.SIZE, z0 = chunkZ * ColumnPlan.SIZE;
         for (int lz = 0; lz < ColumnPlan.SIZE; lz++) {
@@ -39,8 +42,9 @@ public final class ColumnPlanner {
                 rain[i] = (float) p.Pb;
                 rock[i] = (byte) (p.rockT >= 0.5 ? p.rock : p.rock2);
                 biome[i] = (byte) biomes.biomeId(p);
+                gen.crust.planColumn(crust, i, x0 + lx, z0 + lz, p, surfaceY[i]);
             }
         }
-        return new ColumnPlan(chunkX, chunkZ, height, surfaceY, temp, rain, rock, biome);
+        return new ColumnPlan(chunkX, chunkZ, height, surfaceY, temp, rain, rock, biome, crust);
     }
 }

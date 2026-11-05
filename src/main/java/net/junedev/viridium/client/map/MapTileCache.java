@@ -124,6 +124,11 @@ public final class MapTileCache {
         }
     }
 
+    /** Runs background work on the map worker pool. */
+    public static void submit(Runnable r) {
+        POOL.execute(r);
+    }
+
     public int pendingCount() {
         return pending.size() + ready.size();
     }

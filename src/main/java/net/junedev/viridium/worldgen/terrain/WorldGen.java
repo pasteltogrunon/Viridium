@@ -4,6 +4,7 @@ import java.util.function.Function;
 
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.core.Seeds;
+import net.junedev.viridium.worldgen.terrain.crust.CrustModel;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
@@ -33,6 +34,8 @@ public final class WorldGen {
     public final ReliefStage relief;
     public final VolcanismStage volcanism;
     public final GeologyStage geology;
+    /** 3D crust (not a per-point stage: evaluated per column and per block). */
+    public final CrustModel crust;
 
     private final ThreadLocal<GenScratch> scratch = ThreadLocal.withInitial(GenScratch::new);
 
@@ -49,6 +52,7 @@ public final class WorldGen {
         this.relief = b.relief.apply(this);
         this.volcanism = b.volcanism.apply(this);
         this.geology = b.geology.apply(this);
+        this.crust = b.crust.apply(this);
     }
 
     public GenScratch scratch() {
@@ -100,6 +104,7 @@ public final class WorldGen {
         private Function<WorldGen, ReliefStage> relief = ReliefStage::new;
         private Function<WorldGen, VolcanismStage> volcanism = VolcanismStage::new;
         private Function<WorldGen, GeologyStage> geology = GeologyStage::new;
+        private Function<WorldGen, CrustModel> crust = g -> new CrustModel(g.params, g.seeds);
 
         public Builder(GenParams params) {
             this.params = params;
@@ -132,6 +137,11 @@ public final class WorldGen {
 
         public Builder geology(Function<WorldGen, GeologyStage> f) {
             geology = f;
+            return this;
+        }
+
+        public Builder crust(Function<WorldGen, CrustModel> f) {
+            crust = f;
             return this;
         }
 

@@ -7,6 +7,7 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
+import net.junedev.viridium.worldgen.terrain.map.CrustSectionRenderer;
 import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 
@@ -39,6 +40,23 @@ class MapPreviewTest {
             File f = new File(dir, layer.id + "_L" + level + ".png");
             ImageIO.write(img, "png", f);
             System.out.printf("%-16s %6.0f ms/tile → %s%n", layer.id, (System.nanoTime() - t0) / 1e6 / (tiles * tiles), f);
+        }
+        // crust cross-sections through the middle of the previewed area
+        CrustSectionRenderer sec = new CrustSectionRenderer(r.gen());
+        double half = tiles * size * MapTileRenderer.blocksPerPixel(level) / 2;
+        for (double z : new double[] { -half * 0.5, 0, half * 0.5 }) {
+            long t0 = System.nanoTime();
+            int w = 1024, h = 384;
+            int[] p = sec.render(-half, half, z, 700, -2100, w, h);
+            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            img.setRGB(0, 0, w, h, p, 0, w);
+            File f = new File(dir, "section_z" + (int) z + ".png");
+            ImageIO.write(img, "png", f);
+            System.out.printf("section z=%d %6.0f ms → %s%n", (int) z, (System.nanoTime() - t0) / 1e6, f);
+            // close-up of the upper crust
+            p = sec.render(-2000, 2000, z, 400, -400, w, h);
+            img.setRGB(0, 0, w, h, p, 0, w);
+            ImageIO.write(img, "png", new File(dir, "section_z" + (int) z + "_upper.png"));
         }
     }
 }

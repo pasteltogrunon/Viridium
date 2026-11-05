@@ -1,5 +1,7 @@
 package net.junedev.viridium.worldgen.terrain.column;
 
+import net.junedev.viridium.worldgen.terrain.crust.CrustPlan;
+
 /**
  * Immutable result of all X/Z-only work for one 16x16 column. Computed once per column and shared by every cube of
  * that column, whatever its Y. Arrays are indexed {@code localZ * 16 + localX} (the vanilla biome-array order).
@@ -22,11 +24,15 @@ public final class ColumnPlan {
     /** Biome id (vanilla registry). */
     private final byte[] biome;
 
+    /** 3D crust profile of every column. */
+    public final CrustPlan crust;
+
     /** Extremes of {@link #surfaceY}: cubes above the max (and above the sea) are pure air. */
     public final int minSurfaceY, maxSurfaceY;
 
     ColumnPlan(int chunkX, int chunkZ, float[] height, int[] surfaceY, float[] temperature, float[] precipitation,
-        byte[] rock, byte[] biome) {
+        byte[] rock, byte[] biome, CrustPlan crust) {
+        this.crust = crust;
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.height = height;
