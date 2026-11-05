@@ -23,7 +23,11 @@ public class FastErosionStage extends ErosionStage {
     }
 
     @Override
-    protected void reliefGradient(double x, double y, GenPoint o, GenScratch s) {
+    protected void reliefGradient(double x, double y, GenPoint o, double bpp, GenScratch s) {
+        if (bpp > 8) { // map overviews: pixels further apart than the lattice tiles would compute a new tile each
+            super.reliefGradient(x, y, o, bpp, s);
+            return;
+        }
         final double E = 12;
         o.gx = (grid.sample(x + E, y, null) - grid.sample(x - E, y, null)) / (2 * E);
         o.gy = (grid.sample(x, y + E, null) - grid.sample(x, y - E, null)) / (2 * E);

@@ -17,6 +17,7 @@ import java.util.Map;
 
 import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
+import net.junedev.viridium.worldgen.terrain.core.Noise;
 import net.junedev.viridium.worldgen.terrain.core.Seeds;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
@@ -134,6 +135,7 @@ final class RiverNetBuilder {
         float[] hgt = new float[n], run = new float[n];
         boolean[] own = new boolean[n], entry = new boolean[n];
         float[] inflow = new float[n];
+        float[] rkey = new float[n]; // routing bias: makes the flow converge on smooth slopes and flats
         byte[] cer = new byte[n];
         // where the rivers of upstream basins come in, with everything they carry
         for (BasinGraph.Cell ch : graph.children(cell)) {
@@ -164,6 +166,7 @@ final class RiverNetBuilder {
                     continue;
                 }
                 hgt[idx] = (float) gen.relief.baseHeight(x, y, rt, false, rs);
+                rkey[idx] = (float) (P.riverRouteNoise * Noise.fbm(x / 450, y / 450, SD.basinW + 7, 3));
                 rt.h0 = hgt[idx];
                 gen.geology.apply(x, y, rt, rs);
                 cer[idx] = (byte) Math.round(rt.erod * 255);
@@ -208,6 +211,29 @@ final class RiverNetBuilder {
                 filled[nb] = (float) Math.max(hgt[nb], filled[idx] + (k < 4 ? 0.01 : 0.014));
                 recv[nb] = idx;
                 heap.push(filled[nb], nb);
+            }
+        }
+
+        // receivers: steepest descent on the filled surface plus a routing bias, among strictly lower neighbours (so the
+        // flood order stays a valid upstream → downstream order). Without the bias, smooth slopes and flats drain in
+        // parallel lines, one river per grid node.
+        if (P.riverRouteNoise > 0) {
+            for (int idx = 0; idx < n; idx++) {
+                if (recv[idx] < 0 || hgt[idx] < 0) continue;
+                int i = idx % nx, j = (idx - i) / nx, best = recv[idx];
+                double fi = filled[idx] + rkey[idx], bs = Double.NEGATIVE_INFINITY;
+                for (int k = 0; k < 8; k++) {
+                    int ii = i + DI[k], jj = j + DJ[k];
+                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                    int nb = jj * nx + ii;
+                    if (!own[nb] || filled[nb] >= filled[idx]) continue;
+                    double sl = (fi - filled[nb] - (hgt[nb] < 0 ? 0 : rkey[nb])) / (k < 4 ? 1 : 1.4142);
+                    if (sl > bs) {
+                        bs = sl;
+                        best = nb;
+                    }
+                }
+                recv[idx] = best;
             }
         }
 
@@ -285,7 +311,7 @@ final class RiverNetBuilder {
         Arrays.fill(mainUp, -1);
         int count = 0;
         for (int idx = 0; idx < n; idx++) {
-            if (own[idx] && hgt[idx] >= 0 && recv[idx] >= 0 && acc[idx] >= thr) {
+            if (own[idx] && hgt[idx] >= 0 && recv[idx] >= 0 && acc[idx] >= thr * P.riverStart) {
                 isRiv[idx] = true;
                 count++;
                 hw[idx] = halfWidth(acc[idx] / thr);

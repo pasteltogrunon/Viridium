@@ -46,14 +46,23 @@ public final class MapTileCache {
     private record Ready(Key key, int[] pixels) {}
 
     private final MapTileRenderer renderer;
+    private final MapTileStore store;
     private final LinkedHashMap<Key, DynamicTexture> textures = new LinkedHashMap<>(256, 0.75f, true);
     private final Set<Key> pending = ConcurrentHashMap.newKeySet();
     private final ConcurrentLinkedQueue<Ready> ready = new ConcurrentLinkedQueue<>();
     private volatile Set<Key> wanted = ConcurrentHashMap.newKeySet();
     private volatile boolean disposed;
 
-    public MapTileCache(MapTileRenderer renderer) {
+    /** @param storeDir where tiles are kept on disk (null = memory only) */
+    public MapTileCache(MapTileRenderer renderer, java.io.File storeDir) {
         this.renderer = renderer;
+        MapTileStore st = null;
+        try {
+            if (storeDir != null) st = new MapTileStore(renderer.gen(), storeDir);
+        } catch (RuntimeException e) {
+            Viridium.LOGGER.warn("Map tile store unavailable", e);
+        }
+        this.store = st;
     }
 
     public MapTileRenderer renderer() {
@@ -88,7 +97,11 @@ public final class MapTileCache {
             POOL.execute(() -> {
                 try {
                     if (disposed || !wanted.contains(k)) return;
-                    int[] px = renderer.render(layer, k.level(), k.tx(), k.tz(), TILE, k.borders());
+                    int[] px = store == null ? null : store.load(k);
+                    if (px == null) {
+                        px = renderer.render(layer, k.level(), k.tx(), k.tz(), TILE, k.borders());
+                        if (store != null) store.save(k, px);
+                    }
                     if (!disposed) ready.add(new Ready(k, px));
                 } catch (Throwable t) {
                     Viridium.LOGGER.warn("Map tile {} failed", k, t);

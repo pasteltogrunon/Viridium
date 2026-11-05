@@ -358,7 +358,7 @@ public class RiverStage extends GenStage {
         o.lakeZ = 0;
         o.glac = 0;
         o.gorge = 0;
-        if (o.L < -0.5) return;
+        if (o.L < -0.5 || s.riversOff) return;
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
         long[] near = basins.nearCells(x, y, RiverNetBuilder.MARGIN);
         RiverNet[] nets = new RiverNet[near.length];

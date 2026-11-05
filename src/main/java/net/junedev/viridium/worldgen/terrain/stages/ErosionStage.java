@@ -45,7 +45,7 @@ public class ErosionStage extends GenStage {
     }
 
     /** Gradient of the smoothed relief around (x, y). Override to read a cached field. */
-    protected void reliefGradient(double x, double y, GenPoint o, GenScratch s) {
+    protected void reliefGradient(double x, double y, GenPoint o, double bpp, GenScratch s) {
         final double E = 12;
         o.gx = (gen.heightAt(x + E, y, false) - gen.heightAt(x - E, y, false)) / (2 * E);
         o.gy = (gen.heightAt(x, y + E, false) - gen.heightAt(x, y - E, false)) / (2 * E);
@@ -53,7 +53,7 @@ public class ErosionStage extends GenStage {
 
     public void apply(double x, double y, GenPoint o, double bpp, GenScratch s) {
         double h0 = o.h0;
-        reliefGradient(x, y, o, s);
+        reliefGradient(x, y, o, bpp, s);
         double gx = o.gx, gy = o.gy;
         double g = Math.sqrt(gx * gx + gy * gy);
         o.slope = g;

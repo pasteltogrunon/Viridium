@@ -43,6 +43,13 @@ public final class GenParams implements Cloneable {
     public double basinMerge = 0.8;
     /** Upper bound of a river half-width (blocks) and of a delta radius: big basins make huge mouths. */
     public double riverMaxHalfWidth = 48, deltaMaxRadius = 1600;
+    /**
+     * Routing noise (blocks): biases the flow towards gentle noise valleys so that water converges into few rivers
+     * instead of running in parallel down smooth slopes and flats (one river every grid node).
+     */
+    public double riverRouteNoise = 8;
+    /** Flow (in threshold units) at which a river starts: higher = fewer, longer tributaries (width does not change). */
+    public double riverStart = 1.6;
     public double biomeSharpness = 3;
     public double monsoon = 1.0;
     public double deltaSize = 1.0;

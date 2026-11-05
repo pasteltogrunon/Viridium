@@ -2,7 +2,10 @@
 
 Java port of the web prototype in `ViridiumExtras/worldgen` (`js/worldgen.js`), plugged into Cubic Chunks.
 Select the **Viridium** world type when creating a world (or `level-type=viridium` on a server).
-Press **M** in game (singleplayer) for the world map.
+Press **M** in game (singleplayer) for the world map. It shares the server's pipeline (warm caches and river
+networks), keeps finished tiles in memory between openings and on disk in `.minecraft/viridium/mapcache/<fingerprint>`
+(the fingerprint covers the parameters, the seed and the generator code, so changes never show stale tiles), and
+draws rivers only up to level 4 (8+ blocks per pixel further out would build hundreds of networks).
 
 ## Layout
 
@@ -109,6 +112,11 @@ upstream system decides the size of the mouth: river half width up to `riverMaxH
 rivers) and delta radius up to `deltaMaxRadius` (1600); big rivers build deltas rather than estuaries. Waterfalls at
 confluences are limited to 2.5 blocks per node (glacial hanging valleys can still drop ~10). Lake rims never cross a
 river channel or its banks, so rivers flow into and out of lakes freely.
+
+Flow routing: the priority flood only decides the filled surface (lakes); each node then drains to the steepest
+strictly lower neighbour on that surface plus a gentle routing noise (`riverRouteNoise`, 8 blocks at ~450-block
+scale). Without it, smooth slopes and flats drained in parallel lines (a river on every grid node, and the broad valley
+flattened the whole area). A river starts at `riverStart` (1.6) times the threshold flow; widths use the threshold.
 
 Scales: plates/continents `plateSize` 12000, temperature period 48000, precipitation period 36000 (3× the prototype;
 `ParityTest` sets the prototype values back).

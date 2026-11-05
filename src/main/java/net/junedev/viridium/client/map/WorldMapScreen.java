@@ -79,10 +79,16 @@ public class WorldMapScreen extends GuiScreen {
             error = "The world map needs the world seed: singleplayer only for now.";
             return;
         }
-        GenParams p = new GenParams();
-        p.seed = GenParams.foldSeed(overworld.getSeed());
-        gen = new WorldGen(p);
-        cache = new MapTileCache(new MapTileRenderer(gen));
+        // share the server's pipeline: its caches and river networks are already warm around the player
+        net.junedev.viridium.worldgen.terrain.cube.ViridiumWorldGenerator vg = net.junedev.viridium.worldgen.terrain.cube.ViridiumWorldGenerator
+            .forWorld(overworld);
+        if (vg != null) gen = vg.gen();
+        else {
+            GenParams p = new GenParams();
+            p.seed = GenParams.foldSeed(overworld.getSeed());
+            gen = new WorldGen(p);
+        }
+        cache = new MapTileCache(new MapTileRenderer(gen), mc.mcDataDir);
         sectionRenderer = new CrustSectionRenderer(gen);
         if (Double.isNaN(centerX) || viewSeed != overworld.getSeed()) {
             centerX = mc.thePlayer.posX;

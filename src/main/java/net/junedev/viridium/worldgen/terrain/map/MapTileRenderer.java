@@ -18,6 +18,11 @@ public final class MapTileRenderer {
     /** Light direction (from north-west, above) for hill shading. */
     private static final double LX = -0.5, LZ = -0.6, LY = 0.62;
     private static final double EXAGGERATION = 2.0;
+    /**
+     * Coarsest level that draws rivers: further out a screen spans more basins than the river network cache holds
+     * (seconds per tile, and it would evict the networks the server needs).
+     */
+    public static final int RIVERS_MAX_LEVEL = 4;
 
     private final WorldGen gen;
     private final ThreadLocal<GenPoint> point = ThreadLocal.withInitial(GenPoint::new);
@@ -48,22 +53,28 @@ public final class MapTileRenderer {
         float[] hb = shade ? new float[n * n] : null;
         int[] out = new int[size * size];
         GenPoint o = point.get();
-        for (int j = 0; j < n; j++) {
-            for (int i = 0; i < n; i++) {
-                boolean inside = i < size && j < size;
-                if (!inside && !shade) continue;
-                double x = (tx * (double) size + i + 0.5) * bpp, z = (tz * (double) size + j + 0.5) * bpp;
-                gen.evaluate(x, z, stage, bpp, o);
-                if (shade) hb[j * n + i] = (float) switch (layer.heightField) {
-                    case BASE -> o.h0;
-                    case FINAL -> o.h;
-                    case SURFACE -> o.hs;
-                };
-                if (!inside) continue;
-                int c = layer.colorizer.color(o, bpp);
-                if (borders && o.edge < bpp * 0.8) c = ColorRamp.lerp(c, ColorRamp.rgb(250, 50, 250), 0.8);
-                out[j * size + i] = c;
+        net.junedev.viridium.worldgen.terrain.pipeline.GenScratch s = gen.scratch();
+        s.riversOff = level > RIVERS_MAX_LEVEL;
+        try {
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < n; i++) {
+                    boolean inside = i < size && j < size;
+                    if (!inside && !shade) continue;
+                    double x = (tx * (double) size + i + 0.5) * bpp, z = (tz * (double) size + j + 0.5) * bpp;
+                    gen.evaluate(x, z, stage, bpp, o);
+                    if (shade) hb[j * n + i] = (float) switch (layer.heightField) {
+                        case BASE -> o.h0;
+                        case FINAL -> o.h;
+                        case SURFACE -> o.hs;
+                    };
+                    if (!inside) continue;
+                    int c = layer.colorizer.color(o, bpp);
+                    if (borders && o.edge < bpp * 0.8) c = ColorRamp.lerp(c, ColorRamp.rgb(250, 50, 250), 0.8);
+                    out[j * size + i] = c;
+                }
             }
+        } finally {
+            s.riversOff = false;
         }
         if (shade) {
             for (int j = 0; j < size; j++) {

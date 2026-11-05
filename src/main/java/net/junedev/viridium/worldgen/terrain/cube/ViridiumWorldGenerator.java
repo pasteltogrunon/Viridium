@@ -43,12 +43,13 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
     private final WorldServer world;
     private final ColumnPlanCache plans;
     private final CubeFiller filler;
+    private final WorldGen gen;
 
     public ViridiumWorldGenerator(WorldServer world) {
         this.world = world;
         GenParams params = new GenParams();
         params.seed = GenParams.foldSeed(world.getSeed());
-        WorldGen gen = new WorldGen(params);
+        WorldGen gen = this.gen = new WorldGen(params);
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
         filler.setFlora(new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(plans, filler.rules(), world.getSeed(),
@@ -58,6 +59,11 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         // the spawn area is prepared before any player joins: warm it right away
         p.prefetchAround(world.getSpawnPoint().posX >> 4, world.getSpawnPoint().posZ >> 4, 14);
         Viridium.LOGGER.info("Viridium terrain generator created (seed {})", params.seed);
+    }
+
+    /** The pipeline of this world (shared: the map reuses its caches and river networks). */
+    public WorldGen gen() {
+        return gen;
     }
 
     public ColumnPlanCache plans() {
