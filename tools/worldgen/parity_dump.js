@@ -72,3 +72,49 @@ for (const seed of [12345, 987654321]) {
   fs.writeFileSync(path.join(outDir, `points_${seed}.csv`), rows.join('\n') + '\n');
   console.log(`seed ${seed}: ${rows.length - 1} points`);
 }
+
+// ---------------------------------------------------------------- full pipeline (climate → biomes)
+// Clustered in a few regions so only a handful of river networks are built; extra samples near river
+// reaches, mouths and lakes so those code paths are covered.
+const FULL = ['T', 'P', 'wfx', 'wfy', 'sst', 'shadow', 'oro', 'slope', 'eroDelta', 'h', 'river', 'riverD', 'riverHW',
+  'valley', 'delta', 'estu', 'lake', 'lakeZ', 'glac', 'gorge', 'seaIce', 'berg', 'perma', 'iceFrac', 'hs'];
+for (const seed of [12345, 987654321]) {
+  W.setParams({ seed });
+  const o = W.newPoint();
+  const rows = ['x,z,' + FULL.join(',') + ',biome,cr,cg,cb'];
+  const sample = (x, y) => {
+    W.evaluate(x, y, W.STAGE.BIOME, 1, o);
+    let best = -1, bi = 0;
+    for (let i = 0; i < W.BIOMES.length; i++) if (o.biomeW[i] > best) { best = o.biomeW[i]; bi = i; }
+    rows.push(`${x},${y},` + FULL.map((f) => num(o[f])).join(',') +
+      `,${bi},${Math.round(o.color[0])},${Math.round(o.color[1])},${Math.round(o.color[2])}`);
+  };
+  const t0 = Date.now();
+  let regions = 0;
+  for (let tries = 0; regions < 4 && tries < 200; tries++) {
+    const cx = Math.round((rand() - 0.5) * 80000), cy = Math.round((rand() - 0.5) * 80000);
+    W.evaluate(cx, cy, W.STAGE.BASE, 1, o);
+    if (o.h0 < 5) continue; // centre regions on land
+    regions++;
+    const pi = o.pi, pj = o.pj;
+    for (let k = 0; k < 150; k++) sample(cx + Math.round((rand() - 0.5) * 3000), cy + Math.round((rand() - 0.5) * 3000));
+    const net = W.riverNet(pi, pj);
+    for (let k = 0; k < 120 && net.count; k++) { // along river reaches
+      const s = Math.floor(rand() * net.count), t = Math.floor(rand() * net.NPT), q = (s * net.NPT + t) * 2;
+      sample(Math.round(net.pts[q] + (rand() - 0.5) * 60), Math.round(net.pts[q + 1] + (rand() - 0.5) * 60));
+    }
+    for (let q = 0; q < net.nMouth; q++) { // deltas and estuaries
+      const b = q * net.MS;
+      for (let k = 0; k < 8; k++)
+        sample(Math.round(net.mouths[b] + (rand() - 0.5) * 500), Math.round(net.mouths[b + 1] + (rand() - 0.5) * 500));
+    }
+    let lk = 0;
+    for (const c of net.lakes.keys()) { // lakes and their rims
+      if (lk++ > 40) break;
+      const i = c % net.nx, j = (c - i) / net.nx;
+      sample(Math.round(net.x0 + (i + rand()) * net.g), Math.round(net.y0 + (j + rand()) * net.g));
+    }
+  }
+  fs.writeFileSync(path.join(outDir, `full_${seed}.csv`), rows.join('\n') + '\n');
+  console.log(`seed ${seed}: ${rows.length - 1} full-pipeline points (${Date.now() - t0} ms)`);
+}

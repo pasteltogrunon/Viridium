@@ -9,6 +9,8 @@ public final class TerrainLayout {
     public static final int MIN_Y = -2048;
     /** Highest generated Y. Multiple of 16. */
     public static final int MAX_Y = 1024;
+    /** Deepest block the surface rules can paint below the terrain surface. */
+    public static final int SURFACE_RULE_DEPTH = 10;
 
     private TerrainLayout() {}
 

@@ -106,6 +106,93 @@ class ParityTest {
         };
     }
 
+    private static final java.util.Set<String> FULL_DISCRETE = new java.util.HashSet<>(
+        java.util.Arrays.asList("river", "lake", "seaIce", "biome"));
+
+    private static double fullField(GenPoint o, String f) {
+        return switch (f) {
+            case "T" -> o.T;
+            case "P" -> o.P;
+            case "wfx" -> o.wfx;
+            case "wfy" -> o.wfy;
+            case "sst" -> o.sst;
+            case "shadow" -> o.shadow;
+            case "oro" -> o.oro;
+            case "slope" -> o.slope;
+            case "eroDelta" -> o.eroDelta;
+            case "h" -> o.h;
+            case "river" -> o.river;
+            case "riverD" -> o.riverD;
+            case "riverHW" -> o.riverHW;
+            case "valley" -> o.valley;
+            case "delta" -> o.delta;
+            case "estu" -> o.estu;
+            case "lake" -> o.lake;
+            case "lakeZ" -> o.lakeZ;
+            case "glac" -> o.glac;
+            case "gorge" -> o.gorge;
+            case "seaIce" -> o.seaIce;
+            case "berg" -> o.berg;
+            case "perma" -> o.perma;
+            case "iceFrac" -> o.iceFrac;
+            case "hs" -> o.hs;
+            case "biome" -> o.biome;
+            case "cr" -> o.color >> 16 & 255;
+            case "cg" -> o.color >> 8 & 255;
+            case "cb" -> o.color & 255;
+            default -> throw new IllegalArgumentException(f);
+        };
+    }
+
+    /** Climate, erosion, rivers (per-plate networks), cryosphere and biomes against the prototype. */
+    @ParameterizedTest
+    @ValueSource(ints = { 12345, 987654321 })
+    void fullPipelineMatchesPrototype(int seed) throws IOException {
+        List<String[]> rows = csv("full_" + seed + ".csv");
+        String[] header = rows.get(0);
+        GenParams p = new GenParams();
+        p.seed = seed;
+        WorldGen gen = new WorldGen(p);
+        GenPoint o = new GenPoint();
+        Map<String, Double> maxErr = new LinkedHashMap<>();
+        Map<String, Integer> miss = new LinkedHashMap<>();
+        int bad = 0, rivers = 0, lakes = 0;
+        StringBuilder examples = new StringBuilder();
+        for (String[] r : rows.subList(1, rows.size())) {
+            gen.evaluate(Double.parseDouble(r[0]), Double.parseDouble(r[1]), Stage.BIOMES, o);
+            if (o.river != 0) rivers++;
+            if (o.lake != 0) lakes++;
+            boolean b = false;
+            for (int c = 2; c < header.length; c++) {
+                String f = header[c];
+                double want = Double.parseDouble(r[c]), got = fullField(o, f);
+                if (FULL_DISCRETE.contains(f)) {
+                    if (want != got) {
+                        miss.merge(f, 1, Integer::sum);
+                        b = true;
+                    }
+                    continue;
+                }
+                boolean colour = f.length() == 2 && f.charAt(0) == 'c';
+                double err = colour ? Math.max(0, Math.abs(want - got) - 1) : Math.abs(want - got) / Math.max(1, Math.abs(want));
+                maxErr.merge(f, err, Math::max);
+                if (err > 1e-5) {
+                    b = true;
+                    if (examples.length() < 2500)
+                        examples.append(String.format("  (%s,%s) %s want %s got %s%n", r[0], r[1], f, want, got));
+                }
+            }
+            if (b) bad++;
+        }
+        int n = rows.size() - 1;
+        System.out.printf("full seed %d: %d points (%d river, %d lake), %d differ (%.3f%%), %d nets built%n", seed, n,
+            rivers, lakes, bad, 100.0 * bad / n, gen.rivers.buildCount());
+        System.out.println("  max relative error per field: " + maxErr);
+        if (!miss.isEmpty()) System.out.println("  discrete mismatches: " + miss);
+        if (examples.length() > 0) System.out.print(examples);
+        assertTrue(bad <= n * 0.005, "too many points differ from the JS prototype: " + bad + "/" + n);
+    }
+
     @ParameterizedTest
     @ValueSource(ints = { 12345, 987654321 })
     void pipelineMatchesPrototype(int seed) throws IOException {

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.junedev.viridium.worldgen.terrain.WorldGen;
-import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
+
 import net.junedev.viridium.worldgen.terrain.column.TerrainLayout;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.crust.Lithology;
@@ -13,6 +13,7 @@ import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
+import net.junedev.viridium.worldgen.terrain.stages.Biome;
 import net.junedev.viridium.worldgen.terrain.stages.Rock;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
@@ -21,7 +22,7 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
-import net.minecraft.world.biome.BiomeGenBase;
+
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -34,6 +35,7 @@ import org.lwjgl.opengl.GL11;
  */
 public class WorldMapScreen extends GuiScreen {
 
+    private static final int LIST_TOP = 22, LIST_ROW = 10;
     private static final int BTN_BORDERS = 1000, BTN_CENTER = 1001, BTN_SECTION = 1002;
     private static final int SECTION_TOP = 700, SECTION_BOTTOM = TerrainLayout.MIN_Y - 40;
 
@@ -64,15 +66,7 @@ public class WorldMapScreen extends GuiScreen {
     public void initGui() {
         buttonList.clear();
         if (gen == null && error == null) setupGenerator();
-        int y = 22;
-        int id = 0;
-        for (MapLayer l : MapLayer.ALL) {
-            GuiButton b = new GuiButton(id++, 4, y, 112, 16, l.name);
-            b.enabled = !l.id.equals(layerId);
-            buttonList.add(b);
-            y += 17;
-        }
-        y += 6;
+        int y = LIST_TOP + MapLayer.ALL.size() * LIST_ROW + 6;
         buttonList.add(new GuiButton(BTN_BORDERS, 4, y, 112, 16, "Plate borders: " + (borders ? "on" : "off")));
         buttonList.add(new GuiButton(BTN_CENTER, 4, y + 17, 112, 16, "Center on player"));
         buttonList.add(new GuiButton(BTN_SECTION, 4, y + 34, 112, 16, "Crust section: " + (section ? "on" : "off")));
@@ -145,6 +139,11 @@ public class WorldMapScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int x, int y, int button) {
         super.mouseClicked(x, y, button);
+        int row = (y - LIST_TOP) / LIST_ROW;
+        if (x < 120 && y >= LIST_TOP && row < MapLayer.ALL.size()) {
+            layerId = MapLayer.ALL.get(row).id;
+            return;
+        }
         if (x < 120 || gen == null) return;
         if (button == 0 && isShiftKeyDown()) {
             teleport(worldX(x), worldZ(y));
@@ -180,8 +179,8 @@ public class WorldMapScreen extends GuiScreen {
     }
 
     private void teleport(double x, double z) {
-        gen.evaluate(x, z, Stage.GEOLOGY, inspect);
-        int y = Math.max(TerrainLayout.surfaceY(inspect.h), TerrainLayout.SEA_LEVEL - 1) + 2;
+        gen.evaluate(x, z, Stage.BIOMES, inspect);
+        int y = Math.max(TerrainLayout.surfaceY(Math.max(inspect.h, inspect.hs)), TerrainLayout.SEA_LEVEL - 1) + 2;
         mc.thePlayer.sendChatMessage(String.format("/tp %d %d %d", (int) Math.floor(x), y, (int) Math.floor(z)));
         mc.displayGuiScreen(null);
     }
@@ -214,6 +213,13 @@ public class WorldMapScreen extends GuiScreen {
         if (section) drawSection();
         drawRect(0, 0, 120, height, 0xa0000000);
         drawString(fontRendererObj, "Viridium map", 6, 8, 0xffffff);
+        for (int k = 0; k < MapLayer.ALL.size(); k++) {
+            MapLayer l = MapLayer.ALL.get(k);
+            int ly = LIST_TOP + k * LIST_ROW;
+            boolean sel = l.id.equals(layerId), hover = mouseX < 120 && mouseY >= ly && mouseY < ly + LIST_ROW;
+            if (sel) drawRect(2, ly - 1, 118, ly + LIST_ROW - 1, 0x80508050);
+            drawString(fontRendererObj, l.name, 6, ly, sel ? 0xffff80 : hover ? 0xffffff : 0xa0a0a0);
+        }
         super.drawScreen(mouseX, mouseY, partial);
         drawInspector(mouseX, mouseY);
     }
@@ -353,19 +359,21 @@ public class WorldMapScreen extends GuiScreen {
     private void drawInspector(int mx, int my) {
         if (mx < 120) return;
         double x = worldX(mx), z = worldZ(my);
-        GenPoint o = gen.evaluate(x, z, Stage.GEOLOGY, inspect);
-        int biome = BiomeMapper.VANILLA.biomeId(o);
-        BiomeGenBase b = biome >= 0 && biome < BiomeGenBase.getBiomeGenArray().length
-            ? BiomeGenBase.getBiomeGenArray()[biome]
-            : null;
+        GenPoint o = gen.evaluate(x, z, Stage.PLATES, inspect);
+        // never build a river network on the render thread: fall back to the stages before rivers
+        boolean full = gen.rivers.isCached(o.pi, o.pj) || o.L < -0.5;
+        if (full) gen.evaluate(x, z, Stage.BIOMES, o);
+        else gen.evaluate(x, z, Stage.EROSION, o);
+        String water = o.lake == 1 ? "lake" : o.lake == 2 ? "salt flat" : o.river != 0 ? "river" : o.h < 0 ? "sea" : "-";
         String[] lines = { String.format("X %d  Z %d   Y %d (h %.1f)", (int) Math.floor(x), (int) Math.floor(z),
             TerrainLayout.surfaceY(o.h), o.h),
-            String.format("T %.1f °C   P %.0f mm   lat %.0f°", o.Tb - 0.07 * Math.max(0, o.h), o.Pb,
-                Math.toDegrees(o.lat)),
-            String.format("Plate %d,%d   L %.2f   edge %.0f", o.pi, o.pj, o.L, o.edge),
+            String.format("T %.1f °C   P %.0f mm   lat %.0f°", o.T, o.P, Math.toDegrees(o.lat)),
+            String.format("Plate %d,%d   L %.2f   slope %.2f", o.pi, o.pj, o.L, o.slope),
             String.format("Rock %s   erod %.2f", Rock.VALUES[o.rockT >= 0.5 ? o.rock : o.rock2].name()
                 .toLowerCase(), o.erod),
-            "Biome " + (b == null ? biome : b.biomeName), "Shift+click: teleport" };
+            full ? String.format("Biome %s   water %s", Biome.VALUES[o.biome].displayName, water)
+                : "Biome: river network not built yet",
+            "Shift+click: teleport" };
         int w = 0;
         for (String s : lines) w = Math.max(w, fontRendererObj.getStringWidth(s));
         int x0 = width - w - 10, y0 = height - 18 - lines.length * 10;

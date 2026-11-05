@@ -8,16 +8,21 @@ import net.junedev.viridium.worldgen.terrain.crust.CrustModel;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
+import net.junedev.viridium.worldgen.terrain.stages.BiomeStage;
 import net.junedev.viridium.worldgen.terrain.stages.ClimateBaseStage;
+import net.junedev.viridium.worldgen.terrain.stages.ClimateStage;
 import net.junedev.viridium.worldgen.terrain.stages.ContinentStage;
+import net.junedev.viridium.worldgen.terrain.stages.CryoStage;
+import net.junedev.viridium.worldgen.terrain.stages.ErosionStage;
 import net.junedev.viridium.worldgen.terrain.stages.GeologyStage;
 import net.junedev.viridium.worldgen.terrain.stages.PlateStage;
 import net.junedev.viridium.worldgen.terrain.stages.ReliefStage;
+import net.junedev.viridium.worldgen.terrain.stages.RiverStage;
 import net.junedev.viridium.worldgen.terrain.stages.VolcanismStage;
 
 /**
  * Random-access terrain pipeline: {@link #evaluate} depends only on (x, z) and the parameters, never on evaluation
- * order. Thread-safe; all mutable temporaries live in a per-thread {@link GenScratch}.
+ * order (caches are deterministic). Thread-safe; all mutable temporaries live in a per-thread {@link GenScratch}.
  *
  * <p>
  * Each stage is an independent class. To experiment with one, subclass it and plug it in through {@link Builder}; the
@@ -34,6 +39,11 @@ public final class WorldGen {
     public final ReliefStage relief;
     public final VolcanismStage volcanism;
     public final GeologyStage geology;
+    public final ClimateStage climateFinal;
+    public final ErosionStage erosion;
+    public final RiverStage rivers;
+    public final CryoStage cryo;
+    public final BiomeStage biomes;
     /** 3D crust (not a per-point stage: evaluated per column and per block). */
     public final CrustModel crust;
 
@@ -52,6 +62,11 @@ public final class WorldGen {
         this.relief = b.relief.apply(this);
         this.volcanism = b.volcanism.apply(this);
         this.geology = b.geology.apply(this);
+        this.climateFinal = b.climateFinal.apply(this);
+        this.erosion = b.erosion.apply(this);
+        this.rivers = b.rivers.apply(this);
+        this.cryo = b.cryo.apply(this);
+        this.biomes = b.biomes.apply(this);
         this.crust = b.crust.apply(this);
     }
 
@@ -59,8 +74,16 @@ public final class WorldGen {
         return scratch.get();
     }
 
-    /** Evaluates every stage up to and including {@code upTo} at (x, z), writing into {@code o}. */
+    /** Evaluates every stage up to and including {@code upTo} at (x, z) at game resolution (1 block/pixel). */
     public GenPoint evaluate(double x, double z, Stage upTo, GenPoint o) {
+        return evaluate(x, z, upTo, 1, o);
+    }
+
+    /**
+     * Evaluates every stage up to and including {@code upTo}. {@code bpp} (blocks per pixel) fades detail that would
+     * alias when the result is viewed from far away (map); use 1 for the game.
+     */
+    public GenPoint evaluate(double x, double z, Stage upTo, double bpp, GenPoint o) {
         GenScratch s = scratch();
         o.x = x;
         o.z = z;
@@ -74,12 +97,22 @@ public final class WorldGen {
         o.h = o.h0;
         if (upTo == Stage.RELIEF) return o;
         geology.apply(x, z, o, s);
+        if (upTo == Stage.GEOLOGY) return o;
+        climateFinal.apply(x, z, o, s);
+        if (upTo == Stage.CLIMATE_FINAL) return o;
+        erosion.apply(x, z, o, bpp, s);
+        if (upTo == Stage.EROSION) return o;
+        rivers.apply(x, z, o, s);
+        if (upTo == Stage.RIVERS) return o;
+        cryo.apply(x, z, o, bpp);
+        if (upTo == Stage.CRYOSPHERE) return o;
+        biomes.apply(o);
         return o;
     }
 
     /**
      * Base height (plates + continents + relief) at an arbitrary point. {@code detail = false} skips fine octaves;
-     * used by stages that sample the relief around a point.
+     * used by stages that sample the relief around a point. Leaves the details in {@code scratch().heightPoint}.
      */
     public double heightAt(double x, double z, boolean detail) {
         GenScratch s = scratch();
@@ -92,6 +125,7 @@ public final class WorldGen {
     /** Drops deterministic caches (the world is identical afterwards). */
     public void clearCaches() {
         volcanism.clearCache();
+        rivers.clearCache();
     }
 
     /** Lets callers replace individual stages with custom implementations. */
@@ -104,6 +138,11 @@ public final class WorldGen {
         private Function<WorldGen, ReliefStage> relief = ReliefStage::new;
         private Function<WorldGen, VolcanismStage> volcanism = VolcanismStage::new;
         private Function<WorldGen, GeologyStage> geology = GeologyStage::new;
+        private Function<WorldGen, ClimateStage> climateFinal = ClimateStage::new;
+        private Function<WorldGen, ErosionStage> erosion = ErosionStage::new;
+        private Function<WorldGen, RiverStage> rivers = RiverStage::new;
+        private Function<WorldGen, CryoStage> cryo = CryoStage::new;
+        private Function<WorldGen, BiomeStage> biomes = BiomeStage::new;
         private Function<WorldGen, CrustModel> crust = g -> new CrustModel(g.params, g.seeds);
 
         public Builder(GenParams params) {
@@ -137,6 +176,31 @@ public final class WorldGen {
 
         public Builder geology(Function<WorldGen, GeologyStage> f) {
             geology = f;
+            return this;
+        }
+
+        public Builder climateFinal(Function<WorldGen, ClimateStage> f) {
+            climateFinal = f;
+            return this;
+        }
+
+        public Builder erosion(Function<WorldGen, ErosionStage> f) {
+            erosion = f;
+            return this;
+        }
+
+        public Builder rivers(Function<WorldGen, RiverStage> f) {
+            rivers = f;
+            return this;
+        }
+
+        public Builder cryo(Function<WorldGen, CryoStage> f) {
+            cryo = f;
+            return this;
+        }
+
+        public Builder biomes(Function<WorldGen, BiomeStage> f) {
+            biomes = f;
             return this;
         }
 

@@ -1,11 +1,15 @@
 package net.junedev.viridium.worldgen.terrain.column;
 
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
+import net.junedev.viridium.worldgen.terrain.stages.Biome;
 
 /** Chooses the Minecraft biome id of a column from the evaluated point. Swap it to use custom biomes. */
 public interface BiomeMapper {
 
     int biomeId(GenPoint p);
+
+    /** Default: the dominant biome of the biome stage, mapped onto its temporary vanilla biome. */
+    BiomeMapper FROM_STAGE = p -> Biome.VALUES[p.biome].vanillaId;
 
     /**
      * Temporary mapping onto vanilla biome ids (numeric, so the planner stays free of Minecraft classes) until the

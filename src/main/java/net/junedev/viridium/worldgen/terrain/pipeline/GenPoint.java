@@ -46,4 +46,37 @@ public final class GenPoint {
     /** Dominant and secondary surface rock ordinals ({@code Rock}), weight of the dominant one, erodibility. */
     public int rock, rock2;
     public double rockT = 1, erod;
+
+    // 8. final climate
+    /** Thermal (monsoon) wind strength, relief deflection, how much land the wind crossed. */
+    public double thermal, deflect, upLand;
+    /** Land fraction ~800 blocks east / west. */
+    public double lE, lW;
+    /** Sea surface temperature anomaly from currents, upwelling, current vector. */
+    public double sst, upwell, curX, curY;
+    /** Rain shadow and orographic lift. */
+    public double shadow, oro;
+
+    // 9. erosion
+    public double slope, gx, gy, eroDelta;
+
+    // 10. rivers, lakes, valleys, deltas, estuaries
+    public double riverD = 1e9, riverHW, riverZ, riverAcc, valley, delta, estu, lakeZ, glac, gorge;
+    /** 1 inside a river channel. */
+    public int river;
+    /** 0 none, 1 lake, 2 salt flat. */
+    public int lake;
+
+    // 11. cryosphere
+    /** 0 none, 1 floe, 2 ice shelf, 3 frozen lake. */
+    public int seaIce;
+    public double berg, perma, iceFrac;
+    /** Visible surface height (lake level, ice, iceberg top). */
+    public double hs;
+
+    // 12. biomes
+    /** Normalised weight of every {@code Biome}. */
+    public final float[] biomeW = new float[64];
+    /** Dominant biome ordinal and blended colour (RGB). */
+    public int biome, color;
 }

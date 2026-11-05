@@ -24,6 +24,14 @@ public final class GenScratch {
     public final GenPoint hotspotPoint = new GenPoint();
     public final GenPoint landPoint = new GenPoint();
 
+    // erosion: last gully value and gradient
+    public double EV, EGX, EGY;
+
+    // rivers: cubic B-spline weights and the sampled network field
+    public final double[] BWX = new double[4], BWY = new double[4];
+    public double FD, FZ, FW, FA, FR, FE, FEW;
+    public boolean FOK;
+
     // volcanism: hotspots near the last evaluated hotspot cell
     public boolean hotValid;
     public long hotKey;

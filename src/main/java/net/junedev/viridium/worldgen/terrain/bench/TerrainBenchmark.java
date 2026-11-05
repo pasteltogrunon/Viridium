@@ -132,7 +132,7 @@ public final class TerrainBenchmark {
     private void columns() {
         line("");
         line("Column plans (contiguous 16x16 columns, real case):");
-        ColumnPlanner planner = new ColumnPlanner(gen, BiomeMapper.VANILLA);
+        ColumnPlanner planner = new ColumnPlanner(gen, BiomeMapper.FROM_STAGE);
         int side = 24; // 24x24 columns = 384x384 blocks
         int cx0 = 37, cz0 = -12;
         // warm-up
@@ -167,8 +167,8 @@ public final class TerrainBenchmark {
         long air = 0, solid = 0, mixed = 0;
         int cubesPerColumn = (TerrainLayout.MAX_Y - TerrainLayout.MIN_Y) >> 4;
         for (ColumnPlan p : plans) {
-            int top = Math.max(p.maxSurfaceY, TerrainLayout.SEA_LEVEL - 1) >> 4;
-            int solidTop = (p.minSurfaceY - 4 - 15) >> 4;
+            int top = p.maxTopY >> 4;
+            int solidTop = (p.minSurfaceY - TerrainLayout.SURFACE_RULE_DEPTH - 15) >> 4;
             for (int cy = TerrainLayout.MIN_Y >> 4; cy < TerrainLayout.MAX_Y >> 4; cy++) {
                 if (cy > top) air++;
                 else if (cy <= solidTop) solid++;

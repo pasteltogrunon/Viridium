@@ -53,8 +53,12 @@ public final class MapTileRenderer {
                 boolean inside = i < size && j < size;
                 if (!inside && !shade) continue;
                 double x = (tx * (double) size + i + 0.5) * bpp, z = (tz * (double) size + j + 0.5) * bpp;
-                gen.evaluate(x, z, stage, o);
-                if (shade) hb[j * n + i] = (float) (layer.heightField == MapLayer.HeightField.BASE ? o.h0 : o.h);
+                gen.evaluate(x, z, stage, bpp, o);
+                if (shade) hb[j * n + i] = (float) switch (layer.heightField) {
+                    case BASE -> o.h0;
+                    case FINAL -> o.h;
+                    case SURFACE -> o.hs;
+                };
                 if (!inside) continue;
                 int c = layer.colorizer.color(o, bpp);
                 if (borders && o.edge < bpp * 0.8) c = ColorRamp.lerp(c, ColorRamp.rgb(250, 50, 250), 0.8);
