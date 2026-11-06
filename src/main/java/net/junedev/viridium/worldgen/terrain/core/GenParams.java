@@ -72,6 +72,11 @@ public final class GenParams implements Cloneable {
      * (scales the threshold of their mask), their height multiplier, and the terraced mesas of arid sedimentary land.
      */
     public double plateaus = 1.0, plateauHeight = 1.0, mesas = 1.0;
+    /**
+     * Coastal cliffs (frequency and height multiplier) and the block-level detail of every cliff: notch at its foot,
+     * talus and fallen boulders (0 turns the detail off).
+     */
+    public double cliffs = 1.0, cliffDetail = 1.0;
 
     // implementation
     /**

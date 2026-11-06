@@ -51,6 +51,20 @@ public final class BlockSink implements FloraSink {
         put(x, y, z, b, meta, false);
     }
 
+    @Override
+    public void rock(int x, int y, int z, Block b, int meta) {
+        int lx = x - x0, ly = y - y0, lz = z - z0;
+        if ((lx | ly | lz) < 0 || lx > 15 || ly > 15 || lz > 15) return;
+        if (ebs == null) ebs = new ExtendedBlockStorage(y0, hasSky);
+        Block cur = ebs.getBlockByExtId(lx, ly, lz);
+        Material m = cur.getMaterial();
+        if (cur != Blocks.air && cur != Blocks.snow_layer && m != Material.water && m != Material.leaves && m != Material.plants
+            && m != Material.vine) return;
+        ebs.func_150818_a(lx, ly, lz, b);
+        ebs.setExtBlockMetadata(lx, ly, lz, meta);
+        written++;
+    }
+
     private void put(int x, int y, int z, Block b, int meta, boolean strong) {
         int lx = x - x0, ly = y - y0, lz = z - z0;
         if ((lx | ly | lz) < 0 || lx > 15 || ly > 15 || lz > 15) return; // another cube draws this part

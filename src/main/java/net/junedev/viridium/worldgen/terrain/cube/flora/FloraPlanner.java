@@ -38,12 +38,27 @@ public final class FloraPlanner {
         .build();
     private final ThreadLocal<SurfaceRules.Column> column = ThreadLocal.withInitial(SurfaceRules.Column::new);
     private final ThreadLocal<BlockSink> sinks = ThreadLocal.withInitial(BlockSink::new);
+    private net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs;
+    private net.junedev.viridium.worldgen.terrain.crust.CrustModel crust;
+    private Block[] lith;
+    private ThreadLocal<net.junedev.viridium.worldgen.terrain.crust.CrustModel.Sampler> rockSampler;
+    private double boulders;
 
     public FloraPlanner(ColumnPlanCache plans, SurfaceRules rules, long worldSeed, boolean hasSky) {
         this.plans = plans;
         this.rules = rules;
         this.seed = worldSeed;
         this.hasSky = hasSky;
+    }
+
+    /** Cliff detail (talus columns grow nothing; boulders fall at the foot of walls) and the rock of the boulders. */
+    public void setCliffs(net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs,
+        net.junedev.viridium.worldgen.terrain.crust.CrustModel crust, Block[] lith, double boulders) {
+        this.cliffs = cliffs;
+        this.crust = crust;
+        this.lith = lith;
+        this.boulders = boulders;
+        this.rockSampler = ThreadLocal.withInitial(() -> crust.new Sampler());
     }
 
     // ------------------------------------------------------------------ densities per biome
@@ -159,7 +174,38 @@ public final class FloraPlanner {
                     p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
             }
         }
+        if (cliffs != null) {
+            net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc = cliffs.get(chunkX, chunkZ);
+            if (cc.any) out.removeIf(f -> cc.talusTop[ColumnPlan.index(f.x & 15, f.z & 15)] != ColumnPlan.NONE);
+            boulders(p, cc, r, out);
+        }
         return out.isEmpty() ? Collections.emptyList() : out;
+    }
+
+    /**
+     * Fallen blocks: more of them close to the foot of tall walls, fewer further out (up to 10 blocks), on dry ground or
+     * on the sea floor below a sea cliff. Each is made of the rock found under its own column.
+     */
+    private void boulders(ColumnPlan p, net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc, Random r,
+        List<Feature> out) {
+        if (boulders <= 0) return;
+        for (int i = 0; i < 256; i++) {
+            int wd = cc.wallDist[i];
+            if (wd <= 0) continue;
+            double pr = boulders * 0.03 * (1 - (wd - 1) / 10.0) * Math.min(1, cc.wallH[i] / 30.0);
+            if (r.nextDouble() >= pr) continue;
+            int lx = i & 15, lz = i >> 4;
+            int top = cc.talusTop[i] != ColumnPlan.NONE ? cc.talusTop[i] : p.surfaceY[i];
+            int x = (p.chunkX << 4) + lx, z = (p.chunkZ << 4) + lz;
+            out.add(new Feature(FeatureType.BOULDER, x, top + 1, z, r.nextLong(), rockAt(p, i, p.surfaceY[i] - 4)));
+        }
+    }
+
+    private Block rockAt(ColumnPlan p, int i, int y) {
+        net.junedev.viridium.worldgen.terrain.crust.CrustModel.Sampler s = rockSampler.get();
+        int y0 = y & ~15;
+        s.prepare(p.chunkX << 4, y0, p.chunkZ << 4);
+        return lith[s.at(p.crust, i, i & 15, y - y0, i >> 4).ordinal()];
     }
 
     /** Top block of a dry column (null when water/ice covers it or the rock is bare); fills {@code sc}. */

@@ -10,10 +10,17 @@ public final class Feature {
     public final FeatureType type;
     public final int x, y, z;
     public final long seed;
+    /** Block of the feature when it has one of its own (boulders: the local rock), else null. */
+    public final net.minecraft.block.Block block;
     /** Conservative bounding box (inclusive). */
     public final int minX, minY, minZ, maxX, maxY, maxZ;
 
     public Feature(FeatureType type, int x, int y, int z, long seed) {
+        this(type, x, y, z, seed, null);
+    }
+
+    public Feature(FeatureType type, int x, int y, int z, long seed, net.minecraft.block.Block block) {
+        this.block = block;
         this.type = type;
         this.x = x;
         this.y = y;

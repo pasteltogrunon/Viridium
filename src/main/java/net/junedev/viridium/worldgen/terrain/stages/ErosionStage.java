@@ -100,7 +100,7 @@ public class ErosionStage extends GenStage {
         double raw = (hv - sumA) * 0.5; // ∈ [-sumA, 0]: only digs
         double tN = o.T / 7;
         double clim = (0.3 + clamp(o.P / 1500, 0, 1.5)) * (1 + 0.6 * Math.exp(-tN * tN)); // rain + freeze/thaw
-        double amount = P.erosionStrength * 32 * o.erod * clim * ss(-8, 6, h0) * (1 - o.platEdge);
+        double amount = P.erosionStrength * 32 * o.erod * clim * ss(-8, 6, h0) * (1 - o.scarp);
         o.eroDelta = raw * amount;
         o.h = h0 + o.eroDelta;
         mesas(o, g);

@@ -41,8 +41,10 @@ public final class GenPoint {
     /** Plateau share (0..1, the escarpment rises across it) and type (0 uplifted tableland, 1 basalt traps). */
     public double plat;
     public int platType;
-    /** Nearness to a plateau escarpment (1 on it, 0 beyond ~25 blocks): erosion leaves the scarp and its foot alone. */
-    public double platEdge;
+    /** Nearness to an escarpment or cliff (1 on it, 0 beyond ~25 blocks): erosion leaves the scarp and its foot alone. */
+    public double scarp;
+    /** Coastal cliff share (0..1: the raised coast behind a sea cliff). */
+    public double cliff;
     /** Volcanic share and type (0 none, 1 arc, 2 hotspot chain, 3 Iceland-like, 4 atoll). */
     public double volc;
     public int volcType;

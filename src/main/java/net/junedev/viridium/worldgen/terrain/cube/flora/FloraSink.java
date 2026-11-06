@@ -10,4 +10,7 @@ public interface FloraSink {
     void leaves(int x, int y, int z, Block b, int meta);
 
     void plant(int x, int y, int z, Block b, int meta);
+
+    /** Rock (boulders): replaces air, snow, plants, leaves and water. */
+    void rock(int x, int y, int z, Block b, int meta);
 }

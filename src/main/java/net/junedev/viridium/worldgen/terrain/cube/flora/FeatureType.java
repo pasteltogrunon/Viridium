@@ -187,6 +187,24 @@ public enum FeatureType {
             int h = 1 + r.nextInt(3);
             for (int i = 0; i < h; i++) s.plant(x, y + i, z, Blocks.cactus, 0);
         }
+    },
+    /** Fallen block at the foot of a cliff: a rough ellipsoid of the local rock, half buried. */
+    BOULDER(2, 3) {
+
+        @Override
+        void draw(FloraSink s, int x, int y, int z, Random r) {}
+
+        @Override
+        public void draw(FloraSink s, Feature f) {
+            Random r = new Random(f.seed);
+            double rx = 0.8 + r.nextDouble() * 1.4, rz = 0.8 + r.nextDouble() * 1.4, ry = 0.7 + r.nextDouble() * 0.9;
+            net.minecraft.block.Block b = f.block != null ? f.block : Blocks.cobblestone;
+            for (int dy = -2; dy <= 2; dy++) for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
+                double q = (dx / rx) * (dx / rx) + (dy / ry) * (dy / ry) + (dz / rz) * (dz / rz);
+                if (q > 1.05 || (q > 0.6 && r.nextInt(4) == 0)) continue;
+                s.rock(f.x + dx, f.y + dy, f.z + dz, b, 0);
+            }
+        }
     };
 
     /** Horizontal reach from the base and height above it (conservative). */

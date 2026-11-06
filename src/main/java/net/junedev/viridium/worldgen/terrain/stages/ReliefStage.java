@@ -31,7 +31,7 @@ public class ReliefStage extends GenStage {
     protected double plateau(double x, double y, double L, GenPoint o) {
         o.plat = 0;
         o.platType = 0;
-        o.platEdge = 0;
+        o.scarp = 0;
         if (P.plateaus <= 0 || L < 0.02) return 0;
         // towards the coast and collisions the mask is lowered: the plateau ends inland with its scarp, it does not ramp down
         double inland = ss(0.02, 0.2, L) * (1 - ss(0.05, 0.3, o.collZ));
@@ -48,10 +48,32 @@ public class ReliefStage extends GenStage {
         k = 0.94 * k + 0.06 * ss(thr - 0.04, thr, m); // gentle footslope below the scarp
         // the erosion gradient comes from an 8-block lattice: next to a scarp it is smeared over ~20 blocks and would dig
         // a moat along its foot
-        o.platEdge = (1 - ss(basalt ? 0.032 : 0.003, basalt ? 0.042 : 0.013, Math.abs(m - thr)));
+        o.scarp = (1 - ss(basalt ? 0.032 : 0.003, basalt ? 0.042 : 0.013, Math.abs(m - thr)));
         o.plat = k;
         o.platType = basalt ? 1 : 0;
         return k;
+    }
+
+    /**
+     * Sea cliffs: where the coast is rocky (a regional noise, about a third of the coastline) the land does not slope into
+     * the sea, it stands 14..60 blocks above it and drops in ~5 blocks (waves cut the foot back and leave a shallow
+     * platform: the shelf). The raised strip fades back to the normal land 150..400 blocks inland. Coves: the step
+     * follows the coast shifted by small-scale noise, so pocket beaches open between headlands. The noise does not
+     * depend on {@code detail}.
+     *
+     * @return height added
+     */
+    protected double coastalCliff(double x, double y, double L, GenPoint o) {
+        if (P.cliffs <= 0 || L < -0.03 || L > 0.12) return 0;
+        double cw = ss(0.0, 0.2, fbm(x / 6000, y / 6000, SD.cliff, 2) + 0.3 * (P.cliffs - 1));
+        if (cw <= 0) return 0;
+        double Lc = L + 0.006 * fbm(x / 90, y / 90, SD.cliff + 2, 2);
+        double C = P.cliffs * cw * (14 + 46 * clamp(0.5 + 0.7 * fbm(x / 2500, y / 2500, SD.cliff + 1, 2), 0, 1));
+        double k = ss(0, 0.0035, Lc) * (1 - ss(0.03, 0.12, L));
+        o.cliff = cw * k;
+        // erosion fades in slowly behind the edge: a sudden start would leave a raised lip along the top
+        o.scarp = Math.max(o.scarp, Math.min(1, 3 * cw) * (Lc < 0 ? 1 - ss(0.002, 0.012, -Lc) : 1 - ss(0.0035, 0.08, Lc)));
+        return C * k;
     }
 
     /** Height of the plateau top above the surrounding plains (60..150 blocks, varying over ~14 km). */
@@ -65,7 +87,8 @@ public class ReliefStage extends GenStage {
         double h;
         o.plat = 0;
         o.platType = 0;
-        o.platEdge = 0;
+        o.scarp = 0;
+        o.cliff = 0;
         o.collR = 0;
         o.volc = 0;
         o.volcType = 0;
@@ -95,6 +118,7 @@ public class ReliefStage extends GenStage {
             // continental shelf → slope → abyssal plain
             h = -16 * ss(0, -0.06, L) + (floor + 16) * ss(-0.06, -0.3, L);
         }
+        h += coastalCliff(x, y, L, o);
         // continental collision: range on the suture + plateau on the overriding plate (Himalaya + Tibet)
         if (o.collK > 1e-3) {
             double S = P.plateSize, sd = o.collS;

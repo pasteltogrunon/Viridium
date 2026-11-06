@@ -327,6 +327,50 @@ class DebugPointTest {
         }
     }
 
+    /** ASCII section of cliff detail along x: VIRIDIUM_CLIFF=x0,x1,z (# rock, ~ water, o notch air, w notch water, + talus). */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CLIFF", matches = ".+")
+    void cliffSection() {
+        WorldGen gen = new WorldGen(new GenParams());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+            net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
+        var plans = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache(planner);
+        var cd = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(plans, 7, 1.0);
+        String[] a = System.getenv("VIRIDIUM_CLIFF").split(",");
+        int x0 = Integer.parseInt(a[0]), x1 = Integer.parseInt(a[1]), z = Integer.parseInt(a[2]);
+        final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE;
+        int n = x1 - x0 + 1, ymin = Integer.MAX_VALUE, ymax = Integer.MIN_VALUE;
+        int[] S = new int[n], Wl = new int[n], lo = new int[n], hi = new int[n], nw = new int[n], tt = new int[n];
+        for (int k = 0; k < n; k++) {
+            int x = x0 + k, i = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.index(x & 15, z & 15);
+            var p = plans.get(x >> 4, z >> 4);
+            var c = cd.get(x >> 4, z >> 4);
+            S[k] = p.surfaceY[i];
+            Wl[k] = p.waterY[i];
+            lo[k] = c.notchLo[i];
+            hi[k] = c.notchHi[i];
+            nw[k] = c.notchWater[i];
+            tt[k] = c.talusTop[i];
+            ymin = Math.min(ymin, S[k]);
+            ymax = Math.max(ymax, Math.max(S[k], Math.max(Wl[k], tt[k])));
+        }
+        StringBuilder hs = new StringBuilder("S: ");
+        for (int k = 0; k < n; k++) hs.append(S[k]).append(Wl[k] != NONE ? "~" : "").append(' ');
+        System.out.println(hs);
+        for (int y = ymax + 1; y >= ymin - 3; y--) {
+            StringBuilder sb = new StringBuilder(String.format("%4d ", y));
+            for (int k = 0; k < n; k++) {
+                char ch = ' ';
+                if (lo[k] != NONE && y >= lo[k] && y <= hi[k]) ch = nw[k] != NONE && y <= nw[k] ? 'w' : 'o';
+                else if (y <= S[k]) ch = '#';
+                else if (tt[k] != NONE && y <= tt[k]) ch = '+';
+                else if (Wl[k] != NONE && y <= Wl[k]) ch = '~';
+                sb.append(ch);
+            }
+            System.out.println(sb);
+        }
+    }
+
     /** Height profile along a line: VIRIDIUM_PROFILE=x0,z0,x1,z1,step (landform debugging). */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_PROFILE", matches = ".+")
@@ -341,8 +385,8 @@ class DebugPointTest {
         for (double t = 0; t <= len; t += st) {
             double x = Math.floor(x0 + (x1 - x0) * t / len), z = Math.floor(z0 + (z1 - z0) * t / len);
             gen.evaluate(x, z, Stage.BIOMES, o);
-            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d%n", x, z,
-                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock);
+            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d  L %.4f cliff %.2f scarp %.2f%n", x, z,
+                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock, o.L, o.cliff, o.scarp);
             prev = o.h;
         }
     }

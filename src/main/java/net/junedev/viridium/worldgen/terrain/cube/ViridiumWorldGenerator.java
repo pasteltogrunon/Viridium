@@ -52,8 +52,13 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         WorldGen gen = this.gen = new WorldGen(params);
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
-        filler.setFlora(new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(plans, filler.rules(), world.getSeed(),
-            filler.hasSky()));
+        net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora = new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(
+            plans, filler.rules(), world.getSeed(), filler.hasSky());
+        net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(
+            plans, params.seed ^ 0xC11FF, params.cliffDetail);
+        filler.setCliffs(cliffs);
+        flora.setCliffs(cliffs, gen.crust, LithologyBlocks.get(), params.cliffDetail);
+        filler.setFlora(flora);
         BY_WORLD.put(world, this);
         PlanPrefetcher p = PlanPrefetcher.start(world, plans, gen);
         // the spawn area is prepared before any player joins: warm it right away

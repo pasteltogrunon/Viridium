@@ -82,4 +82,8 @@ final class CanopySink implements FloraSink {
 
     @Override
     public void plant(int x, int y, int z, Block b, int meta) {}
+
+    /** Boulders are too small for a LOD column. */
+    @Override
+    public void rock(int x, int y, int z, Block b, int meta) {}
 }

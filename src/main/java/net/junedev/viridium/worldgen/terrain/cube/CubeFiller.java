@@ -24,6 +24,7 @@ public class CubeFiller {
     private final SurfaceRules rules;
     private final ThreadLocal<SurfaceRules.Column> surface = ThreadLocal.withInitial(SurfaceRules.Column::new);
     private net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora;
+    private net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs;
 
     public CubeFiller(boolean hasSky, CrustModel crust, Block[] lithologyBlocks) {
         this.hasSky = hasSky;
@@ -45,6 +46,11 @@ public class CubeFiller {
         this.flora = flora;
     }
 
+    /** Notches and talus of cliffs (null = none). */
+    public void setCliffs(net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs) {
+        this.cliffs = cliffs;
+    }
+
     /** Kind of work a cube needs. */
     public enum Kind {
         AIR,
@@ -64,8 +70,14 @@ public class CubeFiller {
     /** Returns the block storage of the cube, or null for an all-air cube. */
     public @Nullable ExtendedBlockStorage fill(ColumnPlan plan, int cubeX, int cubeY, int cubeZ) {
         Kind kind = classify(plan, cubeY);
-        if (kind == Kind.AIR) return flora == null ? null : flora.draw(plan, cubeX, cubeY, cubeZ, null);
         int y0 = cubeY << 4;
+        // a notch can lie below the surface rules of this column (its wall is tall), talus above its highest point
+        net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc = null;
+        if (cliffs != null && kind != Kind.BEDROCK) {
+            cc = cliffs.get(cubeX, cubeZ);
+            if (!cc.any || cc.maxY < y0 || cc.minY > y0 + 15) cc = null;
+        }
+        if (kind == Kind.AIR && cc == null) return flora == null ? null : flora.draw(plan, cubeX, cubeY, cubeZ, null);
         ExtendedBlockStorage ebs = new ExtendedBlockStorage(y0, hasSky);
         if (kind == Kind.BEDROCK) {
             for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
@@ -79,6 +91,7 @@ public class CubeFiller {
         for (int lz = 0; lz < 16; lz++) {
             for (int lx = 0; lx < 16; lx++) {
                 int i = ColumnPlan.index(lx, lz);
+                if (kind == Kind.AIR) continue;
                 if (kind == Kind.CRUST) {
                     for (int ly = 0; ly < 16; ly++)
                         ebs.func_150818_a(lx, ly, lz, lith[s.at(cp, i, lx, ly, lz).ordinal()]);
@@ -87,9 +100,39 @@ public class CubeFiller {
                 }
             }
         }
-        if (kind == Kind.MIXED && flora != null) flora.draw(plan, cubeX, cubeY, cubeZ, ebs);
+        if (cc != null) for (int i = 0; i < 256; i++) cliff(ebs, plan, cc, i, y0, cubeX, cubeZ);
+        if ((kind == Kind.MIXED || kind == Kind.AIR) && flora != null) flora.draw(plan, cubeX, cubeY, cubeZ, ebs);
         ebs.removeInvalidBlocks();
         return ebs;
+    }
+
+    /**
+     * Cuts the notch of column i (flooded below the water level of the cliff foot) and piles its talus: cobblestone with
+     * gravel on top, mossy cobblestone where it rains.
+     */
+    private void cliff(ExtendedBlockStorage ebs, ColumnPlan plan, net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc,
+        int i, int y0, int cubeX, int cubeZ) {
+        int lx = i & 15, lz = i >> 4;
+        int lo = cc.notchLo[i];
+        if (lo != NONE) {
+            int hi = cc.notchHi[i], wl = cc.notchWater[i];
+            // never hang sand or gravel over the hole: keep at least one block of rock under loose soil
+            SurfaceRules.Column sc = surface.get();
+            rules.resolve(plan, i, (cubeX << 4) + lx, (cubeZ << 4) + lz, sc);
+            if (sc.top instanceof net.minecraft.block.BlockFalling || sc.under instanceof net.minecraft.block.BlockFalling)
+                hi = Math.min(hi, plan.surfaceY[i] - sc.depth - 2);
+            for (int y = Math.max(lo, y0); y <= Math.min(hi, y0 + 15); y++)
+                ebs.func_150818_a(lx, y - y0, lz, wl != NONE && y <= wl ? Blocks.water : Blocks.air);
+        }
+        int tt = cc.talusTop[i];
+        if (tt != NONE) {
+            boolean wet = plan.precipitation[i] > 900;
+            for (int y = Math.max(plan.surfaceY[i] + 1, y0); y <= Math.min(tt, y0 + 15); y++) {
+                Block b = y < tt ? Blocks.cobblestone : wet ? Blocks.mossy_cobblestone : Blocks.gravel;
+                ebs.func_150818_a(lx, y - y0, lz, b);
+                ebs.setExtBlockMetadata(lx, y - y0, lz, 0);
+            }
+        }
     }
 
     private void fillColumn(ExtendedBlockStorage ebs, ColumnPlan plan, CrustModel.Sampler s, SurfaceRules.Column sc,
