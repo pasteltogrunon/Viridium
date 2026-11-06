@@ -40,6 +40,21 @@ public final class ColumnPlanner {
         return plan;
     }
 
+    /** A plan used as scratch by {@link #planPoint}; only the slots written there are meaningful. */
+    public ColumnPlan newScratchPlan() {
+        return new ColumnPlan(0, 0);
+    }
+
+    /**
+     * Plans a single column at block (x, z) into slot {@code i} of a scratch plan, seen at {@code bpp} blocks per
+     * sample (1 = game resolution). Used by far-away consumers (Distant Horizons LODs) that never need a whole chunk.
+     */
+    public void planPoint(ColumnPlan plan, int i, int x, int z, double bpp) {
+        GenPoint p = point.get();
+        gen.evaluate(x, z, Stage.BIOMES, bpp, p);
+        fillColumn(plan, i, x, z, p);
+    }
+
     /** Converts one evaluated point into the column's absolute layout. */
     void fillColumn(ColumnPlan plan, int i, int x, int z, GenPoint p) {
         int surface = TerrainLayout.surfaceY(p.h);

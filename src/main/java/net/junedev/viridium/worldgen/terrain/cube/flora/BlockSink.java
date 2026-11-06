@@ -10,7 +10,7 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
  * air, leaves, snow and plants; leaves and plants only fill air (and snow layers). The storage is allocated lazily, so
  * an otherwise empty air cube stays storage-free unless a tree reaches into it.
  */
-public final class BlockSink {
+public final class BlockSink implements FloraSink {
 
     private int x0, y0, z0;
     private boolean hasSky;
@@ -36,14 +36,17 @@ public final class BlockSink {
         return written;
     }
 
+    @Override
     public void log(int x, int y, int z, Block b, int meta) {
         put(x, y, z, b, meta, true);
     }
 
+    @Override
     public void leaves(int x, int y, int z, Block b, int meta) {
         put(x, y, z, b, meta, false);
     }
 
+    @Override
     public void plant(int x, int y, int z, Block b, int meta) {
         put(x, y, z, b, meta, false);
     }

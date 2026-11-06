@@ -17,28 +17,28 @@ public enum FeatureType {
     OAK(2, 9) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             blob(s, x, y, z, r, 4 + r.nextInt(3), Blocks.log, 0, Blocks.leaves, 0, 2);
         }
     },
     BIRCH(2, 10) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             blob(s, x, y, z, r, 5 + r.nextInt(3), Blocks.log, 2, Blocks.leaves, 2, 2);
         }
     },
     SWAMP_OAK(3, 9) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             blob(s, x, y, z, r, 5 + r.nextInt(2), Blocks.log, 0, Blocks.leaves, 0, 3);
         }
     },
     SPRUCE(3, 13) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             int h = 7 + r.nextInt(5);
             for (int i = 0; i < h; i++) s.log(x, y + i, z, Blocks.log, 1);
             int rad = 0, max = 1 + r.nextInt(2);
@@ -53,7 +53,7 @@ public enum FeatureType {
     PINE(2, 22) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             int h = 13 + r.nextInt(7);
             for (int i = 0; i < h; i++) s.log(x, y + i, z, Blocks.log, 1);
             int crown = 4 + r.nextInt(3);
@@ -64,14 +64,14 @@ public enum FeatureType {
     JUNGLE(2, 14) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             blob(s, x, y, z, r, 6 + r.nextInt(6), Blocks.log, 3, Blocks.leaves, 3, 2);
         }
     },
     MEGA_JUNGLE(6, 30) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             int h = 16 + r.nextInt(10);
             for (int i = 0; i < h; i++)
                 for (int d = 0; d < 4; d++) s.log(x + (d & 1), y + i, z + (d >> 1), Blocks.log, 3);
@@ -94,7 +94,7 @@ public enum FeatureType {
     ACACIA(7, 10) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             int h = 4 + r.nextInt(2), dir = r.nextInt(4);
             int dx = dir == 0 ? 1 : dir == 1 ? -1 : 0, dz = dir == 2 ? 1 : dir == 3 ? -1 : 0;
             int cx = x, cz = z, top = y;
@@ -112,7 +112,7 @@ public enum FeatureType {
     PEDUNCULATE_OAK(4, 13) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             LargeTreeBlockSet t = ViriBlocks.pedunculate_oak;
             broadleaf(s, x, y, z, r, 6 + r.nextInt(3), t.log, t.leaves);
         }
@@ -121,7 +121,7 @@ public enum FeatureType {
     CHESTNUT(4, 15) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             LargeTreeBlockSet t = ViriBlocks.american_chestnut;
             broadleaf(s, x, y, z, r, 8 + r.nextInt(3), t.log, t.leaves);
         }
@@ -130,7 +130,7 @@ public enum FeatureType {
     PALM(6, 13) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             LargeTreeBlockSet t = ViriBlocks.coconut_palm;
             int h = 6 + r.nextInt(4);
             double ang = r.nextDouble() * Math.PI * 2, lean = 1.5 + r.nextDouble() * 1.5;
@@ -154,21 +154,21 @@ public enum FeatureType {
     TALL_GRASS(0, 1) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             s.plant(x, y, z, Blocks.tallgrass, 1);
         }
     },
     FERN(0, 1) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             s.plant(x, y, z, Blocks.tallgrass, 2);
         }
     },
     FLOWER(0, 1) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             if (r.nextInt(3) == 0) s.plant(x, y, z, Blocks.yellow_flower, 0);
             else s.plant(x, y, z, Blocks.red_flower, r.nextInt(9));
         }
@@ -176,14 +176,14 @@ public enum FeatureType {
     DEAD_BUSH(0, 1) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             s.plant(x, y, z, Blocks.deadbush, 0);
         }
     },
     CACTUS(0, 3) {
 
         @Override
-        void draw(BlockSink s, int x, int y, int z, Random r) {
+        void draw(FloraSink s, int x, int y, int z, Random r) {
             int h = 1 + r.nextInt(3);
             for (int i = 0; i < h; i++) s.plant(x, y + i, z, Blocks.cactus, 0);
         }
@@ -197,16 +197,16 @@ public enum FeatureType {
         this.height = height;
     }
 
-    abstract void draw(BlockSink s, int x, int y, int z, Random r);
+    abstract void draw(FloraSink s, int x, int y, int z, Random r);
 
-    public void draw(BlockSink s, Feature f) {
+    public void draw(FloraSink s, Feature f) {
         draw(s, f.x, f.y, f.z, new Random(f.seed));
     }
 
     // ------------------------------------------------------------------ shape helpers
 
     /** Vanilla-like tree: straight trunk, 4 layers of leaves (two of radius rad, two of radius rad-1). */
-    static void blob(BlockSink s, int x, int y, int z, Random r, int h, Block log, int lm, Block leaves, int fm,
+    static void blob(FloraSink s, int x, int y, int z, Random r, int h, Block log, int lm, Block leaves, int fm,
         int rad) {
         for (int ly = y + h - 3; ly <= y + h; ly++) {
             int rr = ly >= y + h - 1 ? rad - 1 : rad;
@@ -216,7 +216,7 @@ public enum FeatureType {
     }
 
     /** Broad crown: ellipsoid of leaves around the trunk top, held by four short branches. */
-    static void broadleaf(BlockSink s, int x, int y, int z, Random r, int h, Block log, Block leaves) {
+    static void broadleaf(FloraSink s, int x, int y, int z, Random r, int h, Block log, Block leaves) {
         for (int i = 0; i < h; i++) s.log(x, y + i, z, log, 0);
         int top = y + h;
         for (int b = 0; b < 4; b++) { // branches
@@ -232,7 +232,7 @@ public enum FeatureType {
     }
 
     /** Square of leaves of the given radius; random corners skipped when {@code ragged}. */
-    static void disc(BlockSink s, int x, int y, int z, int rad, Block leaves, int meta, Random r, boolean ragged) {
+    static void disc(FloraSink s, int x, int y, int z, int rad, Block leaves, int meta, Random r, boolean ragged) {
         for (int dz = -rad; dz <= rad; dz++) for (int dx = -rad; dx <= rad; dx++) {
             boolean corner = Math.abs(dx) == rad && Math.abs(dz) == rad && rad > 0;
             if (corner && (!ragged || r.nextBoolean())) continue;
@@ -241,7 +241,7 @@ public enum FeatureType {
     }
 
     /** Disc of leaves of real radius rad (optionally centred on a 2x2 trunk), with a ragged edge. */
-    static void ellipseLayer(BlockSink s, int x, int y, int z, double rad, Block leaves, int meta, Random r,
+    static void ellipseLayer(FloraSink s, int x, int y, int z, double rad, Block leaves, int meta, Random r,
         boolean twoByTwo) {
         int R = (int) Math.ceil(rad);
         double c = twoByTwo ? 0.5 : 0;

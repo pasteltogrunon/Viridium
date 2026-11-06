@@ -36,9 +36,15 @@
 dependencies {
     api("com.cardinalstar.cubicchunks:CubicChunks1710:v0.1.24-alpha:dev")
 
+    runtimeOnlyNonPublishable(rfg.deobf(files("../DistantHorizons/dh/forge17/build/libs/DistantHorizons-forge17-3.3.5-dev-1.7.10.jar")))
+
     implementation("com.github.GTNewHorizons:GTNHLib:0.11.54:dev")
 
     devOnlyNonPublishable("com.github.GTNewHorizons:Angelica:2.2.36:dev")
+
+    // Distant Horizons (GTNH 1.7.10 backport) API: optional LOD generator for Viridium worlds. The API is pure Java and
+    // the backport ships it unchanged, so the upstream API jar is enough to compile against.
+    compileOnly("maven.modrinth:distanthorizonsapi:7.2.0")
 
     runtimeOnlyNonPublishable("io.github.legacymoddingmc:unimixins:0.3.1:dev")
     implementation("com.github.GTNewHorizons:Baubles-Expanded:2.2.25-GTNH:dev") { transitive = false }

@@ -49,7 +49,7 @@ public final class FloraPlanner {
     // ------------------------------------------------------------------ densities per biome
 
     /** Trees per 16×16 column. */
-    static double treeDensity(Biome b) {
+    public static double treeDensity(Biome b) {
         return switch (b) {
             case TROPICAL_RAINFOREST -> 12;
             case TEMPERATE_RAINFOREST -> 10;
@@ -66,7 +66,7 @@ public final class FloraPlanner {
         };
     }
 
-    static FeatureType tree(Biome b, Random r, float temperature) {
+    public static FeatureType tree(Biome b, Random r, float temperature) {
         return switch (b) {
             case TROPICAL_RAINFOREST -> r.nextInt(5) == 0 ? FeatureType.MEGA_JUNGLE : FeatureType.JUNGLE;
             case TEMPERATE_RAINFOREST -> r.nextInt(3) == 0 ? FeatureType.PINE : FeatureType.SPRUCE;

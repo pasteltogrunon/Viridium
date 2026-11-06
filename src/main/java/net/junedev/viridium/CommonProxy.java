@@ -2,6 +2,7 @@ package net.junedev.viridium;
 
 import net.junedev.viridium.worldgen.terrain.cube.ViridiumCommand;
 
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
@@ -24,7 +25,12 @@ public class CommonProxy {
     public void init(FMLInitializationEvent event) {}
 
     // postInit "Handle interaction with other mods, complete your setup based on this." (Remove if not needed)
-    public void postInit(FMLPostInitializationEvent event) {}
+    public void postInit(FMLPostInitializationEvent event) {
+        // optional Distant Horizons LODs from the Viridium pipeline (its classes load only when DH is present)
+        if (Loader.isModLoaded("distanthorizons")) {
+            net.junedev.viridium.compat.dh.DistantHorizonsCompat.init();
+        }
+    }
 
     // register server commands in this event handler (Remove if not needed)
     public void serverStarting(FMLServerStartingEvent event) {
