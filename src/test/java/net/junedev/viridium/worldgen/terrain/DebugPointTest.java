@@ -41,6 +41,45 @@ class DebugPointTest {
             System.out.printf("mouth flow %.0f at %.0f,%.0f deltaR %.0f halfWidth %.1f estuary %.2f%n", m[0], m[1], m[2],
                 m[3], m[4], m[5]);
         }
+        // delta branches whose tip is not out in the water (they look like a mouth without a river)
+        GenPoint tp = new GenPoint();
+        int tips = 0, dry = 0;
+        for (long k : seen) {
+            var c = gen.rivers.basins.cell(k);
+            if (c.ocean || !c.outlet) continue;
+            var net = gen.rivers.net(c.ci, c.cj);
+            for (int cc = 0; cc < net.dch.length / 2; cc++) {
+                int v0 = net.dch[cc * 2], vn = net.dch[cc * 2 + 1], b = (v0 + vn - 1) * net.DV;
+                if (net.dv[b + 4] > 1e8) continue; // split, not a tip
+                tips++;
+                gen.evaluate(net.dv[b], net.dv[b + 1], Stage.BIOMES, tp);
+                double a0x = net.dv[v0 * net.DV], a0y = net.dv[v0 * net.DV + 1];
+                if (tp.h > 0.5 && dry++ < 10) System.out.printf("  tip on land at %.0f,%.0f (h %.1f), branch from %.0f,%.0f%n",
+                    net.dv[b], net.dv[b + 1], tp.h, a0x, a0y);
+            }
+        }
+        System.out.println("delta tips " + tips + ", on land " + dry);
+        // wide reaches whose upstream end connects to nothing (another reach's end, a delta vertex, a divide entry)
+        int orphans = 0;
+        for (long k : seen) {
+            var c = gen.rivers.basins.cell(k);
+            if (c.ocean) continue;
+            var net = gen.rivers.net(c.ci, c.cj);
+            for (int s = 0; s < net.count; s++) {
+                if (net.skip[s] != 0 || net.w0[s] < 6 || net.head[s] != 0) continue;
+                int q = s * net.NPT * 2;
+                double sx = net.pts[q], sy = net.pts[q + 1];
+                boolean ok = false;
+                for (int t = 0; t < net.count && !ok; t++) {
+                    if (t == s || net.skip[t] != 0) continue;
+                    int e = (t * net.NPT + net.NPT - 1) * 2;
+                    if (Math.abs(net.pts[e] - sx) < 4 && Math.abs(net.pts[e + 1] - sy) < 4) ok = true;
+                }
+                if (!ok && orphans++ < 10) System.out.printf("  orphan reach %d at %.0f,%.0f w %.1f z %.1f (basin %d,%d)%n", s,
+                    sx, sy, net.w0[s], net.z0[s], c.ci, c.cj);
+            }
+        }
+        System.out.println("orphan wide reaches " + orphans);
         System.out.println("mouths: " + mouths.size() + ", networks built: " + gen.rivers.buildCount() + ", cells: outlet "
             + outlets + ", inner " + inner + ", terminal " + terminal);
     }
@@ -154,6 +193,15 @@ class DebugPointTest {
             var net = gen.rivers.net(c.ci, c.cj);
             System.out.printf("basin %d,%d outlet=%b terminal=%b L=%.2f reaches %d lakes %d exit %s%n", c.ci, c.cj, c.outlet,
                 c.terminal, c.L, net.count, net.lakes.size(), net.exitLevel);
+            System.out.printf("  estimated flow out %.0f, real exit flow %.0f, mouths %d%n", gen.rivers.basins.flowOut(c),
+                net.exitFlow, net.nMouth);
+            for (var ch : gen.rivers.basins.children(c)) {
+                var cn = gen.rivers.net(ch.ci, ch.cj);
+                double mouthFlow = 0;
+                for (int q = 0; q < cn.nMouth; q++) mouthFlow += cn.mouths[q * cn.MS + 6];
+                System.out.printf("  child %d,%d L=%.2f: estimated %.0f, real exit %.0f, its mouths %d (flow/thr %.0f), lakes %d%n",
+                    ch.ci, ch.cj, ch.L, gen.rivers.basins.flowOut(ch), cn.exitFlow, cn.nMouth, mouthFlow, cn.lakes.size());
+            }
             for (int q = 0; q < net.nMouth; q++) {
                 int c0 = net.dmc[q * 2], ncn = net.dmc[q * 2 + 1];
                 if (ncn == 0) continue;

@@ -294,6 +294,7 @@ final class RiverNetBuilder {
                 // wandering heading, then the lowest of a few headings around it: branches follow the low ground
                 double th0 = mid + 0.5 * half * perlin(br.s / (0.25 * Rd) + br.id * 3.7, idSeed * 0.013, SD.delta + 5)
                     + 0.5 * perlin(br.s / 70 + br.id * 1.3, idSeed * 0.017 + 5.1, SD.delta + 6);
+                double r0 = hypot(br.x - ax, br.y - ay);
                 double nx2 = 0, ny2 = 0, hb = 1e9, score = 1e18, vx = 0, vy = 0, r = 0;
                 for (int cnd = -2; cnd <= 2; cnd++) {
                     double th = th0 + cnd * 0.3;
@@ -315,6 +316,7 @@ final class RiverNetBuilder {
                     }
                     double hc = baseAt(cx2, cy2, p, s);
                     double sc = Math.max(hc, -6) + 1.5 * Math.abs(cnd); // water is all alike; prefer going straight
+                    if (rr < r0 + 0.3 * step) sc += 1e6; // always away from the apex: a branch never turns back inland
                     if (sc < score) {
                         score = sc;
                         hb = hc;
@@ -405,7 +407,7 @@ final class RiverNetBuilder {
             int ei = BasinGraph.keyA(ch.exitNode) - gx0, ej = BasinGraph.keyB(ch.exitNode) - gy0;
             if (ei < 1 || ej < 1 || ei >= nx - 1 || ej >= ny - 1) continue;
             entry[ej * nx + ei] = true;
-            inflow[ej * nx + ei] += (float) graph.flowOut(ch);
+            inflow[ej * nx + ei] += gen.rivers.net(ch.ci, ch.cj).exitFlow; // what really leaves it, not the estimate
         }
         int exit = -1;
         if (cell.drainsToNeighbour()) {
@@ -608,7 +610,7 @@ final class RiverNetBuilder {
                     : (float) Math.max(0, valleyFloor(idx, idx, halfWidth(inflow[idx] / thr), null));
             else if (isRiv[idx]) wlf[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
         });
-        if (exitIdx >= 0) wl[exitIdx] = (float) Math.max(0, valleyFloor(exitIdx, exitIdx, halfWidth((float) graph.flowOut(cell) / thr), null));
+        if (exitIdx >= 0) wl[exitIdx] = (float) Math.max(0, valleyFloor(exitIdx, exitIdx, halfWidth(acc[exitIdx] / thr), null));
         for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
@@ -879,6 +881,7 @@ final class RiverNetBuilder {
 
         RiverNet net = new RiverNet();
         net.exitLevel = exitIdx >= 0 ? wl[exitIdx] : Float.NaN;
+        net.exitFlow = exitIdx >= 0 ? acc[exitIdx] : 0;
         net.ci = cell.ci;
         net.cj = cell.cj;
         net.x0 = x0;

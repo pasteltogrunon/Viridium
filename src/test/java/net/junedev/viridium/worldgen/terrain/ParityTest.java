@@ -117,6 +117,7 @@ class ParityTest {
         p.tempPeriod = 16000;
         p.precipPeriod = 12000;
         p.fastFields = false; // exact port: compare with the prototype
+        p.exactPlateEdges = false;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 

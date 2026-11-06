@@ -76,6 +76,75 @@ public class PlateStage extends GenStage {
         return (ax - s.VX) * nx + (ay - s.VY) * ny;
     }
 
+    /**
+     * Distance from (wx, wy) in plate bk to the real Voronoi edge with plate k: the bisector clipped by the plate's other
+     * half-planes (the bisector line alone runs on past a triple junction, where it is no boundary at all). Infinity if
+     * the two plates do not touch.
+     */
+    private double edgeSegmentDistance(int bk, int k, double d, double nx, double ny, double wx, double wy, GenScratch s) {
+        final double[] FX = s.FX, FY = s.FY;
+        double ax = FX[bk], ay = FY[bk];
+        double px = wx + d * nx, py = wy + d * ny; // foot of the perpendicular on the bisector
+        double ux = -ny, uy = nx; // along the bisector
+        double tmin = Double.NEGATIVE_INFINITY, tmax = Double.POSITIVE_INFINITY;
+        for (int m = 0; m < 25; m++) {
+            if (m == bk || m == k) continue;
+            double mx = FX[m] - ax, my = FY[m] - ay, ml = Math.sqrt(mx * mx + my * my);
+            mx /= ml;
+            my /= ml;
+            // A's side of the bisector with m: (X - mid)·n <= 0
+            double c0 = (px - (ax + FX[m]) * 0.5) * mx + (py - (ay + FY[m]) * 0.5) * my, cu = ux * mx + uy * my;
+            if (Math.abs(cu) < 1e-12) {
+                if (c0 > 0) return Double.POSITIVE_INFINITY;
+                continue;
+            }
+            double t = -c0 / cu;
+            if (cu > 0) tmax = Math.min(tmax, t);
+            else tmin = Math.max(tmin, t);
+            if (tmin > tmax) return Double.POSITIVE_INFINITY;
+        }
+        double tc = clamp(0, tmin, tmax);
+        return Math.sqrt(d * d + tc * tc);
+    }
+
+    /**
+     * Soft minimum of the distances to the cell's sides (only the near ones matter): the hard minimum creases along
+     * straight lines from every corner (the medial axis), and the coasts that follow it showed them.
+     */
+    private double softEdge(int bk, double edge, GenScratch s) {
+        final double K = P.plateSize * 0.02;
+        double sum = 0;
+        for (int k = 0; k < 25; k++) if (k != bk && s.LD[k] < edge + 6 * K) sum += Math.exp(-(s.LD[k] - edge) / K);
+        return Math.max(0, edge - K * Math.log(Math.max(1, sum)));
+    }
+
+    /**
+     * Soft distance to the non-collisional boundaries, measured to their real segments: a bisector line alone runs on past
+     * the triple junction where the boundary turns into a collision, and cut a straight ocean wedge there.
+     */
+    private double softEdgeNC(int bk, double wx, double wy, GenScratch s) {
+        final double K = P.plateSize * 0.02, S = P.plateSize;
+        final double[] FX = s.FX, FY = s.FY;
+        double best = 2 * S;
+        int n = 0;
+        boolean[] done = s.LDONE;
+        java.util.Arrays.fill(done, false);
+        for (;;) { // nearest lines first, until the next line is beyond the best segment found (+ the soft margin)
+            int pick = -1;
+            for (int k = 0; k < 25; k++)
+                if (k != bk && s.LNC[k] && !done[k] && (pick < 0 || s.LD[k] < s.LD[pick])) pick = k;
+            if (pick < 0 || s.LD[pick] > best + 6 * K) break;
+            done[pick] = true;
+            double nx = FX[pick] - FX[bk], ny = FY[pick] - FY[bk], l = Math.sqrt(nx * nx + ny * ny);
+            double dd = edgeSegmentDistance(bk, pick, s.LD[pick], nx / l, ny / l, wx, wy, s);
+            s.SEGD[n++] = dd;
+            if (dd < best) best = dd;
+        }
+        double sum = 0;
+        for (int q = 0; q < n; q++) if (s.SEGD[q] < best + 6 * K) sum += Math.exp(-(s.SEGD[q] - best) / K);
+        return Math.max(0, best - K * Math.log(Math.max(1, sum)));
+    }
+
     public void apply(double x, double y, GenPoint o, GenScratch s) {
         final double[] FX = s.FX, FY = s.FY, PW = s.PW;
         final int[] FI = s.FI, FJ = s.FJ;
@@ -135,6 +204,8 @@ public class PlateStage extends GenStage {
                 edge = d;
                 nk = k;
             }
+            s.LD[k] = d;
+            s.LNC[k] = true;
             if (d >= S) {
                 if (d < edgeNC) edgeNC = d;
                 continue;
@@ -142,6 +213,7 @@ public class PlateStage extends GenStage {
             plateVel(FI[k], FJ[k], s);
             double conv = (avx - s.VX) * nx + (avy - s.VY) * ny; // >0 convergent, <0 divergent
             boolean coll = isCollision(conv, ai, aj, FI[k], FJ[k]);
+            s.LNC[k] = !coll;
             if (!coll && d < edgeNC) edgeNC = d;
             if (d >= S * 0.6) continue;
             double cP = clamp(conv, 0, 1), dP = clamp(-conv, 0, 1);
@@ -188,6 +260,10 @@ public class PlateStage extends GenStage {
         o.fy = ay;
         o.wx = wx;
         o.wy = wy;
+        if (P.exactPlateEdges) {
+            edge = softEdge(bk, edge, s);
+            edgeNC = softEdgeNC(bk, wx, wy, s);
+        }
         o.edge = edge;
         o.edgeNC = edgeNC;
         o.ni = FI[nk];

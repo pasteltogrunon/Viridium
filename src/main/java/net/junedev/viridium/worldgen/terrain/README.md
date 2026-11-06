@@ -126,6 +126,15 @@ river's level at the apex to sea level at the old coast. The delta plain (just a
 blended between them) is only built around the branches, narrowing towards their tips, over shallow water and low land;
 the channels are carved last, a full block deep at the edges. If no branch can leave the apex the river stays as it was.
 
+**Flow between basins**: a basin receives the flow that really reaches the exit node of its upstream networks
+(`RiverNet.exitFlow`), not the graph's estimate: an "inner" cell with a few inlets of its own sends most of its water
+there, and the estimate made huge rivers start out of nowhere where it entered the next basin.
+
+**Plate edges** (`exactPlateEdges`, off in `ParityTest`): the distance to the plate edge is a soft minimum over the
+cell's sides, and the distance to non-collisional boundaries is measured to their real segments (bisectors clipped at
+the triple junctions); coasts that follow a boundary are bent by noise. Before, the hard minimum creased along straight
+lines from every corner and the bisector lines ran on past triple junctions, cutting straight wedges into the coast.
+
 **Confluences**: a small river within reach of a much larger one (3× the flow, 2.5× the width) has its water no higher
 than the large river's there (+0.5): otherwise its last reach hid its drop under the large river and showed it all at
 once at the bank (a staircase), or it ran alongside on a perched terrace. Deep river channels below sea level keep their

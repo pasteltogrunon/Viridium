@@ -53,6 +53,8 @@ public final class RiverNet {
     public Map<Integer, Double> lakes;
     /** Water level at the exit node towards the downstream basin (NaN if the basin drains to the sea). */
     public float exitLevel = Float.NaN;
+    /** Flow (runoff units) that reaches the exit node: what the downstream basin receives. */
+    public float exitFlow;
     /** Approximate retained size, for diagnostics. */
     public long bytes;
 }

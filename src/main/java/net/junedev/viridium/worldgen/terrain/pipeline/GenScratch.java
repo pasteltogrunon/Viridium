@@ -27,6 +27,9 @@ public final class GenScratch {
     public boolean riversOff;
     /** Blocks per pixel of the current evaluation (1 in game): coarse caches step aside when it outgrows them. */
     public double bpp = 1;
+    /** Plate stage: distance to each neighbour's bisector, whether it is a non-collisional boundary, segment distances. */
+    public final double[] LD = new double[25], SEGD = new double[25];
+    public final boolean[] LNC = new boolean[25], LDONE = new boolean[25];
 
     /** Small output buffer for field lookups. */
     public final double[] tmp1 = new double[1];

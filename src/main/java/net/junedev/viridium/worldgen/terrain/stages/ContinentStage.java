@@ -27,6 +27,8 @@ public class ContinentStage extends GenStage {
         double cy = o.fy + (rnd(i, j, SD.cont + 1) - 0.5) * 0.3 * S;
         double dc = hypot(o.wx - cx, o.wy - cy);
         double eN = o.edgeNC; // collision boundaries do not count: the continent extends until it meets its neighbour
+        double bend = P.exactPlateEdges ? fbm(x / 1600, y / 1600, SD.contN + 90, 3) : 0; // bends coasts along boundaries
+        if (bend != 0) eN = Math.max(0, eN + S * 0.04 * bend);
         double c = eN / (eN + dc + 1e-6); // 1 at the continent centre, 0 at the plate boundary
         double size = P.continentSize + (rnd(i, j, SD.cont + 2) - 0.5) * 0.3;
         double n = 0.22 * fbm(x / 1100, y / 1100, SD.contN, 4) + 0.07 * fbm(x / 240, y / 240, SD.contN + 50, 3);
@@ -44,8 +46,10 @@ public class ContinentStage extends GenStage {
             double w = ss(-0.5, -0.2, L) * (1 - ss(-0.02, 0.12, L));
             if (w > 0) L += w * P.islands * 0.75 * Math.max(0, fbm(x / 700, y / 700, SD.isl, 4) - 0.12);
         }
-        L = Math.min(L, o.edge / (S * 0.12) - 0.5); // guarantees ocean next to the plate boundary...
-        if (o.collZ > 0) L = lerp(L, 0.4 + 0.8 * n, ss(0, 0.6, o.collZ)); // ...except at collisions
+        // guarantees ocean next to the plate boundary... (bent by noise: the boundary is straight for thousands of blocks)
+        double eB = o.edge + S * 0.04 * bend;
+        L = Math.min(L, eB / (S * 0.12) - 0.5);
+        if (o.collZ > 0) L = lerp(L, 0.4 + 0.8 * n, ss(0, 0.6, o.collZ + 0.25 * bend)); // ...except at collisions
         o.L = L;
     }
 }
