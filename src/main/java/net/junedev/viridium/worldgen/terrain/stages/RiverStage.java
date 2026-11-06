@@ -44,6 +44,9 @@ public class RiverStage extends GenStage {
             this.used = used;
         }
     }
+
+    /** Recently used networks by slot (mixed key): most lookups skip the map and its boxed key. Cleared on eviction. */
+    private final Cached[] front = new Cached[64];
     private final ConcurrentHashMap<Long, FutureTask<RiverNet>> building = new ConcurrentHashMap<>();
     private final AtomicLong builds = new AtomicLong(), buildNanos = new AtomicLong();
 
@@ -54,8 +57,9 @@ public class RiverStage extends GenStage {
 
     // ------------------------------------------------------------------ network cache
 
+    /** Map key (mixed: see GenMath.mixKey). */
     private static long key(int pi, int pj) {
-        return ((long) pi << 32) | (pj & 0xffffffffL);
+        return net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(((long) pi << 32) | (pj & 0xffffffffL));
     }
 
     private static final ThreadLocal<Boolean> SERIAL = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -75,8 +79,15 @@ public class RiverStage extends GenStage {
     /** River network of basin cell (ci, cj), building it if needed (other threads wait for the same build). */
     public RiverNet net(int ci, int cj) {
         long key = key(ci, cj);
+        Cached f = front[(int) key & (front.length - 1)];
+        if (f != null && f.net.ci == ci && f.net.cj == cj) {
+            long now = clock.get();
+            if (f.used < now) f.used = now;
+            return f.net;
+        }
         Cached hit = cache.get(key);
         if (hit != null) {
+            front[(int) key & (front.length - 1)] = hit;
             long now = clock.get(); // the clock only ticks on inserts: plain reads write nothing
             if (hit.used < now) hit.used = now;
             return hit.net;
@@ -123,7 +134,9 @@ public class RiverStage extends GenStage {
                 oldest = e.getKey();
             }
             if (oldest == null) return;
-            cache.remove(oldest);
+            Cached gone = cache.remove(oldest);
+            int slot = (int) (long) oldest & (front.length - 1);
+            if (front[slot] == gone) front[slot] = null;
         }
     }
 
@@ -179,12 +192,27 @@ public class RiverStage extends GenStage {
     /** True when every network that shapes (x, y) is already built (evaluating there will not build one). */
     public boolean isReadyAt(double x, double y) {
         for (long k : basins.nearCells(x, y, RiverNetBuilder.MARGIN))
-            if (!cache.containsKey(k) && !basins.cell(k).ocean) return false;
+            if (!cache.containsKey(net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(k)) && !basins.cell(k).ocean) return false;
         return true;
+    }
+
+    /** Drops the networks but keeps their exits. */
+    public void clearNets() {
+        cache.clear();
+        java.util.Arrays.fill(front, null);
+    }
+
+    public int cachedCount() {
+        return cache.size();
+    }
+
+    public int exitCount() {
+        return exits.size();
     }
 
     public void clearCache() {
         cache.clear();
+        java.util.Arrays.fill(front, null);
         exits.clear();
     }
 
@@ -442,11 +470,11 @@ public class RiverStage extends GenStage {
         o.gorge = 0;
         if (o.L < -0.5 || s.riversOff) return;
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
-        long[] near = basins.nearCells(x, y, RiverNetBuilder.MARGIN);
-        RiverNet[] nets = new RiverNet[near.length];
+        int nNear = basins.nearCells(x, y, RiverNetBuilder.MARGIN, s); // into s.NCK: no allocation per point
+        RiverNet[] nets = s.NETS;
         int nn = 0;
-        for (long k : near) {
-            BasinGraph.Cell c = basins.cell(k);
+        for (int q = 0; q < nNear; q++) {
+            BasinGraph.Cell c = basins.cell(s.NCK[q]);
             if (c.ocean) continue;
             RiverNet net = net(c.ci, c.cj);
             if (net.count > 0 || !net.lakes.isEmpty()) nets[nn++] = net;
@@ -577,8 +605,8 @@ public class RiverStage extends GenStage {
             for (int i = 0; i < 4; i++) {
                 int ii = i0 + i;
                 if (ii < 0 || ii >= net.nx) continue;
-                Double lv = net.lakes.get(jj * net.nx + ii);
-                if (lv == null) continue;
+                double lv = net.lakeAt(jj * net.nx + ii);
+                if (lv != lv) continue;
                 double w = s.BWX[i] * s.BWY[j];
                 m += w;
                 zs += w * Math.abs(lv);

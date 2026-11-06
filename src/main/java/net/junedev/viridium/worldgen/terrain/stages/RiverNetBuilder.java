@@ -1088,6 +1088,9 @@ final class RiverNetBuilder {
         net.vr = vr;
         net.cer = cer;
         net.lakes = lakes;
+        net.lakeIdx = lakes.keySet().stream().mapToInt(Integer::intValue).sorted().toArray();
+        net.lakeLv = new double[net.lakeIdx.length];
+        for (int q = 0; q < net.lakeIdx.length; q++) net.lakeLv[q] = lakes.get(net.lakeIdx[q]);
         net.bytes = 4L * n + 2L * n * 2 + 4L * n + (long) pts.length * 4 + (long) count * 4 * 14 + lakes.size() * 48L;
         return net;
     }

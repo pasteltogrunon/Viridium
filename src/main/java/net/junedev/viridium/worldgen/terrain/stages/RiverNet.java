@@ -51,6 +51,15 @@ public final class RiverNet {
     public byte[] cer;
     /** Lake level per cell (negative = salt flat). */
     public Map<Integer, Double> lakes;
+    /** The same lakes as sorted cell indices and levels: looked up per point without boxing. */
+    public int[] lakeIdx = new int[0];
+    public double[] lakeLv = new double[0];
+
+    /** Lake level of a cell (negative = salt flat), or NaN. */
+    public double lakeAt(int idx) {
+        int k = java.util.Arrays.binarySearch(lakeIdx, idx);
+        return k >= 0 ? lakeLv[k] : Double.NaN;
+    }
     /** Water level at the exit node towards the downstream basin (NaN if the basin drains to the sea). */
     public float exitLevel = Float.NaN;
     /** Flow (runoff units) that reaches the exit node: what the downstream basin receives. */

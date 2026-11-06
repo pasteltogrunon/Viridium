@@ -98,7 +98,7 @@ public final class FloraPlanner {
     // ------------------------------------------------------------------ planning
 
     private static long key(int x, int z) {
-        return ((long) x << 32) | (z & 0xffffffffL);
+        return net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(((long) x << 32) | (z & 0xffffffffL));
     }
 
     public List<Feature> features(int chunkX, int chunkZ) {

@@ -21,17 +21,35 @@ public final class HeightGrid {
 
     private final WorldGen gen;
     private final int spacing;
-    private final int maxTiles;
-    private final ConcurrentHashMap<Long, float[]> tiles = new ConcurrentHashMap<>();
+    /**
+     * 4-way set-associative store (set = mixed key): a hit costs a few array reads and allocates nothing (a map of Long
+     * keys boxed a key per lookup, several per evaluated point). A new tile takes a free way of its set or replaces one in
+     * turn. Final fields make a tile safe to read without locks.
+     */
+    private final Tile[] slots;
+    private final int mask;
+    private int victim; // racy round robin, any value is fine
+
+    private static final class Tile {
+
+        final long key;
+        final float[] v;
+
+        Tile(long key, float[] v) {
+            this.key = key;
+            this.v = v;
+        }
+    }
     /** Tiles being computed: other threads wait for them instead of computing the same tile again. */
     private final ConcurrentHashMap<Long, java.util.concurrent.CompletableFuture<float[]>> building = new ConcurrentHashMap<>();
 
-    /** @param spacing node spacing in blocks; @param maxTiles cache bound (64x64 nodes per tile) */
+    /** @param spacing node spacing in blocks; @param maxTiles cache bound (rounded up to a power of two) */
     public HeightGrid(WorldGen gen, int spacing, int nodesPerTile, int maxTiles) {
         this.gen = gen;
         this.N = nodesPerTile;
         this.spacing = spacing;
-        this.maxTiles = maxTiles;
+        this.slots = new Tile[Math.max(4, Integer.highestOneBit(Math.max(1, maxTiles - 1)) << 1)];
+        this.mask = slots.length - 1;
     }
 
     public int spacing() {
@@ -40,24 +58,36 @@ public final class HeightGrid {
 
     private float[] tile(int tx, int tz) {
         long key = ((long) tx << 32) | (tz & 0xffffffffL);
-        float[] t = tiles.get(key);
-        if (t != null) return t;
+        long mk = net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(key);
+        int set = (int) mk & mask & ~3;
+        for (int w = 0; w < 4; w++) {
+            Tile hit = slots[set + w];
+            if (hit != null && hit.key == key) return hit.v;
+        }
+        float[] t;
         java.util.concurrent.CompletableFuture<float[]> mine = new java.util.concurrent.CompletableFuture<>(),
-            other = building.putIfAbsent(key, mine);
+            other = building.putIfAbsent(mk, mine);
         if (other != null) return other.join();
         try {
             t = compute(tx, tz);
-            if (tiles.size() >= maxTiles) evictSome();
-            tiles.put(key, t);
+            int way = -1;
+            for (int w = 0; w < 4 && way < 0; w++) if (slots[set + w] == null) way = w;
+            if (way < 0) way = victim++ & 3;
+            slots[set + way] = new Tile(key, t);
             mine.complete(t);
             return t;
         } catch (RuntimeException | Error e) {
             mine.completeExceptionally(e);
             throw e;
         } finally {
-            building.remove(key, mine);
+            building.remove(mk, mine);
         }
     }
+
+    // per-thread temporaries for tile rows (a GenScratch per row was a large share of all allocations). Computing a tile
+    // never reads this grid again, so a thread never uses them twice at once
+    private final ThreadLocal<GenScratch> rowScratch = ThreadLocal.withInitial(GenScratch::new);
+    private final ThreadLocal<GenPoint> rowPoint = ThreadLocal.withInitial(GenPoint::new);
 
     /** One tile; large ones by rows in parallel (a 64x64 climate tile is 4096 relief evaluations, ~12 ms). */
     private float[] compute(int tx, int tz) {
@@ -66,8 +96,8 @@ public final class HeightGrid {
         java.util.stream.IntStream rows = java.util.stream.IntStream.range(0, N);
         if (N >= 32 && !net.junedev.viridium.worldgen.terrain.stages.RiverStage.serialBuilds()) rows = rows.parallel();
         rows.forEach(j -> {
-            GenScratch s = new GenScratch();
-            GenPoint p = new GenPoint();
+            GenScratch s = rowScratch.get();
+            GenPoint p = rowPoint.get();
             for (int i = 0; i < N; i++) {
                 double x = x0 + i * spacing, z = z0 + j * spacing;
                 gen.plates.apply(x, z, p, s);
@@ -125,22 +155,13 @@ public final class HeightGrid {
         return a + (b - a) * v;
     }
 
-    /** Drops about a quarter of the tiles (arbitrary ones: output never depends on what is cached). */
-    private void evictSome() {
-        int drop = Math.max(1, maxTiles / 4);
-        java.util.Iterator<Long> it = tiles.keySet()
-            .iterator();
-        while (drop-- > 0 && it.hasNext()) {
-            it.next();
-            it.remove();
-        }
-    }
-
     public int cachedTiles() {
-        return tiles.size();
+        int n = 0;
+        for (Tile t : slots) if (t != null) n++;
+        return n;
     }
 
     public void clear() {
-        tiles.clear();
+        java.util.Arrays.fill(slots, null);
     }
 }

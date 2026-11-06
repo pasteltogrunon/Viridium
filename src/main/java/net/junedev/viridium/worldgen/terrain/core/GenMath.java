@@ -45,4 +45,18 @@ public final class GenMath {
     public static double hypot(double x, double y) {
         return Math.sqrt(x * x + y * y);
     }
+
+    /**
+     * Bijective mix of a packed (x, z) key for hash maps. Long.hashCode of (x << 32 | z) is x ^ z: nearby tiles, columns
+     * and cells collide by the thousands (tree bins in ConcurrentHashMap, which then reflect on Long at every lookup;
+     * long chains in Guava caches). Distinct keys stay distinct.
+     */
+    public static long mixKey(long k) {
+        k ^= k >>> 33;
+        k *= 0xff51afd7ed558ccdL;
+        k ^= k >>> 33;
+        k *= 0xc4ceb9fe1a85ec53L;
+        k ^= k >>> 33;
+        return k;
+    }
 }

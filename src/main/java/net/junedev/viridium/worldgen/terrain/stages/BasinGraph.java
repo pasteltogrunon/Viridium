@@ -124,12 +124,22 @@ public final class BasinGraph {
      * closer than {@code margin}. Usually one or two cells. Deterministic order.
      */
     public long[] nearCells(double x, double y, double margin) {
+        long[] out = new long[9];
+        int n = nearCells(x, y, margin, new double[25], new double[25], out);
+        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
+    }
+
+    /** Same as {@link #nearCells(double, double, double)} into the scratch arrays (no allocation): count in, keys in s.NCK. */
+    public int nearCells(double x, double y, double margin, GenScratch s) {
+        return nearCells(x, y, margin, s.NCX, s.NCY, s.NCK);
+    }
+
+    private int nearCells(double x, double y, double margin, double[] fx, double[] fy, long[] out) {
         double wa = 0.22 * B, ws = 0.6 * B;
         double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3), wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
         int ci = floor(wx / B), cj = floor(wy / B);
         int bi = 0, bj = 0;
         double best = Double.POSITIVE_INFINITY;
-        double[] fx = new double[25], fy = new double[25];
         for (int dj = -2, k = 0; dj <= 2; dj++) for (int di = -2; di <= 2; di++, k++) {
             fx[k] = featX(ci + di, cj + dj);
             fy[k] = featY(ci + di, cj + dj);
@@ -141,7 +151,6 @@ public final class BasinGraph {
             }
         }
         int ok = (bj + 2) * 5 + bi + 2;
-        long[] out = new long[9];
         int n = 0;
         out[n++] = key(ci + bi, cj + bj);
         for (int k = 0; k < 25; k++) {
@@ -151,14 +160,15 @@ public final class BasinGraph {
             double d = ((fx[ok] + fx[k]) * 0.5 - wx) * nx / len + ((fy[ok] + fy[k]) * 0.5 - wy) * ny / len;
             if (d < margin && n < out.length) out[n++] = key(ci + (k % 5) - 2, cj + (k / 5) - 2);
         }
-        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
+        return n;
     }
 
     // ------------------------------------------------------------------ cells and links
 
     private Cell raw(int ci, int cj) {
         long k = key(ci, cj);
-        Cell c = cells.get(k);
+        long mk = net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(k);
+        Cell c = cells.get(mk);
         if (c != null) return c;
         double fx = featX(ci, cj), fy = featY(ci, cj);
         GenPoint p = pt.get();
@@ -170,14 +180,21 @@ public final class BasinGraph {
         double valleys = P.basinMerge * fbm(fx / (5 * B), fy / (5 * B), SD.basin + 3, 2);
         c = new Cell(ci, cj, fx, fy, L, L + valleys);
         if (cells.size() > 20000) cells.clear(); // deterministic: anything dropped is recomputed identically
-        Cell prev = cells.putIfAbsent(k, c);
+        Cell prev = cells.putIfAbsent(mk, c);
         return prev != null ? prev : c;
     }
 
+    /** Recently used linked cells by slot (mixed key): most lookups skip the map and its boxed key. */
+    private final Cell[] front = new Cell[4096];
+
     /** The basin cell with its drainage link resolved. */
     public Cell cell(int ci, int cj) {
+        int slot = (int) net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(key(ci, cj)) & (front.length - 1);
+        Cell f = front[slot];
+        if (f != null && f.ci == ci && f.cj == cj) return f;
         Cell c = raw(ci, cj);
         if (!c.linked) link(c);
+        front[slot] = c;
         return c;
     }
 

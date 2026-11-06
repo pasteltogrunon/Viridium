@@ -92,6 +92,10 @@ public final class ColumnPlanCache {
         get(chunkX, chunkZ);
     }
 
+    public long size() {
+        return completed.size();
+    }
+
     public long computedCount() {
         return computed.get();
     }
@@ -101,6 +105,6 @@ public final class ColumnPlanCache {
     }
 
     private static long key(int chunkX, int chunkZ) {
-        return (chunkX & 0xffffffffL) | ((long) chunkZ << 32);
+        return net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey((chunkX & 0xffffffffL) | ((long) chunkZ << 32));
     }
 }

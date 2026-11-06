@@ -69,7 +69,7 @@ public class VolcanismStage extends GenStage {
     }
 
     private static long key(int I, int J) {
-        return ((long) I << 32) | (J & 0xffffffffL);
+        return net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(((long) I << 32) | (J & 0xffffffffL));
     }
 
     /** Hotspot of coarse cell (I, J), or null. */

@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 
 import net.junedev.viridium.Viridium;
+import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanner;
 import net.junedev.viridium.worldgen.terrain.column.TerrainLayout;
@@ -40,10 +41,24 @@ public class ViridiumCommand extends CommandBase {
         return Collections.emptyList();
     }
 
+    /** Cache occupancy and the JVM heap (approximate sizes from the memory audit, MemoryAuditTest). */
+    private static String cacheReport(ViridiumWorldGenerator vg) {
+        WorldGen g = vg.gen();
+        long plans = vg.plans().size(), nets = g.rivers.cachedCount();
+        Runtime rt = Runtime.getRuntime();
+        return String.format(
+            "caches: %d column plans (~%.0f MiB), %d river networks (~%.0f MiB), %d river exits%n"
+                + "heap: %.0f MiB used of %.0f MiB reserved (max %.0f MiB)%n",
+            plans, plans * 17.8 / 1024, nets, nets * 1.05, g.rivers.exitCount(),
+            (rt.totalMemory() - rt.freeMemory()) / 1048576.0, rt.totalMemory() / 1048576.0, rt.maxMemory() / 1048576.0);
+    }
+
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
         if (args.length > 0 && args[0].equals("stats")) {
             String r = net.junedev.viridium.worldgen.terrain.GenStats.report();
+            ViridiumWorldGenerator vg = ViridiumWorldGenerator.forWorld(sender.getEntityWorld());
+            if (vg != null) r += cacheReport(vg);
             Viridium.LOGGER.info("Viridium generation stats:\n{}", r);
             for (String l : r.split("\n")) say(sender, l);
             if (args.length > 1 && args[1].equals("reset")) net.junedev.viridium.worldgen.terrain.GenStats.reset();

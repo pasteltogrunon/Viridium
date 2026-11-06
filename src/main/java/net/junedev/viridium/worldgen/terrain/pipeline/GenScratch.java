@@ -33,6 +33,10 @@ public final class GenScratch {
 
     /** Small output buffer for field lookups. */
     public final double[] tmp1 = new double[1];
+    /** River stage: nearby basin cells (BasinGraph.nearCells) and their networks. */
+    public final double[] NCX = new double[25], NCY = new double[25];
+    public final long[] NCK = new long[9];
+    public final net.junedev.viridium.worldgen.terrain.stages.RiverNet[] NETS = new net.junedev.viridium.worldgen.terrain.stages.RiverNet[9];
 
     // erosion: last gully value and gradient
     public double EV, EGX, EGY;

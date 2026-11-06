@@ -181,6 +181,35 @@ flattened the whole area). A river starts at `riverStart` (1.6) times the thresh
 Scales: plates/continents `plateSize` 12000, temperature period 48000, precipitation period 36000 (3× the prototype;
 `ParityTest` sets the prototype values back).
 
+## Memory
+
+`VIRIDIUM_MEM=1 ./gradlew cleanTest test --tests '*MemoryAuditTest'` fills every cache as a long session would
+(23 400 columns along 41 km) and measures what each one really retains after a full GC, plus what one unit of work
+allocates. `/viridium stats` shows the cache occupancy and the heap in game. Results (2026-11-06):
+
+| Retained | |
+|---|---|
+| column plans (2048 max, ~17.8 KiB each) | 36 MiB |
+| river networks (64 max, ~1.05 MiB each) | 54 MiB at 52 cached |
+| climate lattice (256 tiles) + erosion lattice (4096 tiles) | 7 + 8 MiB |
+| river exits, hotspots, basin cells, thread locals | < 8 MiB |
+| client map (outside the test): 512 tiles in memory + 384 textures | ~32 + 24 MiB (+ 24 MiB of textures) |
+
+The generator keeps ~110 MiB; the `runClient` JVM may grow to 6 GiB (`-Xmx6G`, RetroFuturaGradle's default) and G1
+keeps what it reserved, so the process size says little about live data. What drives the heap up is garbage. It was
+cut from 14.5 GB to 1.15 GB in the audit:
+
+- Map keys were `x << 32 | z` in a `Long`, whose hash is `x ^ z`: nearby tiles, columns and cells collided by the
+  thousands. ConcurrentHashMap then turned bins into trees and reflected on `Long` at every lookup (a third of all
+  allocations, and CPU); Guava caches had long chains. Keys now go through `GenMath.mixKey` (bijective).
+- Per point: `nearCells` writes into the scratch arrays; basin cells and river networks are looked up first in small
+  front arrays (no boxed key); lakes are sorted primitive arrays; the lattices are 4-way set-associative arrays
+  instead of maps of boxed keys.
+- Lattice tiles reuse per-thread temporaries instead of a `GenScratch` per row.
+
+Per unit of work: a column plan allocates only its result (~18 KiB); a river network build ~8 MiB of temporaries (was
+20); a 128² map tile at level 4 ~14 MiB (was 97).
+
 ## Known limitations
 
 - River networks are built per drainage basin by the prefetcher before players reach them; teleporting far away still
