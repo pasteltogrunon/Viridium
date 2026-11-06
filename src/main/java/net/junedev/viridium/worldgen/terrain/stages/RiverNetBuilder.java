@@ -458,9 +458,13 @@ final class RiverNetBuilder {
                 out.v[vv * RiverNet.DV + 4] = split || joinZ == joinZ ? 1e9f : (float) (br.s - out.v[vv * RiverNet.DV + 4]);
             out.channel(first, out.nv - first);
         }
-        if (out.nc == out.mc[q * 2]) { // no branch could leave the apex (hills all around): keep the river as it was
+        if (out.nc == out.mc[q * 2]) {
+            // no branch could leave the apex (a steep or mountain coast): no delta. Like such coasts in reality the river
+            // ends in an estuary, or in a fjord where the coast was glaciated (the stage turns estuaries off there and the
+            // glacial trough runs below sea level)
             for (int sl : marked) skip[sl] = 0;
             M[b + 4] = 0;
+            M[b + 8] = (float) Math.max(E, 0.75);
             return;
         }
         double plain = clamp(0.2 * Rd, 30, 260);
@@ -523,11 +527,14 @@ final class RiverNetBuilder {
                 own[idx] = true;
                 gen.plates.apply(x, y, rt, rs);
                 gen.continents.apply(x, y, rt);
-                if (rt.L < 0) {
+                // sea where the relief is below sea level: a pocket of slightly negative continentality can still be land
+                // (a river ending in it would stop dead inland)
+                double hb = rt.L < -0.2 ? -1 : gen.relief.baseHeight(x, y, rt, false, rs);
+                if (hb < 0) {
                     hgt[idx] = -1;
                     continue;
                 }
-                hgt[idx] = (float) gen.relief.baseHeight(x, y, rt, false, rs);
+                hgt[idx] = (float) hb;
                 rkey[idx] = (float) (P.riverRouteNoise * Noise.fbm(x / 450, y / 450, SD.basinW + 7, 3));
                 rt.h0 = hgt[idx];
                 gen.geology.apply(x, y, rt, rs);
@@ -898,7 +905,7 @@ final class RiverNetBuilder {
         for (int q = 0; q < nm; q++) {
             System.arraycopy(M, q * 12, mouthsOut, q * RiverNet.MS, 12);
             int start = ne;
-            if (M[q * 12 + 8] > 0.02) {
+            { // every mouth: a delta that cannot form falls back to an estuary later
                 int sl = (int) M[q * 12 + 11], idx = (int) M[q * 12 + 7];
                 while (sl >= 0 && am1[sl] < M[q * 12 + 9] && ne - start < 64) {
                     estSeg[ne++] = sl;

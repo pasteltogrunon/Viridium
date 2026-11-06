@@ -125,12 +125,16 @@ the lowest of a few headings; every branch owns an angular sector around the ape
 children, so branches never cross. They run until they are out on the sea. Their water falls linearly from the
 river's level at the apex to sea level at the old coast. The delta plain (just above the water of the branches,
 blended between them) is only built around the branches, narrowing towards their tips, over shallow water and low land;
-the channels are carved last, a full block deep at the edges. If no branch can leave the apex the river stays as it was.
+the channels are carved last, a full block deep at the edges. If no branch can leave the apex (steep or mountain coast) the river keeps its course and gets an estuary, which the stage
+turns into a fjord on glaciated coasts (as on such coasts in reality).
 Deltas are shared: a branch that meets a branch of another delta joins it there (its water raised to that branch's
 level if lower). Deltas of one network are traced largest river first; a coastal cell also joins the deltas of its
 neighbouring coastal cells of lower colour ((ci & 1) | (cj & 1) << 1: no two neighbours share one, so the dependency
 chain is at most 3 networks long and has no cycles). Branches stay within 0.6 × `MARGIN` of their cell, where the stage
 still applies their network.
+
+**Sea in the river grid**: a node is sea only where the relief is below sea level (pockets of slightly negative
+continentality can be land: rivers stopped dead there, "mouths" inland).
 
 **Flow between basins**: a basin receives the flow that really reaches the exit node of its upstream networks
 (`RiverNet.exitFlow`), not the graph's estimate: an "inner" cell with a few inlets of its own sends most of its water
