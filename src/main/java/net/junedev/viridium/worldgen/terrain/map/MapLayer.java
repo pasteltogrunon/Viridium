@@ -150,6 +150,18 @@ public final class MapLayer {
     public static final MapLayer HEIGHT = register(
         new MapLayer("height", "Final height", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> R_HEIGHT.at(o.h)));
 
+    /** Landforms over a grey relief: plateaus (tablelands ochre, basalt traps purple), mesas (red). */
+    public static final MapLayer LANDFORMS = register(
+        new MapLayer("landforms", "Landforms", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> {
+            if (o.h < 0 && o.river == 0) return rgb(40, 66, 112);
+            int gv = (int) (110 + clamp(o.h, 0, 300) * 0.4);
+            int c = rgb(gv, gv, gv);
+            if (o.plat > 0.02) c = lerp(c, o.platType == 1 ? rgb(120, 70, 150) : rgb(214, 150, 60), clamp(o.plat, 0, 1) * 0.75);
+            if (o.mesa > 0.05) c = lerp(c, rgb(200, 80, 40), clamp(o.mesa, 0, 1) * 0.8);
+            if (o.river != 0 || o.lake == 1) c = rgb(60, 110, 225);
+            return c;
+        }));
+
     public static final MapLayer HEIGHT_BASE = register(
         new MapLayer("heightBase", "Base height", Stage.RELIEF, true, HeightField.BASE, (o, bpp) -> R_HEIGHT.at(o.h0)));
 

@@ -38,6 +38,11 @@ public final class GenPoint {
     /** Base height and current height (blocks relative to sea level). */
     public double h0, h;
     public double mtnMask;
+    /** Plateau share (0..1, the escarpment rises across it) and type (0 uplifted tableland, 1 basalt traps). */
+    public double plat;
+    public int platType;
+    /** Nearness to a plateau escarpment (1 on it, 0 beyond ~25 blocks): erosion leaves the scarp and its foot alone. */
+    public double platEdge;
     /** Volcanic share and type (0 none, 1 arc, 2 hotspot chain, 3 Iceland-like, 4 atoll). */
     public double volc;
     public int volcType;
@@ -59,6 +64,8 @@ public final class GenPoint {
 
     // 9. erosion
     public double slope, gx, gy, eroDelta;
+    /** Weight of the arid terracing (mesas, buttes, ledges). */
+    public double mesa;
 
     // 10. rivers, lakes, valleys, deltas, estuaries
     public double riverD = 1e9, riverHW, riverZ, riverAcc, valley, delta, estu, lakeZ, glac, gorge;

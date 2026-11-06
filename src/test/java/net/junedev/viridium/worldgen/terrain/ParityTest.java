@@ -118,6 +118,8 @@ class ParityTest {
         p.precipPeriod = 12000;
         p.fastFields = false; // exact port: compare with the prototype
         p.exactPlateEdges = false;
+        p.plateaus = 0; // Java-only landforms
+        p.mesas = 0;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 

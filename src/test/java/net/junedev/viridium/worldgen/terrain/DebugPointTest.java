@@ -327,6 +327,26 @@ class DebugPointTest {
         }
     }
 
+    /** Height profile along a line: VIRIDIUM_PROFILE=x0,z0,x1,z1,step (landform debugging). */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_PROFILE", matches = ".+")
+    void profile() {
+        WorldGen gen = new WorldGen(new GenParams());
+        GenPoint o = new GenPoint();
+        String[] a = System.getenv("VIRIDIUM_PROFILE").split(",");
+        double x0 = Double.parseDouble(a[0]), z0 = Double.parseDouble(a[1]), x1 = Double.parseDouble(a[2]),
+            z1 = Double.parseDouble(a[3]), st = Double.parseDouble(a[4]);
+        double len = Math.hypot(x1 - x0, z1 - z0);
+        double prev = Double.NaN;
+        for (double t = 0; t <= len; t += st) {
+            double x = Math.floor(x0 + (x1 - x0) * t / len), z = Math.floor(z0 + (z1 - z0) * t / len);
+            gen.evaluate(x, z, Stage.BIOMES, o);
+            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d%n", x, z,
+                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock);
+            prev = o.h;
+        }
+    }
+
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_POINTS", matches = ".+")
     void printPoints() {

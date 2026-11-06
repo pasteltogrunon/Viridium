@@ -67,6 +67,11 @@ public final class GenParams implements Cloneable {
     public double glacialCooling = 9;
     public double lakes = 1.0;
     public double valleyRock = 1.0;
+    /**
+     * Landforms (Java-only, 0 turns each off). Plateaus: frequency of uplifted tablelands with an escarpment around them
+     * (scales the threshold of their mask), their height multiplier, and the terraced mesas of arid sedimentary land.
+     */
+    public double plateaus = 1.0, plateauHeight = 1.0, mesas = 1.0;
 
     // implementation
     /**

@@ -34,6 +34,7 @@ public class GeologyStage extends GenStage {
             if (o.ridge > 0.22) return Rock.BASALT.ordinal();
             return seaRock(r).ordinal();
         }
+        if (o.platType == 1 && o.plat > 0.3) return (r < 0.88 ? Rock.BASALT : Rock.TUFF).ordinal(); // flood basalt plateau
         if (o.orog > 0.35 && r < 0.5) return (r < 0.32 ? Rock.ANDESITE : Rock.TUFF).ordinal(); // volcanic arc
         double r2 = rnd(i, j, SD.rock + 1) * Rock.TOTAL;
         for (int k = 0; k < Rock.VALUES.length; k++) if (r2 < Rock.CUM[k]) return k;
@@ -61,6 +62,7 @@ public class GeologyStage extends GenStage {
         e = lerp(e, collisionRock(r).erod, ss(0.25, 0.35, o.collR) * ss(-0.03, 0.01, o.L));
         Rock vr = o.volcType == 1 ? (r < 0.55 ? Rock.ANDESITE : (r < 0.85 ? Rock.TUFF : Rock.BASALT))
             : o.volcType == 4 ? (r < 0.7 ? Rock.LIMESTONE : Rock.BASALT) : (r < 0.82 ? Rock.BASALT : Rock.TUFF);
+        if (o.platType == 1) e = lerp(e, Rock.BASALT.erod, ss(0.2, 0.4, o.plat));
         return lerp(e, vr.erod, ss(0.1, 0.2, o.volc) * ss(-45, -35, o.h0));
     }
 

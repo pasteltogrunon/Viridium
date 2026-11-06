@@ -51,6 +51,29 @@ public class ErosionStage extends GenStage {
         o.gy = (gen.heightAt(x, y + E, false) - gen.heightAt(x, y - E, false)) / (2 * E);
     }
 
+    /**
+     * Mesas, buttes and ledges: in arid land on flat-lying sedimentary rock a hard bed protects the softer ones below, and
+     * slopes retreat as cliffs separated by benches (Monument Valley, the Colorado Plateau). The height is terraced in
+     * 12-block steps with short steep risers, only on slopes (flats stay flat) and on sandstone, limestone or shale.
+     */
+    protected void mesas(GenPoint o, double g) {
+        o.mesa = 0;
+        if (P.mesas <= 0) return;
+        double arid = ss(520, 260, o.P) * ss(-2, 6, o.T);
+        if (arid <= 0) return;
+        double sed = sedimentary(o.rock) * o.rockT + sedimentary(o.rock2) * (1 - o.rockT);
+        double w = Math.min(1, P.mesas * arid * sed * ss(0.12, 0.35, g) * ss(4, 18, o.h0));
+        if (w <= 0) return;
+        o.mesa = w;
+        final double S = 12;
+        double q = o.h / S, fl = Math.floor(q);
+        o.h += w * ((fl + ss(0.78, 0.96, q - fl)) * S - o.h);
+    }
+
+    private static double sedimentary(int rock) {
+        return rock == Rock.SANDSTONE.ordinal() ? 1 : rock == Rock.LIMESTONE.ordinal() ? 0.8 : rock == Rock.SHALE.ordinal() ? 0.5 : 0;
+    }
+
     public void apply(double x, double y, GenPoint o, double bpp, GenScratch s) {
         double h0 = o.h0;
         reliefGradient(x, y, o, bpp, s);
@@ -77,8 +100,9 @@ public class ErosionStage extends GenStage {
         double raw = (hv - sumA) * 0.5; // ∈ [-sumA, 0]: only digs
         double tN = o.T / 7;
         double clim = (0.3 + clamp(o.P / 1500, 0, 1.5)) * (1 + 0.6 * Math.exp(-tN * tN)); // rain + freeze/thaw
-        double amount = P.erosionStrength * 32 * o.erod * clim * ss(-8, 6, h0);
+        double amount = P.erosionStrength * 32 * o.erod * clim * ss(-8, 6, h0) * (1 - o.platEdge);
         o.eroDelta = raw * amount;
         o.h = h0 + o.eroDelta;
+        mesas(o, g);
     }
 }

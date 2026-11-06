@@ -19,10 +19,53 @@ public class ReliefStage extends GenStage {
         super(gen);
     }
 
+    /**
+     * Plateaus: tablelands lifted as a block without folding (Iberian Meseta, Colorado Plateau, the Ethiopian highlands)
+     * or built by piled flood basalts (Deccan traps). A large-scale mask with ragged detail (spurs and embayments along
+     * the edge) is cut by a narrow step: the top is flat, the edge an escarpment ~8 blocks wide. Basalt plateaus climb in
+     * 3 ledges (each lava flow a step). Only inland, away from collisions (Tibet is the collision plateau). The noise does
+     * not depend on {@code detail}: the coarse lattices and the rivers see the edge where the columns have it.
+     *
+     * @return plateau share k in 0..1 (also o.plat, o.platType)
+     */
+    protected double plateau(double x, double y, double L, GenPoint o) {
+        o.plat = 0;
+        o.platType = 0;
+        o.platEdge = 0;
+        if (P.plateaus <= 0 || L < 0.02) return 0;
+        // towards the coast and collisions the mask is lowered: the plateau ends inland with its scarp, it does not ramp down
+        double inland = ss(0.02, 0.2, L) * (1 - ss(0.05, 0.3, o.collZ));
+        double m = fbm(x / 9000, y / 9000, SD.plat, 3) + 0.22 * fbm(x / 1700, y / 1700, SD.plat + 1, 3)
+            + 0.06 * fbm(x / 300, y / 300, SD.plat + 2, 2) - 0.3 * (1 - inland);
+        double thr = 0.16 - 0.12 * (P.plateaus - 1);
+        if (m < thr - 0.045) return 0;
+        boolean basalt = fbm(x / 20000, y / 20000, SD.plat + 4, 2) > 0.2;
+        double k;
+        if (basalt) { // traps: three ledges, each with its own short scarp
+            double q = ss(thr - 0.03, thr + 0.03, m) * 3, fl = Math.floor(q);
+            k = Math.min(1, (fl + ss(0.72, 1, q - fl)) / 3);
+        } else k = ss(thr - 0.002, thr + 0.002, m);
+        k = 0.94 * k + 0.06 * ss(thr - 0.04, thr, m); // gentle footslope below the scarp
+        // the erosion gradient comes from an 8-block lattice: next to a scarp it is smeared over ~20 blocks and would dig
+        // a moat along its foot
+        o.platEdge = (1 - ss(basalt ? 0.032 : 0.003, basalt ? 0.042 : 0.013, Math.abs(m - thr)));
+        o.plat = k;
+        o.platType = basalt ? 1 : 0;
+        return k;
+    }
+
+    /** Height of the plateau top above the surrounding plains (60..150 blocks, varying over ~14 km). */
+    protected double plateauTop(double x, double y) {
+        return P.plateauHeight * (60 + 90 * clamp(0.5 + 0.8 * fbm(x / 14000, y / 14000, SD.plat + 3, 2), 0, 1));
+    }
+
     /** Returns the base height at (x, y); also sets mtnMask, collR, volc and volcType on {@code o}. */
     public double baseHeight(double x, double y, GenPoint o, boolean detail, GenScratch s) {
         double L = o.L;
         double h;
+        o.plat = 0;
+        o.platType = 0;
+        o.platEdge = 0;
         o.collR = 0;
         o.volc = 0;
         o.volcType = 0;
@@ -38,7 +81,9 @@ public class ReliefStage extends GenStage {
                 double r = ridged(x / 760, y / 760, SD.mtn, detail ? 5 : 3);
                 mtn = r * r * 290 * mask * P.mountainStrength;
             }
-            h = plains + hills + mtn;
+            double k = plateau(x, y, L, o);
+            h = plains + hills * (1 - 0.65 * k) + mtn * (1 - 0.85 * k) + k * plateauTop(x, y);
+            o.mtnMask *= 1 - 0.85 * k;
         } else {
             o.mtnMask = 0;
             double floor = -62 + 40 * o.ridge * P.ridgeStrength
