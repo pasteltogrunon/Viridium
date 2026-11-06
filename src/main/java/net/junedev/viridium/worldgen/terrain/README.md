@@ -112,7 +112,7 @@ systems), through the lowest point of their shared divide. Every basin gets its 
 the water of the upstream basins enters at that divide point with its flow and water level. The size of the whole
 upstream system decides the size of the mouth: half width 1.2 + 2.2·√q + `riverWidthGrowth`·q (q = flow in threshold
 units; flow 100 → ~40) up to `riverMaxHalfWidth` (48, ~100-block wide rivers) and delta radius 95·√q up to
-`deltaMaxRadius` (1600); one delta per stretch of coast (smaller rivers within reach of a larger delta end in it); big rivers build deltas rather than estuaries. Waterfalls at
+`deltaMaxRadius` (1600); big rivers build deltas rather than estuaries. Waterfalls at
 confluences are limited to 2.5 blocks per node (glacial hanging valleys can still drop ~10). Lake rims never cross a
 river channel or its banks, so rivers flow into and out of lakes freely. A cell with more than 10 % sea in its area
 is an outlet (its network sends its water to that coast; handing its whole flow to a neighbour made huge rivers appear
@@ -126,6 +126,11 @@ children, so branches never cross. They run until they are out on the sea. Their
 river's level at the apex to sea level at the old coast. The delta plain (just above the water of the branches,
 blended between them) is only built around the branches, narrowing towards their tips, over shallow water and low land;
 the channels are carved last, a full block deep at the edges. If no branch can leave the apex the river stays as it was.
+Deltas are shared: a branch that meets a branch of another delta joins it there (its water raised to that branch's
+level if lower). Deltas of one network are traced largest river first; a coastal cell also joins the deltas of its
+neighbouring coastal cells of lower colour ((ci & 1) | (cj & 1) << 1: no two neighbours share one, so the dependency
+chain is at most 3 networks long and has no cycles). Branches stay within 0.6 × `MARGIN` of their cell, where the stage
+still applies their network.
 
 **Flow between basins**: a basin receives the flow that really reaches the exit node of its upstream networks
 (`RiverNet.exitFlow`), not the graph's estimate: an "inner" cell with a few inlets of its own sends most of its water

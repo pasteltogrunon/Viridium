@@ -142,6 +142,85 @@ final class RiverNetBuilder {
         }
     }
 
+    /** Branches of other deltas a new branch joins when it meets them: segments (x0, y0, x1, y1, z0, z1, w). */
+    private static final class Foreign {
+
+        float[] a = new float[7 * 64];
+        int n;
+
+        void add(double x0, double y0, double x1, double y1, double z0, double z1, double w) {
+            if ((n + 1) * 7 > a.length) a = Arrays.copyOf(a, a.length * 2);
+            int b = n++ * 7;
+            a[b] = (float) x0;
+            a[b + 1] = (float) y0;
+            a[b + 2] = (float) x1;
+            a[b + 3] = (float) y1;
+            a[b + 4] = (float) z0;
+            a[b + 5] = (float) z1;
+            a[b + 6] = (float) w;
+        }
+
+        /** Adds every branch segment of channels [c0, c1) of a delta vertex list. */
+        void addChannels(float[] v, int[] ch, int c0, int c1) {
+            final int D = RiverNet.DV;
+            for (int c = c0; c < c1; c++) {
+                int v0 = ch[c * 2], vn = ch[c * 2 + 1];
+                for (int k = 0; k < vn - 1; k++) {
+                    int p = (v0 + k) * D, q = p + D;
+                    add(v[p], v[p + 1], v[q], v[q + 1], v[p + 3], v[q + 3], Math.max(v[p + 2], v[q + 2]));
+                }
+            }
+        }
+
+        /**
+         * First crossing of segment (x0, y0)-(x1, y1) with a foreign branch (widened by its half-width): {t along ours,
+         * x, y, water level there}, or null.
+         */
+        double[] hit(double x0, double y0, double x1, double y1) {
+            double best = 2, hx = 0, hy = 0, hz = 0;
+            double ex = x1 - x0, ey = y1 - y0;
+            for (int i = 0; i < n; i++) {
+                int b = i * 7;
+                double fx0 = a[b], fy0 = a[b + 1], fx1 = a[b + 2], fy1 = a[b + 3], w = a[b + 6];
+                if (Math.max(x0, x1) < Math.min(fx0, fx1) - w || Math.min(x0, x1) > Math.max(fx0, fx1) + w
+                    || Math.max(y0, y1) < Math.min(fy0, fy1) - w || Math.min(y0, y1) > Math.max(fy0, fy1) + w) continue;
+                double gx = fx1 - fx0, gy = fy1 - fy0, den = ex * gy - ey * gx;
+                double t, u;
+                if (Math.abs(den) > 1e-9) {
+                    t = ((fx0 - x0) * gy - (fy0 - y0) * gx) / den;
+                    u = ((fx0 - x0) * ey - (fy0 - y0) * ex) / den;
+                } else continue;
+                double gl = Math.max(1e-6, Math.sqrt(gx * gx + gy * gy)), mu = w / gl; // reach the bank, not the axis
+                if (t < 0 || t > 1 || u < -mu || u > 1 + mu) {
+                    // our end point inside the foreign channel also counts
+                    double uu = clamp(((x1 - fx0) * gx + (y1 - fy0) * gy) / (gl * gl), 0, 1);
+                    double dx = x1 - (fx0 + gx * uu), dy = y1 - (fy0 + gy * uu);
+                    if (dx * dx + dy * dy > w * w) continue;
+                    t = 1;
+                    u = uu;
+                }
+                if (t < best) {
+                    best = t;
+                    double uc = clamp(u, 0, 1);
+                    hx = fx0 + gx * uc;
+                    hy = fy0 + gy * uc;
+                    hz = a[b + 4] + (a[b + 5] - a[b + 4]) * uc;
+                }
+            }
+            return best <= 1 ? new double[] { best, hx, hy, hz } : null;
+        }
+    }
+
+    private static boolean contains(long[] keys, long k) {
+        for (long v : keys) if (v == k) return true;
+        return false;
+    }
+
+    /** Colour of a basin cell (no two neighbours share one): deltas of a cell join those of lower-coloured neighbours. */
+    private static int colour(BasinGraph.Cell c) {
+        return (c.ci & 1) | ((c.cj & 1) << 1);
+    }
+
     /** A distributary being traced: position, angular sector (bearing from the apex, relative to the fan axis). */
     private static final class Branch {
 
@@ -163,7 +242,8 @@ final class RiverNetBuilder {
      * steps.
      */
     private void buildDelta(int q, float[] M, DeltaOut out, byte[] skip, float[] pts, int[] slot, int[] mainUp, int[] recv,
-        boolean[] isRiv, float[] acc, float[] hgt, float[] z1, float[] w1, float[] am0, float[] am1, GenScratch s) {
+        boolean[] isRiv, float[] acc, float[] hgt, float[] z1, float[] w1, float[] am0, float[] am1, GenScratch s,
+        Foreign fs, BasinGraph graph, long ck) {
         final int MS = RiverNet.MS;
         int b = q * MS;
         if (out.mc.length < (q + 1) * 2) {
@@ -287,6 +367,7 @@ final class RiverNetBuilder {
             int first = out.nv;
             out.vertex(br.x, br.y, br.w, zS * Math.max(0, 1 - br.s / Lc), br.s);
             boolean split = false;
+            double joinZ = Double.NaN;
             double reachR = Rd * (0.8 + 0.35 * rnd(idSeed, br.id, SD.delta + 3));
             double splitAt = Rd * (0.16 + 0.12 * rnd(idSeed, br.id, SD.delta + 4));
             for (int it = 0; it < 400; it++) {
@@ -317,6 +398,9 @@ final class RiverNetBuilder {
                     double hc = baseAt(cx2, cy2, p, s);
                     double sc = Math.max(hc, -6) + 1.5 * Math.abs(cnd); // water is all alike; prefer going straight
                     if (rr < r0 + 0.3 * step) sc += 1e6; // always away from the apex: a branch never turns back inland
+                    // stays within its network's reach (the stage only asks the networks of cells this close)
+                    if (sc < 1e6 && graph.cellAt(cx2, cy2) != ck && !contains(graph.nearCells(cx2, cy2, 0.6 * MARGIN), ck))
+                        sc += 1e6;
                     if (sc < score) {
                         score = sc;
                         hb = hc;
@@ -327,7 +411,15 @@ final class RiverNetBuilder {
                         r = rr;
                     }
                 }
-                if (hb > zS + 25 || br.s > 2.5 * Rd) break; // boxed in by hills (rare), or lost
+                if (hb > zS + 25 || br.s > 2.5 * Rd || score >= 1e6) break; // boxed in (hills, the reach), or lost
+                double[] hit = fs.hit(br.x, br.y, nx2, ny2);
+                if (hit != null) { // meets a branch of another delta: joins it there
+                    double hs = br.s + step * hit[0];
+                    out.vertex(hit[1], hit[2], br.w * (1 - 0.25 * Math.min(1, r / Rd)), hit[3], hs);
+                    joinZ = hit[3];
+                    br.s = hs;
+                    break;
+                }
                 br.s += step;
                 br.x = nx2;
                 br.y = ny2;
@@ -358,9 +450,12 @@ final class RiverNetBuilder {
                     break;
                 }
             }
+            if (joinZ == joinZ) // joined: its water meets the other branch's level (never below it: no step up)
+                for (int vv = first; vv < out.nv; vv++)
+                    out.v[vv * RiverNet.DV + 3] = (float) Math.max(out.v[vv * RiverNet.DV + 3], joinZ);
             // field 4: distance left to the tip of a leaf branch (the plain narrows there), or "no tip"
             for (int vv = first; vv < out.nv; vv++)
-                out.v[vv * RiverNet.DV + 4] = split ? 1e9f : (float) (br.s - out.v[vv * RiverNet.DV + 4]);
+                out.v[vv * RiverNet.DV + 4] = split || joinZ == joinZ ? 1e9f : (float) (br.s - out.v[vv * RiverNet.DV + 4]);
             out.channel(first, out.nv - first);
         }
         if (out.nc == out.mc[q * 2]) { // no branch could leave the apex (hills all around): keep the river as it was
@@ -819,25 +914,27 @@ final class RiverNetBuilder {
 
         byte[] skip = new byte[count];
         DeltaOut dOut = new DeltaOut();
-        // one delta per stretch of coast: a smaller river reaching the sea within reach of a larger delta ends in it instead
-        // of building its own (overlapping fans crossed each other)
-        {
-            Integer[] byFlow = new Integer[nm];
-            for (int q = 0; q < nm; q++) byFlow[q] = q;
-            final float[] MO = mouthsOut;
-            Arrays.sort(byFlow, (p, r) -> Float.compare(MO[r * RiverNet.MS + 6], MO[p * RiverNet.MS + 6]));
-            for (int a = 0; a < nm; a++) {
-                int qa = byFlow[a] * RiverNet.MS;
-                if (MO[qa + 4] <= 0 || MO[qa + 8] >= 0.5) continue;
-                for (int b2 = a + 1; b2 < nm; b2++) {
-                    int qb = byFlow[b2] * RiverNet.MS;
-                    if (MO[qb + 4] <= 0) continue;
-                    if (hypot(MO[qa] - MO[qb], MO[qa + 1] - MO[qb + 1]) < 0.75 * (MO[qa + 4] + MO[qb + 4])) MO[qb + 4] = 0;
-                }
-            }
+        // shared deltas: branches join those of deltas traced before them where they meet. First the deltas of the
+        // lower-coloured neighbouring coastal cells (built first if needed: colours strictly decrease, no cycles), then
+        // this network's own, largest river first
+        Foreign fs = new Foreign();
+        if (cell.outlet) for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+            if ((di | dj) == 0) continue;
+            BasinGraph.Cell nb = graph.cell(cell.ci + di, cell.cj + dj);
+            if (!nb.outlet || colour(nb) >= colour(cell)) continue;
+            RiverNet sn = gen.rivers.net(nb.ci, nb.cj);
+            fs.addChannels(sn.dv, sn.dch, 0, sn.dch.length / 2);
         }
-        for (int q = 0; q < nm; q++) buildDelta(q, mouthsOut, dOut, skip, pts, slot, mainUp, recv, isRiv, acc, hgt, z1, w1,
-            am0, am1, s);
+        Integer[] byFlow = new Integer[nm];
+        for (int q = 0; q < nm; q++) byFlow[q] = q;
+        final float[] MO = mouthsOut;
+        Arrays.sort(byFlow, (p, r) -> Float.compare(MO[r * RiverNet.MS + 6], MO[p * RiverNet.MS + 6]));
+        for (int q : byFlow) {
+            int c0 = dOut.nc;
+            buildDelta(q, mouthsOut, dOut, skip, pts, slot, mainUp, recv, isRiv, acc, hgt, z1, w1, am0, am1, s, fs, graph,
+                ck);
+            fs.addChannels(dOut.v, dOut.ch, c0, dOut.nc);
+        }
 
         // broad valley field: chamfer distance from every land cell to the nearest river cell
         final double VLIM = 900;
