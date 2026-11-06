@@ -54,6 +54,10 @@ public final class PlanPrefetcher {
     private final Set<Long> pendingNets = ConcurrentHashMap.newKeySet();
     private final GenPoint probe = new GenPoint();
     private int ticks;
+    /** Column positions of the players at the last tick (x, z interleaved) and the radius: stale tasks are skipped. */
+    private volatile int[] around = new int[0];
+    private volatile int aroundRadius = 16;
+    private final Map<EntityPlayer, long[]> lastPos = new WeakHashMap<>();
 
     private PlanPrefetcher(WorldServer world, ColumnPlanCache plans, WorldGen gen) {
         this.world = world;
@@ -123,9 +127,30 @@ public final class PlanPrefetcher {
         int view = server == null ? 10 : server.getConfigurationManager()
             .getViewDistance();
         int radius = view + MARGIN;
+        int[] pos = new int[world.playerEntities.size() * 2];
+        boolean jumped = false;
+        for (int q = 0; q < pos.length / 2; q++) {
+            EntityPlayer player = (EntityPlayer) world.playerEntities.get(q);
+            int pcx = (int) Math.floor(player.posX) >> 4, pcz = (int) Math.floor(player.posZ) >> 4;
+            pos[2 * q] = pcx;
+            pos[2 * q + 1] = pcz;
+            long[] last = lastPos.put(player, new long[] { pcx, pcz });
+            if (last != null && Math.max(Math.abs(last[0] - pcx), Math.abs(last[1] - pcz)) > 8) jumped = true;
+        }
+        aroundRadius = radius + 4;
+        around = pos;
+        // a teleport (or a fast flight): whatever is still queued is for the old place, start over around the new one
+        if (jumped) {
+            pool.getQueue()
+                .clear();
+            pending.clear();
+            pendingNets.clear();
+        }
         for (Object o : world.playerEntities) {
             EntityPlayer player = (EntityPlayer) o;
             int pcx = (int) Math.floor(player.posX) >> 4, pcz = (int) Math.floor(player.posZ) >> 4;
+            // the networks under the player first: every column here waits for them
+            queueNetsAt(player.posX, player.posZ);
             // look a bit ahead in the direction the player moves
             pcx += (int) Math.round(clampAhead(player.motionX));
             pcz += (int) Math.round(clampAhead(player.motionZ));
@@ -164,6 +189,7 @@ public final class PlanPrefetcher {
         if (!pending.add(k)) return;
         pool.execute(() -> {
             try {
+                if (!near(x, z)) return; // the player left: skip it (the finally still clears it)
                 long t0 = System.nanoTime();
                 plans.precalculate(x, z);
                 GenStats.PREFETCH.add(System.nanoTime() - t0);
@@ -173,6 +199,16 @@ public final class PlanPrefetcher {
                 pending.remove(k);
             }
         });
+    }
+
+    /** True if the column is within reach of some player (stale prefetches after a teleport are skipped). */
+    private boolean near(int cx, int cz) {
+        int[] pos = around;
+        int r = aroundRadius;
+        if (pos.length == 0) return true; // spawn warm-up before anyone joined
+        for (int q = 0; q < pos.length; q += 2)
+            if (Math.max(Math.abs(pos[q] - cx), Math.abs(pos[q + 1] - cz)) <= r) return true;
+        return false;
     }
 
     /** Builds the river networks of the drainage basins around the player before any column needs them. */

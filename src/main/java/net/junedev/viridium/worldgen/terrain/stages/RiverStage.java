@@ -68,7 +68,7 @@ public class RiverStage extends GenStage {
         SERIAL.set(Boolean.TRUE);
     }
 
-    static boolean serialBuilds() {
+    public static boolean serialBuilds() {
         return SERIAL.get();
     }
 
@@ -87,6 +87,7 @@ public class RiverStage extends GenStage {
             buildNanos.addAndGet(System.nanoTime() - t0);
             net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET.add(System.nanoTime() - t0);
             builds.incrementAndGet();
+            recordExit(key, n);
             return n;
         });
         FutureTask<RiverNet> task = building.putIfAbsent(key, created);
@@ -126,6 +127,46 @@ public class RiverStage extends GenStage {
         }
     }
 
+    /**
+     * What other networks need from a basin: the flow and water level leaving it downstream, and its delta channels
+     * (neighbouring coastal cells join them). Tiny, so kept far longer than the networks: a network evicted from the
+     * LRU is not rebuilt (with its whole upstream chain) just because a downstream basin needs its exit.
+     */
+    public static final class Exit {
+
+        public final float flow, level;
+        public final float[] dv;
+        public final int[] dch;
+
+        Exit(RiverNet n) {
+            flow = n.exitFlow;
+            level = n.exitLevel;
+            dv = n.dv;
+            dch = n.dch;
+        }
+    }
+
+    private static final int EXITS_MAX = 16384;
+    private final ConcurrentHashMap<Long, Exit> exits = new ConcurrentHashMap<>();
+
+    /** The exit of basin cell (ci, cj), building its network if it was never built. */
+    public Exit exit(int ci, int cj) {
+        Exit e = exits.get(key(ci, cj));
+        if (e != null) return e;
+        RiverNet n = net(ci, cj); // records the exit
+        e = exits.get(key(ci, cj));
+        return e != null ? e : new Exit(n);
+    }
+
+    public boolean hasExit(int ci, int cj) {
+        return exits.containsKey(key(ci, cj));
+    }
+
+    private void recordExit(long key, RiverNet n) {
+        if (exits.size() >= EXITS_MAX) exits.clear(); // deterministic: a missing exit is only rebuilt
+        exits.putIfAbsent(key, new Exit(n));
+    }
+
     public boolean isCached(int ci, int cj) {
         return cache.containsKey(key(ci, cj));
     }
@@ -144,6 +185,7 @@ public class RiverStage extends GenStage {
 
     public void clearCache() {
         cache.clear();
+        exits.clear();
     }
 
     public long buildCount() {

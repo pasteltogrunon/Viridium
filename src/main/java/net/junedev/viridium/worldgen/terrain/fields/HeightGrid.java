@@ -23,6 +23,8 @@ public final class HeightGrid {
     private final int spacing;
     private final int maxTiles;
     private final ConcurrentHashMap<Long, float[]> tiles = new ConcurrentHashMap<>();
+    /** Tiles being computed: other threads wait for them instead of computing the same tile again. */
+    private final ConcurrentHashMap<Long, java.util.concurrent.CompletableFuture<float[]>> building = new ConcurrentHashMap<>();
 
     /** @param spacing node spacing in blocks; @param maxTiles cache bound (64x64 nodes per tile) */
     public HeightGrid(WorldGen gen, int spacing, int nodesPerTile, int maxTiles) {
@@ -40,20 +42,40 @@ public final class HeightGrid {
         long key = ((long) tx << 32) | (tz & 0xffffffffL);
         float[] t = tiles.get(key);
         if (t != null) return t;
-        // computed without a lock: two threads may both build it, both results are identical
-        t = new float[N * N * 2];
-        GenScratch s = new GenScratch();
-        GenPoint p = new GenPoint();
-        double x0 = (double) tx * N * spacing, z0 = (double) tz * N * spacing;
-        for (int j = 0; j < N; j++) for (int i = 0; i < N; i++) {
-            double x = x0 + i * spacing, z = z0 + j * spacing;
-            gen.plates.apply(x, z, p, s);
-            gen.continents.apply(x, z, p);
-            t[(j * N + i) * 2] = (float) gen.relief.baseHeight(x, z, p, false, s);
-            t[(j * N + i) * 2 + 1] = (float) p.L;
+        java.util.concurrent.CompletableFuture<float[]> mine = new java.util.concurrent.CompletableFuture<>(),
+            other = building.putIfAbsent(key, mine);
+        if (other != null) return other.join();
+        try {
+            t = compute(tx, tz);
+            if (tiles.size() >= maxTiles) evictSome();
+            tiles.put(key, t);
+            mine.complete(t);
+            return t;
+        } catch (RuntimeException | Error e) {
+            mine.completeExceptionally(e);
+            throw e;
+        } finally {
+            building.remove(key, mine);
         }
-        if (tiles.size() >= maxTiles) evictSome();
-        tiles.put(key, t);
+    }
+
+    /** One tile; large ones by rows in parallel (a 64x64 climate tile is 4096 relief evaluations, ~12 ms). */
+    private float[] compute(int tx, int tz) {
+        float[] t = new float[N * N * 2];
+        double x0 = (double) tx * N * spacing, z0 = (double) tz * N * spacing;
+        java.util.stream.IntStream rows = java.util.stream.IntStream.range(0, N);
+        if (N >= 32 && !net.junedev.viridium.worldgen.terrain.stages.RiverStage.serialBuilds()) rows = rows.parallel();
+        rows.forEach(j -> {
+            GenScratch s = new GenScratch();
+            GenPoint p = new GenPoint();
+            for (int i = 0; i < N; i++) {
+                double x = x0 + i * spacing, z = z0 + j * spacing;
+                gen.plates.apply(x, z, p, s);
+                gen.continents.apply(x, z, p);
+                t[(j * N + i) * 2] = (float) gen.relief.baseHeight(x, z, p, false, s);
+                t[(j * N + i) * 2 + 1] = (float) p.L;
+            }
+        });
         return t;
     }
 

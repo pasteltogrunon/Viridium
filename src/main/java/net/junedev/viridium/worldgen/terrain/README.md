@@ -39,6 +39,18 @@ CC's background threads through `IPreloadFailureDelegate`). `CubeFiller` then cl
 
 `PlanPrefetcher` computes the plans of the columns around every player (view distance + 3, nearest first, a bit
 ahead of the movement) and the river networks of nearby drainage basins on its own threads, so the server thread rarely waits.
+The networks under the player go first (every column there waits for them). When a player jumps more than 8 columns
+between two passes (a teleport), everything still queued is dropped, and queued work that no player is near any more is
+skipped when its turn comes: before, a teleport left the new area waiting behind the old one.
+
+**Teleport cost.** A cold area needs its river networks, and a network needs the exit (flow, water level) of every
+basin upstream and the deltas of its lower-coloured coastal neighbours, recursively: 4 to 13 networks per teleport in
+the benchmark. Those dependencies are built side by side (they were built one after another), and their exits are kept
+in a small separate map (`RiverStage.exit`), so an evicted network is never rebuilt with its whole upstream chain just
+because a downstream basin needs its exit. Inside a build, the real floor of the lakes (pipeline up to erosion, ~70 % of
+a cold build) is sampled in parallel, and the coarse field lattices (`HeightGrid`) build each tile once (other threads
+wait for it instead of computing it again; large climate tiles by rows in parallel). `/viridium stats` shows each phase
+of the network builds.
 
 Vegetation is **planned, not populated**: `FloraPlanner` decides each column's trees and plants from its plan alone
 (deterministic per column), and every air or surface cube draws the parts of the features of the 3×3 surrounding
@@ -81,16 +93,27 @@ A new map layer is one `MapLayer.register(...)` line in `MapLayer`.
 - In game: `/viridium bench [radius] [cubesDown] [cubesUp]` (op) measures plans + real cube storage around you without
   touching the world. `VIRIDIUM_BENCH_ON_START=1 ./gradlew runServer` runs it at server start.
 
-### Results (2026-11-05, 48-thread machine)
+### Results (2026-11-06, 48-thread machine)
+
+Per-stage costs are measured on 8x8 patches of contiguous points (the cached lattices are warm, as in the game).
 
 | | JS prototype | Java exact | Java fast |
 |---|---|---|---|
-| per land point, all stages | 77.5 µs | 46.9 µs | 11.3 µs |
-| final climate | 44.4 µs | 29.1 µs | 1.7 µs |
-| erosion | 16.5 µs | 11.1 µs | 3.1 µs |
-| column plan (16×16, + crust), 1 thread, Java 25 | — | ~12 ms | 1.8 ms |
-| column plan, 47 threads | — | — | 0.48 ms wall |
-| river network build (per drainage basin) | ~390 ms (per plate) | — | ~260 ms |
+| per land point, all stages | 77.5 µs | 52.4 µs | 11.4 µs |
+| plates | — | 2.0 µs | 2.0 µs |
+| final climate | 44.4 µs | 31.6 µs | 1.2 µs |
+| erosion | 16.5 µs | 13.1 µs | 2.7 µs |
+| rivers (networks cached) | — | 3.3 µs | 3.5 µs |
+| biomes | — | 1.6 µs | 1.2 µs |
+| column plan (16×16, + crust), 1 thread, Java 25 | — | ~13 ms | 2.4 ms |
+| column plan, 47 threads | — | — | 0.20 ms wall |
+| river network build (per drainage basin, cold, warm JIT) | ~390 ms (per plate) | — | 60–170 ms |
+| teleport, cold caches: centre column / whole view (8 threads) | — | — | 0.2–0.35 s / 0.55–0.8 s |
+
+River network phases (cold, teleport benchmark): its dependencies 100 ms (other networks), lakes 32 ms (floor
+samples up to erosion), water levels 11 ms, valley field 12 ms, relief grid 6 ms, flood 2 ms, deltas 1 ms. In a fresh
+JVM (no JIT yet) the first teleport takes 0.5–1.4 s to the centre column; before these changes 1.1–2.8 s.
+`VIRIDIUM_BENCH=teleport` runs only the teleport scenario.
 
 In the dev server (`runServer`, **Java 8**): 4.9 ms per column plan, 0.17 ms per cube (crust-only 0.23 ms,
 surface-crossing 0.12 ms, air 0). A column has 192 cubes in the generation range: 31 % air, 67 % crust only, ≈ 3.3
@@ -160,8 +183,8 @@ Scales: plates/continents `plateSize` 12000, temperature period 48000, precipita
 
 ## Known limitations
 
-- River networks are built per drainage basin (~0.26 s, parallel) by the prefetcher before players reach them; teleporting
-  far away can still make the server thread wait for one.
+- River networks are built per drainage basin by the prefetcher before players reach them; teleporting far away still
+  makes the first columns wait for the networks there (0.2–0.35 s on a 48-thread machine, 0.5–1.4 s right after start).
 - Vegetation uses simplified shapes (the detailed Viridium tree generators are only used for saplings); no ores,
   caves or structures.
 - Biomes map onto vanilla biome ids until Viridium registers its own.

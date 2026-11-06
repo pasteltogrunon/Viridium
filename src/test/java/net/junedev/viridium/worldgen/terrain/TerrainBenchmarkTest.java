@@ -17,6 +17,15 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
  */
 class TerrainBenchmarkTest {
 
+    /** Only the teleport scenario: {@code VIRIDIUM_BENCH=teleport}. */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_BENCH", matches = "teleport")
+    void teleport() {
+        TerrainBenchmark b = new TerrainBenchmark(new GenParams(), 0);
+        b.teleport();
+        System.out.print(b.report());
+    }
+
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_BENCH", matches = "1")
     void benchmark() throws IOException {

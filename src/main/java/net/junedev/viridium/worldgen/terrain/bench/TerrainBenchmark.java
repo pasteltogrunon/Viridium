@@ -80,25 +80,33 @@ public final class TerrainBenchmark {
         columns(fast);
         crust(fast);
         tiles(fast);
+        teleport();
         line("(sink %.3f)", sink);
         return out.toString();
     }
 
-    /** Random land and ocean points (x, z interleaved) inside the sample area. */
+    /**
+     * Land and ocean points (x, z interleaved) inside the sample area, in 8x8 patches 2 blocks apart around random
+     * centres: generation walks contiguous columns, so the cached fields (lattices of 128 to 2048 blocks) are warm. Fully
+     * random points would build a new erosion lattice tile per point (~800 µs) and measure only that.
+     */
     private double[][] samplePoints(WorldGen gen) {
         Random r = new Random(42);
         double[] land = new double[points * 2], sea = new double[points * 2];
         int nl = 0, ns = 0;
         GenPoint o = new GenPoint();
         while (nl < points || ns < points) {
-            double x = Math.round((r.nextDouble() - 0.5) * AREA), z = Math.round((r.nextDouble() - 0.5) * AREA);
-            gen.evaluate(x, z, Stage.RELIEF, o);
-            if (o.h0 >= 0 && nl < points) {
-                land[2 * nl] = x;
-                land[2 * nl++ + 1] = z;
-            } else if (o.h0 < 0 && ns < points) {
-                sea[2 * ns] = x;
-                sea[2 * ns++ + 1] = z;
+            double cx = Math.round((r.nextDouble() - 0.5) * AREA), cz = Math.round((r.nextDouble() - 0.5) * AREA);
+            for (int q = 0; q < 64; q++) {
+                double x = cx + (q & 7) * 2, z = cz + (q >> 3) * 2;
+                gen.evaluate(x, z, Stage.RELIEF, o);
+                if (o.h0 >= 0 && nl < points) {
+                    land[2 * nl] = x;
+                    land[2 * nl++ + 1] = z;
+                } else if (o.h0 < 0 && ns < points) {
+                    sea[2 * ns] = x;
+                    sea[2 * ns++ + 1] = z;
+                }
             }
         }
         return new double[][] { land, sea };
@@ -290,6 +298,73 @@ public final class TerrainBenchmark {
             sink += px[0];
             line("  %-26s %6.0f ms", l.name, (System.nanoTime() - t0) / 1e6);
         }
+    }
+
+    /**
+     * Teleport: a cold pipeline (nothing cached), columns around a far point planned nearest first by as many threads
+     * as the prefetcher uses. Reports when the centre, the inner 9x9 and the whole view are ready, and how many river
+     * networks it took (a network needs the exit flow of every upstream basin and the deltas of its coastal neighbours).
+     */
+    public void teleport() {
+        line("");
+        int threads = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() / 3));
+        line("Teleport to a far point (cold caches, %d prefetch threads, view 10 + 3):", threads);
+        net.junedev.viridium.worldgen.terrain.GenStats.reset();
+        double[][] targets = { { 52000, 31000 }, { -47000, 66000 }, { 88000, -41000 }, { -23000, -97000 } };
+        for (double[] t : targets) {
+            WorldGen g = gen(true);
+            double[] p = landNear(g, t[0], t[1]);
+            int cx = (int) Math.floor(p[0]) >> 4, cz = (int) Math.floor(p[1]) >> 4;
+            ColumnPlanner planner = new ColumnPlanner(g, BiomeMapper.FROM_STAGE);
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+            int R = 13;
+            long t0 = System.nanoTime();
+            List<Future<?>> fs = new ArrayList<>();
+            List<Integer> ring = new ArrayList<>();
+            // like the prefetcher: the networks under the player first, then the columns nearest first
+            for (long k : g.rivers.basinsAt(p[0], p[1])) {
+                BasinGraph.Cell c = g.rivers.basins.cell(k);
+                if (!c.ocean) pool.submit(() -> g.rivers.net(c.ci, c.cj));
+            }
+            for (int r = 0; r <= R; r++) for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+                int x = cx + dx, z = cz + dz;
+                fs.add(pool.submit(() -> planner.plan(x, z)));
+                ring.add(r);
+            }
+            double centre = -1, inner = -1, all;
+            try {
+                for (int i = 0; i < fs.size(); i++) {
+                    fs.get(i).get();
+                    double ms = (System.nanoTime() - t0) / 1e6;
+                    if (i == 0) centre = ms;
+                    if (ring.get(i) == 4 && (i + 1 == fs.size() || ring.get(i + 1) > 4)) inner = ms;
+                }
+            } catch (Exception e) {
+                line("  failed: %s", e);
+            }
+            all = (System.nanoTime() - t0) / 1e6;
+            pool.shutdownNow();
+            net.junedev.viridium.worldgen.terrain.GenStats.Timer rn = net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET;
+            line("  %7.0f,%7.0f  centre %6.0f ms · 9x9 %6.0f ms · 27x27 %6.0f ms · %3d nets built (so far %.0f ms each, max %.0f)",
+                p[0], p[1], centre, inner, all, g.rivers.buildCount(), rn.meanMs(), rn.maxMs());
+        }
+        line("  where the time went (all four, summed over threads):");
+        for (String l : net.junedev.viridium.worldgen.terrain.GenStats.report().split("\n")) line("    %s", l);
+    }
+
+    private static double[] landNear(WorldGen g, double x, double z) {
+        GenPoint o = new GenPoint();
+        for (int r = 0; r < 60; r++) for (int a = 0; a < 8; a++) {
+            double px = x + r * 700 * Math.cos(a * Math.PI / 4), pz = z + r * 700 * Math.sin(a * Math.PI / 4);
+            g.evaluate(px, pz, Stage.RELIEF, o);
+            if (o.h0 > 20) return new double[] { px, pz };
+        }
+        return new double[] { x, z };
+    }
+
+    public String report() {
+        return out.toString();
     }
 
     private void line(String fmt, Object... args) {

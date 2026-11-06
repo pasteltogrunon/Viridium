@@ -60,8 +60,17 @@ public final class GenStats {
     public static final Timer FLORA = new Timer("vegetation drawn into cubes");
     public static final Timer FLORA_FEATURES = new Timer("vegetation features drawn (parts)");
     public static final Timer RIVER_NET = new Timer("river network build");
+    public static final Timer RIVER_DEPS = new Timer("  river: wait for upstream/neighbour nets");
+    public static final Timer RIVER_GRID = new Timer("  river: relief grid");
+    public static final Timer RIVER_FLOW = new Timer("  river: flood and routing");
+    public static final Timer RIVER_LAKES = new Timer("  river: lakes");
+    public static final Timer RIVER_ACC = new Timer("  river: flow accumulation");
+    public static final Timer RIVER_LEVELS = new Timer("  river: water levels on final terrain");
+    public static final Timer RIVER_REACHES = new Timer("  river: reaches, mouths, estuaries");
+    public static final Timer RIVER_DELTAS = new Timer("  river: deltas");
+    public static final Timer RIVER_VALLEY = new Timer("  river: valley field");
 
-    public static final Timer[] ALL = { PLAN, PREFETCH, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK, POPULATE, FLORA, FLORA_FEATURES, RIVER_NET };
+    public static final Timer[] ALL = { PLAN, PREFETCH, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK, POPULATE, FLORA, FLORA_FEATURES, RIVER_NET, RIVER_DEPS, RIVER_GRID, RIVER_FLOW, RIVER_LAKES, RIVER_ACC, RIVER_LEVELS, RIVER_REACHES, RIVER_DELTAS, RIVER_VALLEY };
 
     private GenStats() {}
 
