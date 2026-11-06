@@ -188,7 +188,9 @@ public final class BasinGraph {
     private synchronized void link(Cell c) {
         if (c.linked) return;
         if (!c.ocean) {
-            if (c.L < COAST_L) c.outlet = true;
+            // a cell with its own stretch of coast drains there: its network sends most of its water to that sea, so it
+            // must not hand its whole flow on to a neighbour (which would get a huge river out of nowhere, e.g. on an islet)
+            if (c.L < COAST_L || seaFraction(c) > 0.1) c.outlet = true;
             else {
                 // candidates: the neighbours closer to the sea (so it always reaches the coast), the one deepest in a
                 // great valley first; the first one that really shares a divide with c (an exit node) is the receiver
@@ -263,6 +265,25 @@ public final class BasinGraph {
             }
         }
         return bestNode;
+    }
+
+    /** Share of the cell's area that is sea, from a coarse sample. */
+    private double seaFraction(Cell c) {
+        final int N = 6;
+        double step = 2 * B / N;
+        long ck = key(c.ci, c.cj);
+        GenPoint p = pt.get();
+        GenScratch s = sc.get();
+        int own = 0, sea = 0;
+        for (int j = 0; j < N; j++) for (int i = 0; i < N; i++) {
+            double x = c.fx - B + (i + 0.5) * step, y = c.fy - B + (j + 0.5) * step;
+            if (cellAt(x, y) != ck) continue;
+            own++;
+            gen.plates.apply(x, y, p, s);
+            gen.continents.apply(x, y, p);
+            if (p.L < 0) sea++;
+        }
+        return own == 0 ? 0 : (double) sea / own;
     }
 
     /** Runoff (river-grid units) collected by the land of c itself, from a coarse sample of its area. */

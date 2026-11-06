@@ -156,50 +156,76 @@ public class RiverStage extends GenStage {
 
     // ------------------------------------------------------------------ 10b. deltas
 
-    protected void deltas(double x, double y, GenPoint o, RiverNet net) {
-        float[] M = net.mouths;
-        final int MS = RiverNet.MS;
+    /**
+     * Deltas: a low plain built around the distributaries (filling shallow sea, flattening low land, never touching
+     * hills or deep water) and the distributary channels themselves, whose water falls smoothly from the river's level
+     * at the apex to the sea.
+     */
+    protected void deltas(double x, double y, GenPoint o, RiverNet net, boolean channels) {
+        float[] V = net.dv, BOX = net.dbox;
+        int[] CH = net.dch, MC = net.dmc;
+        final int D = RiverNet.DV;
         for (int q = 0; q < net.nMouth; q++) {
-            int b = q * MS;
-            double R = M[b + 4], E = M[b + 8];
-            if (R <= 0 || E > 0.98) continue;
-            double mx = M[b], my = M[b + 1];
-            if (Math.abs(x - mx) > 1.3 * R || Math.abs(y - my) > 1.3 * R) continue;
-            double ux = M[b + 2], uy = M[b + 3], hw = M[b + 5], qn = M[b + 6], id = M[b + 7];
-            double axp = mx - ux * 0.35 * R, ayp = my - uy * 0.35 * R; // apex, a bit upstream of the mouth
-            double vx = x - axp, vy = y - ayp, r = Math.sqrt(vx * vx + vy * vy);
-            if (r > 1.35 * R) continue;
-            double al = vx * ux + vy * uy, cr = vx * uy - vy * ux;
-            double th = Math.atan2(cr, al);
-            final double PHI = 1.05;
-            double Rr = R * (0.8 + 0.3 * perlin(th * 2.2 + id * 0.37, id * 0.11, SD.delta));
-            // fades near the plate edge, absent on formerly glaciated coasts, shrinks where the tide dominates
-            double m = (1 - ss(PHI * 0.6, PHI, Math.abs(th))) * (1 - ss(Rr * 0.7, Rr, r))
-                * ss(20, 90, o.edge)
-                * (1 - glacial(o, 0))
-                * (1 - E);
-            if (m <= 0) continue;
-            double hD = 0.6 + 2.2 * (1 - r / Rr) + 0.8 * perlin(x / 40, y / 40, SD.delta + 1);
-            double hn = lerp(o.h, hD, m);
-            if (o.h < hD || hn < o.h) o.h = hn;
-            if (m > o.delta) o.delta = m;
-            // distributary channels fanning out from the apex
-            int K = (int) Math.min(7, 2 + Math.floor(qn / 12));
-            for (int c = 0; c <= K; c++) {
-                double tk = c == 0 ? 0 : (rnd((int) id, c, SD.delta + 2) - 0.5) * 2 * PHI * 0.75;
-                tk += 0.14 * Math.sin(r / (0.17 * R) + c * 2.1 + id);
-                double dist = r * Math.abs(th - tk);
-                double wc = Math.max(1.0, hw * (c == 0 ? 0.8 : 0.45) * (1 - 0.45 * r / Rr));
-                if (dist < wc && r > 0.05 * R && r < Rr * 1.05 && m > 0.2) {
-                    double qq = dist / wc;
-                    o.h = Math.min(o.h, lerp(o.h, -0.8 - 1.2 * (1 - qq * qq), ss(0.2, 0.6, m)));
-                    o.river = 1;
-                    if (o.riverD > -1) {
-                        o.riverD = dist - wc;
-                        o.riverHW = wc;
-                        o.riverAcc = qn;
+            int nc = MC[q * 2 + 1];
+            if (nc == 0) continue;
+            int bq = q * 5;
+            if (x < BOX[bq] || y < BOX[bq + 1] || x > BOX[bq + 2] || y > BOX[bq + 3]) continue;
+            double plain = BOX[bq + 4];
+            // per branch its nearest point; the plain blends them all (no seams where the nearest branch changes)
+            double cover = 0, zw = 0, ww = 0, vBest = 1e18, vW = 0, vZ = 0, vD = 0;
+            for (int c = MC[q * 2], ce = c + nc; c < ce; c++) {
+                int v0 = CH[c * 2], vn = CH[c * 2 + 1];
+                double cd = 1e18, cz = 0, ctip = 1e9;
+                for (int k = 0; k < vn - 1; k++) {
+                    int a = (v0 + k) * D, b = a + D;
+                    double ax = V[a], ay = V[a + 1], ex = V[b] - ax, ey = V[b + 1] - ay;
+                    double l2 = ex * ex + ey * ey;
+                    if (l2 == 0) l2 = 1e-9;
+                    double t = clamp(((x - ax) * ex + (y - ay) * ey) / l2, 0, 1);
+                    double ddx = x - (ax + ex * t), ddy = y - (ay + ey * t), d = Math.sqrt(ddx * ddx + ddy * ddy);
+                    double w = lerp(V[a + 2], V[b + 2], t), z = lerp(V[a + 3], V[b + 3], t);
+                    if (d < cd) {
+                        cd = d;
+                        cz = z;
+                        ctip = lerp(V[a + 4], V[b + 4], t) + w;
+                    }
+                    if (d - w < vBest) {
+                        vBest = d - w;
+                        vW = w;
+                        vZ = z;
+                        vD = d;
                     }
                 }
+                // the plain narrows towards the tips of the last branches: they end at its edge, out in the water
+                double pl = Math.min(plain, 0.7 * ctip);
+                cover = Math.max(cover, 1 - ss(0.45 * pl, pl, cd));
+                double wt = 1 / Math.pow(cd + 30, 4);
+                zw += wt * cz;
+                ww += wt;
+            }
+            if (!channels) {
+                // the plain: just above the water of the branches; fades out over deep water and against hills
+                double m = cover * ss(20, 90, o.edge) * (1 - glacial(o, 0)) * ss(-45, -25, o.h);
+                if (m > 0) {
+                    double hP = zw / ww + 1.1 + 0.5 * perlin(x / 40, y / 40, SD.delta + 1);
+                    if (o.h < hP) o.h = lerp(o.h, hP, m);
+                    else o.h -= m * (1 - ss(0, 8, o.h - hP)) * (o.h - hP);
+                    if (m > o.delta) o.delta = m;
+                }
+                continue;
+            }
+            if (vBest >= 3) continue;
+            if (vBest < 0) {
+                double qq = vD / Math.max(vW, 1e-3);
+                o.h = Math.min(o.h, vZ - 1.05 - 0.22 * vW * (1 - qq * qq)); // a full block deep at the edge: no lip
+                o.river = 1;
+            } else if (vZ > 0.3) o.h = Math.max(o.h, Math.min(o.h + 3, vZ + 0.6 * (1 - vBest / 3))); // banks
+            if (vBest < o.riverD) {
+                o.riverD = vBest;
+                o.riverHW = vW;
+                o.riverZ = vZ;
+                o.riverWL = vZ;
+                o.riverAcc = net.mouths[q * RiverNet.MS + 6];
             }
         }
     }
@@ -386,7 +412,9 @@ public class RiverStage extends GenStage {
         // in phases across networks: all valleys first, then all channels (so each channel measures its water against
         // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
         for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase);
-        if (o.h < -1 && o.river != 0 && o.delta == 0) { // last reach drowned by the sea (fjord, estuary)
+        // last reach drowned by the sea (fjord, estuary): only where the river is at sea level anyway. A deep channel
+        // inland keeps its own water (otherwise its middle would drop to sea level between higher river water)
+        if (o.h < -1 && o.river != 0 && o.delta == 0 && o.riverWL < 1) {
             o.river = 0;
             o.riverD = 1e9;
         }
@@ -395,12 +423,13 @@ public class RiverStage extends GenStage {
     /** Applies one phase of one basin network: 0 delta + broad valley, 1 channel, 2 estuary + lakes. */
     protected void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase) {
         if (phase == 2) {
+            if (net.nMouth > 0) deltas(x, y, o, net, true); // distributaries, after the river channels
             if (net.estSeg.length > 0) estuaries(x, y, o, net);
             if (!net.lakes.isEmpty()) lakes(x, y, o, net, s);
             return;
         }
         if (net.count == 0) return;
-        if (phase == 0 && net.nMouth > 0) deltas(x, y, o, net);
+        if (phase == 0 && net.nMouth > 0) deltas(x, y, o, net, false);
         // valley shape from the rock (interpolated from the network grid so it changes smoothly between patches)
         netField(x, y, net, s);
         double ef = clamp(lerp(0.5, (lerp(o.erod, s.FE, s.FEW) - 0.2) / 0.7, P.valleyRock), 0, 1);
@@ -426,7 +455,7 @@ public class RiverStage extends GenStage {
                     int i = gi + di;
                     if (i < 0 || i >= net.nx) continue;
                     int sl = net.slot[j * net.nx + i];
-                    if (sl < 0) continue;
+                    if (sl < 0 || net.skip[sl] != 0) continue; // skipped: replaced by a delta
                     double pad = VMAX + Math.max(net.w0[sl], net.w1[sl]);
                     if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad || qy < BB[sl * 4 + 1] - pad
                         || qy > BB[sl * 4 + 3] + pad) continue;
@@ -472,13 +501,13 @@ public class RiverStage extends GenStage {
                 }
             }
             if (best < 1e8) {
-                if (best < o.riverD) {
+                if (best < o.riverD) { // the nearest channel (of any network, or a delta distributary) sets the water
                     o.riverD = best;
                     o.riverHW = bhw;
                     o.riverAcc = bacc;
+                    o.riverZ = bz;
+                    o.riverWL = bwl;
                 }
-                o.riverZ = bz;
-                o.riverWL = bwl;
                 // a low bank right next to the water would let it spill: keep the first blocks at least at water level
                 if (best > 0 && best < 3) o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
                 o.h = hmin;

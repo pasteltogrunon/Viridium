@@ -113,7 +113,23 @@ the water of the upstream basins enters at that divide point with its flow and w
 upstream system decides the size of the mouth: river half width up to `riverMaxHalfWidth` (48, ~100-block wide
 rivers) and delta radius up to `deltaMaxRadius` (1600); big rivers build deltas rather than estuaries. Waterfalls at
 confluences are limited to 2.5 blocks per node (glacial hanging valleys can still drop ~10). Lake rims never cross a
-river channel or its banks, so rivers flow into and out of lakes freely.
+river channel or its banks, so rivers flow into and out of lakes freely. A cell with more than 10 % sea in its area
+is an outlet (its network sends its water to that coast; handing its whole flow to a neighbour made huge rivers appear
+out of nowhere, e.g. on islets).
+
+**Deltas** (`RiverNetBuilder.buildDelta`, `RiverStage.deltas`): the main stem is cut at an apex up to 0.35 R upstream
+of the mouth (never above a real tributary: it would be left at the old river's level), and the reaches below it are
+skipped. From the apex, distributaries are traced in steps towards the open water around the mouth, each choosing
+the lowest of a few headings; every branch owns an angular sector around the apex and a split divides it between both
+children, so branches never cross. They run until they are out on the sea. Their water falls linearly from the
+river's level at the apex to sea level at the old coast. The delta plain (just above the water of the branches,
+blended between them) is only built around the branches, narrowing towards their tips, over shallow water and low land;
+the channels are carved last, a full block deep at the edges. If no branch can leave the apex the river stays as it was.
+
+**Confluences**: a small river within reach of a much larger one (3× the flow, 2.5× the width) has its water no higher
+than the large river's there (+0.5): otherwise its last reach hid its drop under the large river and showed it all at
+once at the bank (a staircase), or it ran alongside on a perched terrace. Deep river channels below sea level keep their
+river water (only river water at sea level gives way to the sea).
 
 Flow routing: the priority flood only decides the filled surface (lakes); each node then drains to the steepest
 strictly lower neighbour on that surface plus a gentle routing noise (`riverRouteNoise`, 8 blocks at ~450-block

@@ -116,6 +116,265 @@ final class RiverNetBuilder {
         return serial ? st : st.parallel();
     }
 
+    /** Growable output of the delta builder. */
+    private static final class DeltaOut {
+
+        float[] v = new float[256], box = new float[0];
+        int[] ch = new int[32], mc = new int[0];
+        int nv, nc;
+
+        void vertex(double x, double y, double w, double z, double s) {
+            if ((nv + 1) * RiverNet.DV > v.length) v = Arrays.copyOf(v, v.length * 2);
+            int b = nv++ * RiverNet.DV;
+            v[b] = (float) x;
+            v[b + 1] = (float) y;
+            v[b + 2] = (float) w;
+            v[b + 3] = (float) z;
+            v[b + 4] = (float) s;
+        }
+
+        void channel(int first, int n) {
+            if (n < 2) return;
+            if ((nc + 1) * 2 > ch.length) ch = Arrays.copyOf(ch, ch.length * 2);
+            ch[nc * 2] = first;
+            ch[nc * 2 + 1] = n;
+            nc++;
+        }
+    }
+
+    /** A distributary being traced: position, angular sector (bearing from the apex, relative to the fan axis). */
+    private static final class Branch {
+
+        double x, y, lo, hi, w, s, lastSplit;
+        int depth, id;
+    }
+
+    private double baseAt(double x, double y, GenPoint p, GenScratch s) {
+        gen.plates.apply(x, y, p, s);
+        gen.continents.apply(x, y, p);
+        return gen.relief.baseHeight(x, y, p, false, s);
+    }
+
+    /**
+     * Delta of mouth q: the main stem is cut at an apex upstream of the old mouth (the reaches below it are skipped), and
+     * distributaries fan out from there towards the sea. Every branch keeps to its own angular sector around the apex,
+     * and splitting divides the sector between both children, so branches never cross. Water falls linearly from the
+     * river's level at the apex to sea level a little past the old coast, so it joins the river and the sea without
+     * steps.
+     */
+    private void buildDelta(int q, float[] M, DeltaOut out, byte[] skip, float[] pts, int[] slot, int[] mainUp, int[] recv,
+        boolean[] isRiv, float[] acc, float[] hgt, float[] z1, float[] w1, float[] am0, float[] am1, GenScratch s) {
+        final int MS = RiverNet.MS;
+        int b = q * MS;
+        if (out.mc.length < (q + 1) * 2) {
+            out.mc = Arrays.copyOf(out.mc, (q + 1) * 2 + 8);
+            out.box = Arrays.copyOf(out.box, (q + 1) * 5 + 20);
+        }
+        out.mc[q * 2] = out.nc;
+        out.mc[q * 2 + 1] = 0;
+        double Rd = M[b + 4], E = M[b + 8];
+        if (Rd <= 0 || E >= 0.5) {
+            M[b + 4] = 0;
+            return;
+        }
+        M[b + 8] = 0; // a delta, not an estuary
+        int mIdx = (int) M[b + 7];
+        // apex: up the main stem, stopping below any real tributary (one joining the replaced stretch would be left at
+        // the old river's level beside the higher distributaries) or where the valley leaves the coastal plain.
+        // Rivulets joining the stretch are dropped with it.
+        int a = mIdx;
+        double walked = 0;
+        java.util.List<Integer> below = new java.util.ArrayList<>(), rivulets = new java.util.ArrayList<>();
+        while (walked < 0.35 * Rd) {
+            int mu = mainUp[a];
+            if (mu < 0 || hgt[mu] > 18) break;
+            boolean trib = false;
+            int nr = rivulets.size();
+            int ai = a % nx, aj = (a - ai) / nx;
+            for (int k = 0; k < 8; k++) {
+                int ii = ai + DI[k], jj = aj + DJ[k];
+                if (ii < 0 || jj < 0 || ii >= nx || jj * nx + ii >= recv.length) continue;
+                int nb = jj * nx + ii;
+                if (nb == mu || !isRiv[nb] || recv[nb] != a) continue;
+                if (acc[nb] > 0.06 * acc[a]) trib = true;
+                else rivulets.add(nb);
+            }
+            if (trib) {
+                while (rivulets.size() > nr) rivulets.remove(rivulets.size() - 1);
+                break;
+            }
+            below.add(a);
+            walked += am0[slot[a]] - am1[slot[a]];
+            a = mu;
+        }
+        int sa = slot[a];
+        if (sa < 0) return;
+        java.util.List<Integer> marked = new java.util.ArrayList<>();
+        for (int nd : below) {
+            skip[slot[nd]] = 1;
+            marked.add(slot[nd]);
+        }
+        // rivulets: their whole upstream tree
+        java.util.ArrayDeque<Integer> up = new java.util.ArrayDeque<>(rivulets);
+        while (!up.isEmpty()) {
+            int nd = up.poll();
+            if (slot[nd] < 0 || skip[slot[nd]] != 0) continue;
+            skip[slot[nd]] = 1;
+            marked.add(slot[nd]);
+            int ci2 = nd % nx, cj2 = (nd - ci2) / nx;
+            for (int k = 0; k < 8; k++) {
+                int ii = ci2 + DI[k], jj = cj2 + DJ[k];
+                if (ii < 0 || jj < 0 || ii >= nx || jj * nx + ii >= recv.length) continue;
+                int nb = jj * nx + ii;
+                if (isRiv[nb] && recv[nb] == nd) up.add(nb);
+            }
+        }
+        int pq = (sa * NPT + SEG) * 2; // the apex reach ends halfway to the first skipped node
+        double ax = pts[pq], ay = pts[pq + 1];
+        if (below.isEmpty()) { // the apex is the mouth itself
+            ax = M[b];
+            ay = M[b + 1];
+        }
+        double zS = Math.max(0, z1[sa]), wS = Math.max(1.5, w1[sa]);
+        // fan axis: towards the old mouth, and on through it towards the sea
+        double dx = M[b] - ax, dy = M[b + 1] - ay, dl = hypot(dx, dy);
+        double ux = M[b + 2], uy = M[b + 3];
+        double fx = (dl > 1 ? dx / dl : 0) + ux, fy = (dl > 1 ? dy / dl : 0) + uy, fl = hypot(fx, fy);
+        if (fl < 1e-6) {
+            fx = ux;
+            fy = uy;
+            fl = Math.max(1e-6, hypot(ux, uy));
+        }
+        fx /= fl;
+        fy /= fl;
+        // ...turned towards the open water around the mouth (a ring of samples, weighted by depth)
+        GenPoint pr = new GenPoint();
+        double sxs = 0, sys = 0;
+        for (int k = 0; k < 16; k++) {
+            double an = k * TAU / 16, cx = Math.cos(an), cy = Math.sin(an);
+            for (double rr : new double[] { 0.35 * Rd, 0.7 * Rd }) {
+                double hb = baseAt(M[b] + cx * rr, M[b + 1] + cy * rr, pr, s);
+                double wgt = clamp(-hb, 0, 30);
+                sxs += cx * wgt;
+                sys += cy * wgt;
+            }
+        }
+        double sl2 = hypot(sxs, sys);
+        if (sl2 > 1e-6) {
+            double kx = fx + 1.5 * sxs / sl2, ky = fy + 1.5 * sys / sl2, kl = hypot(kx, ky);
+            if (kl > 1e-6) {
+                fx = kx / kl;
+                fy = ky / kl;
+            }
+        }
+        final double PHI = 0.95, step = Math.max(14, 0.025 * Rd), Lc = Math.max(walked, 0.1 * Rd); // sea level at the old coast
+        int maxDepth = (int) Math.min(3, 1 + Math.floor(M[b + 6] / 25)); // up to 8 branches for the largest rivers
+        int idSeed = (int) M[b + 7];
+        GenPoint p = new GenPoint();
+        double bx0 = ax, by0 = ay, bx1 = ax, by1 = ay;
+        java.util.ArrayDeque<Branch> todo = new java.util.ArrayDeque<>();
+        Branch root = new Branch();
+        root.x = ax;
+        root.y = ay;
+        root.lo = -PHI;
+        root.hi = PHI;
+        root.w = wS;
+        todo.add(root);
+        int ids = 0;
+        while (!todo.isEmpty()) {
+            Branch br = todo.poll();
+            br.id = ids++;
+            int first = out.nv;
+            out.vertex(br.x, br.y, br.w, zS * Math.max(0, 1 - br.s / Lc), br.s);
+            boolean split = false;
+            double reachR = Rd * (0.8 + 0.35 * rnd(idSeed, br.id, SD.delta + 3));
+            double splitAt = Rd * (0.16 + 0.12 * rnd(idSeed, br.id, SD.delta + 4));
+            for (int it = 0; it < 400; it++) {
+                double mid = 0.5 * (br.lo + br.hi), half = 0.5 * (br.hi - br.lo);
+                // wandering heading, then the lowest of a few headings around it: branches follow the low ground
+                double th0 = mid + 0.5 * half * perlin(br.s / (0.25 * Rd) + br.id * 3.7, idSeed * 0.013, SD.delta + 5)
+                    + 0.5 * perlin(br.s / 70 + br.id * 1.3, idSeed * 0.017 + 5.1, SD.delta + 6);
+                double nx2 = 0, ny2 = 0, hb = 1e9, score = 1e18, vx = 0, vy = 0, r = 0;
+                for (int cnd = -2; cnd <= 2; cnd++) {
+                    double th = th0 + cnd * 0.3;
+                    double hx = fx * Math.cos(th) - fy * Math.sin(th), hy = fx * Math.sin(th) + fy * Math.cos(th);
+                    double cx2 = br.x + hx * step, cy2 = br.y + hy * step;
+                    // keep inside the sector: bearing from the apex clamped to [lo, hi] (with a small margin)
+                    double ux2 = cx2 - ax, uy2 = cy2 - ay, rr = hypot(ux2, uy2);
+                    if (rr > 1e-6) {
+                        double al = ux2 * fx + uy2 * fy, cr = ux2 * fy - uy2 * fx;
+                        double bear = -Math.atan2(cr, al), mg = Math.min(0.03, 0.2 * half);
+                        double bc = clamp(bear, br.lo + mg, br.hi - mg);
+                        if (bc != bear) {
+                            double kx = fx * Math.cos(bc) - fy * Math.sin(bc), ky = fx * Math.sin(bc) + fy * Math.cos(bc);
+                            cx2 = ax + kx * rr;
+                            cy2 = ay + ky * rr;
+                            ux2 = cx2 - ax;
+                            uy2 = cy2 - ay;
+                        }
+                    }
+                    double hc = baseAt(cx2, cy2, p, s);
+                    double sc = Math.max(hc, -6) + 1.5 * Math.abs(cnd); // water is all alike; prefer going straight
+                    if (sc < score) {
+                        score = sc;
+                        hb = hc;
+                        nx2 = cx2;
+                        ny2 = cy2;
+                        vx = ux2;
+                        vy = uy2;
+                        r = rr;
+                    }
+                }
+                if (hb > zS + 25 || br.s > 2.5 * Rd) break; // boxed in by hills (rare), or lost
+                br.s += step;
+                br.x = nx2;
+                br.y = ny2;
+                double w = br.w * (1 - 0.25 * Math.min(1, r / Rd));
+                out.vertex(nx2, ny2, w, zS * Math.max(0, 1 - br.s / Lc), br.s);
+                bx0 = Math.min(bx0, nx2);
+                by0 = Math.min(by0, ny2);
+                bx1 = Math.max(bx1, nx2);
+                by1 = Math.max(by1, ny2);
+                if (hb < -30 || (r > reachR && hb < -2)) break; // off the shelf, or far enough and in the sea
+                if (br.depth < maxDepth && br.s - br.lastSplit > splitAt && r > 0.08 * Rd && br.w > 1.6) {
+                    // split: each child takes the part of the sector on its side of the current bearing
+                    double al = vx * fx + vy * fy, cr = vx * fy - vy * fx, bear = clamp(-Math.atan2(cr, al), br.lo, br.hi);
+                    double cut = clamp(bear, br.lo + 0.3 * (br.hi - br.lo), br.hi - 0.3 * (br.hi - br.lo));
+                    for (int side = 0; side < 2; side++) {
+                        Branch c = new Branch();
+                        c.x = br.x;
+                        c.y = br.y;
+                        c.lo = side == 0 ? br.lo : cut;
+                        c.hi = side == 0 ? cut : br.hi;
+                        c.w = br.w * 0.72;
+                        c.s = br.s;
+                        c.lastSplit = br.s;
+                        c.depth = br.depth + 1;
+                        todo.add(c);
+                    }
+                    split = true;
+                    break;
+                }
+            }
+            // field 4: distance left to the tip of a leaf branch (the plain narrows there), or "no tip"
+            for (int vv = first; vv < out.nv; vv++)
+                out.v[vv * RiverNet.DV + 4] = split ? 1e9f : (float) (br.s - out.v[vv * RiverNet.DV + 4]);
+            out.channel(first, out.nv - first);
+        }
+        if (out.nc == out.mc[q * 2]) { // no branch could leave the apex (hills all around): keep the river as it was
+            for (int sl : marked) skip[sl] = 0;
+            M[b + 4] = 0;
+            return;
+        }
+        double plain = clamp(0.2 * Rd, 30, 260);
+        out.mc[q * 2 + 1] = out.nc - out.mc[q * 2];
+        out.box[q * 5] = (float) (bx0 - plain - wS);
+        out.box[q * 5 + 1] = (float) (by0 - plain - wS);
+        out.box[q * 5 + 2] = (float) (bx1 + plain + wS);
+        out.box[q * 5 + 3] = (float) (by1 + plain + wS);
+        out.box[q * 5 + 4] = (float) plain;
+    }
+
     /** Margin (blocks) around a basin cell: the valley field reaches this far into the neighbours, then fades out. */
     static final double MARGIN = 960;
 
@@ -354,6 +613,31 @@ final class RiverNetBuilder {
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
         }
+        // a small river next to a much larger one sits on its floodplain: no higher than the large river's water there
+        // (+ half a block). Otherwise its last reach would hide its drop under the large river and show it all at once at
+        // the bank (a staircase), or it would run alongside it on a perched terrace.
+        boolean clamped = false;
+        for (int idx = 0; idx < n; idx++) {
+            if (!isRiv[idx]) continue;
+            int ci = idx % nx, cj = (idx - ci) / nx;
+            double px = jx(idx), py = jy(idx), lim = wl[idx];
+            for (int dj = -2; dj <= 2; dj++) for (int di = -2; di <= 2; di++) {
+                int ii = ci + di, jj = cj + dj;
+                if ((di | dj) == 0 || ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                int nb = jj * nx + ii;
+                if (!isRiv[nb] || acc[nb] < 3 * acc[idx] || hw[nb] < 2.5 * hw[idx]) continue;
+                if (hypot(jx(nb) - px, jy(nb) - py) > hw[nb] + 1.2 * g) continue;
+                lim = Math.min(lim, wl[nb] + 0.5);
+            }
+            if (lim < wl[idx]) {
+                wl[idx] = (float) lim;
+                clamped = true;
+            }
+        }
+        if (clamped) for (int k = cnt - 1; k >= 0; k--) {
+            int idx = order[k], r = recv[idx];
+            if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
+        }
         // ...and no reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level of
         // the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
         final double MAX_DROP = 2.5;
@@ -530,13 +814,18 @@ final class RiverNetBuilder {
             mouthsOut[q * RiverNet.MS + 13] = ne - start;
         }
 
+        byte[] skip = new byte[count];
+        DeltaOut dOut = new DeltaOut();
+        for (int q = 0; q < nm; q++) buildDelta(q, mouthsOut, dOut, skip, pts, slot, mainUp, recv, isRiv, acc, hgt, z1, w1,
+            am0, am1, s);
+
         // broad valley field: chamfer distance from every land cell to the nearest river cell
         final double VLIM = 900;
         float[] dd = new float[n];
         Arrays.fill(dd, 1e9f);
         int[] src = new int[n];
         Arrays.fill(src, -1);
-        for (int idx = 0; idx < n; idx++) if (isRiv[idx]) {
+        for (int idx = 0; idx < n; idx++) if (isRiv[idx] && skip[slot[idx]] == 0) { // not the stretch a delta replaced
             dd[idx] = 0;
             src[idx] = idx;
         }
@@ -613,6 +902,11 @@ final class RiverNetBuilder {
         net.mouths = mouthsOut;
         net.nMouth = nm;
         net.estSeg = Arrays.copyOf(estSeg, ne);
+        net.skip = skip;
+        net.dv = Arrays.copyOf(dOut.v, dOut.nv * RiverNet.DV);
+        net.dch = Arrays.copyOf(dOut.ch, dOut.nc * 2);
+        net.dmc = dOut.mc.length == nm * 2 ? dOut.mc : Arrays.copyOf(dOut.mc, nm * 2);
+        net.dbox = dOut.box.length == nm * 5 ? dOut.box : Arrays.copyOf(dOut.box, nm * 5);
         net.vd = vd;
         net.vz = vz;
         net.vw = vw;

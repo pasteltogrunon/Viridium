@@ -83,6 +83,64 @@ class DebugPointTest {
         System.out.println("reaches " + total + ", inside lakes " + inLake);
     }
 
+    /**
+     * Lists confluences of a tributary (half-width >= 3) into a large river (>= 12), worst drop first: the water level
+     * at the end of the tributary versus the main river beside it (VIRIDIUM_CONFLUENCES = half size in blocks).
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CONFLUENCES", matches = ".+")
+    void confluences() {
+        WorldGen gen = new WorldGen(new GenParams());
+        double half = Double.parseDouble(System.getenv("VIRIDIUM_CONFLUENCES"));
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        double B = gen.rivers.basins.size();
+        java.util.List<double[]> out = new java.util.ArrayList<>();
+        GenPoint o = new GenPoint();
+        for (double z = -half; z <= half; z += B / 2) for (double x = -half; x <= half; x += B / 2) {
+            long k = gen.rivers.basins.cellAt(x, z);
+            if (!seen.add(k)) continue;
+            var c = gen.rivers.basins.cell(k);
+            if (c.ocean) continue;
+            var net = gen.rivers.net(c.ci, c.cj);
+            for (int s = 0; s < net.count; s++) {
+                if (net.w1[s] < 3) continue;
+                int q = (s * net.NPT + net.NPT - 1) * 2;
+                double ex = net.pts[q], ey = net.pts[q + 1];
+                // the reach of the river the tributary ends in: nearest other reach that is much wider
+                int i = (int) Math.floor((ex - net.x0) / net.g), j = (int) Math.floor((ey - net.y0) / net.g);
+                double bestD = 1e9, mainZ = 0, mainW = 0;
+                for (int dj = -2; dj <= 2; dj++) for (int di = -2; di <= 2; di++) {
+                    int ii = i + di, jj = j + dj;
+                    if (ii < 0 || jj < 0 || ii >= net.nx || jj >= net.ny) continue;
+                    int sl = net.slot[jj * net.nx + ii];
+                    if (sl < 0 || sl == s || net.w1[sl] < 12 || net.w1[sl] < 3 * net.w1[s]) continue;
+                    for (int t = 0; t < net.NPT; t++) {
+                        int qq = (sl * net.NPT + t) * 2;
+                        double d = Math.hypot(net.pts[qq] - ex, net.pts[qq + 1] - ey);
+                        if (d < bestD) {
+                            bestD = d;
+                            double u = (double) t / (net.NPT - 1);
+                            mainZ = net.z0[sl] + (net.z1[sl] - net.z0[sl]) * u;
+                            mainW = net.w0[sl] + (net.w1[sl] - net.w0[sl]) * u;
+                        }
+                    }
+                }
+                if (bestD > 20) continue;
+                out.add(new double[] { net.z0[s] - mainZ, ex, ey, net.w1[s], mainW, net.z0[s], net.z1[s], mainZ });
+            }
+        }
+        out.sort((p, r) -> Double.compare(r[0], p[0]));
+        System.out.println("confluences: " + out.size());
+        for (int n = 0; n < Math.min(12, out.size()); n++) {
+            double[] v = out.get(n);
+            System.out.printf("  drop %.1f at %.0f,%.0f trib hw %.1f main hw %.1f, trib z %.1f..%.1f main z %.1f%n", v[0], v[1],
+                v[2], v[3], v[4], v[5], v[6], v[7]);
+        }
+        int nb = 0;
+        for (double[] v : out) if (v[0] > 3) nb++;
+        System.out.println("  drop > 3 blocks over the last reach: " + nb);
+    }
+
     /** Lists the river reaches of every basin net within r blocks of a point (VIRIDIUM_REACHES = "x,z,r"). */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_REACHES", matches = ".+")
@@ -96,6 +154,19 @@ class DebugPointTest {
             var net = gen.rivers.net(c.ci, c.cj);
             System.out.printf("basin %d,%d outlet=%b terminal=%b L=%.2f reaches %d lakes %d exit %s%n", c.ci, c.cj, c.outlet,
                 c.terminal, c.L, net.count, net.lakes.size(), net.exitLevel);
+            for (int q = 0; q < net.nMouth; q++) {
+                int c0 = net.dmc[q * 2], ncn = net.dmc[q * 2 + 1];
+                if (ncn == 0) continue;
+                System.out.printf("  delta of mouth %d: R %.0f, plain %.0f, %d branches%n", q, net.mouths[q * net.MS + 4],
+                    net.dbox[q * 5 + 4], ncn);
+                for (int cc = c0; cc < c0 + ncn; cc++) {
+                    int v0 = net.dch[cc * 2], vn = net.dch[cc * 2 + 1], D = net.DV;
+                    int a0 = v0 * D, a1 = (v0 + vn - 1) * D;
+                    System.out.printf("    branch %d: %d vertices (%.0f,%.0f)->(%.0f,%.0f) w %.1f->%.1f z %.1f->%.1f tip %.0f%n", cc,
+                        vn, net.dv[a0], net.dv[a0 + 1], net.dv[a1], net.dv[a1 + 1], net.dv[a0 + 2], net.dv[a1 + 2],
+                        net.dv[a0 + 3], net.dv[a1 + 3], net.dv[a0 + 4]);
+                }
+            }
             int shown = 0;
             for (int s = 0; s < net.count && shown < 40; s++) {
                 int q = (s * net.NPT + net.NPT / 2) * 2;
@@ -108,6 +179,75 @@ class DebugPointTest {
                     net.acc[s], net.head[s]);
             }
         }
+    }
+
+    /**
+     * Block-resolution picture of the generated water around a point (VIRIDIUM_WATERPNG = "x,z,half"): ground shaded
+     * by height, water coloured by its level (bands every block), red where a water column stands 1+ blocks above a
+     * neighbouring water column, magenta where it stands above dry ground. Written to build/reports/map/water_x_z.png.
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_WATERPNG", matches = ".+")
+    void waterPicture() throws java.io.IOException {
+        WorldGen gen = new WorldGen(new GenParams());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+            net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
+        String[] a = System.getenv("VIRIDIUM_WATERPNG").split(",");
+        int cx = Integer.parseInt(a[0]), cz = Integer.parseInt(a[1]), half = Integer.parseInt(a[2]);
+        int n = 2 * half;
+        int[] surf = new int[(n + 2) * (n + 2)], wat = new int[(n + 2) * (n + 2)];
+        java.util.Map<Long, net.junedev.viridium.worldgen.terrain.column.ColumnPlan> plans = new java.util.HashMap<>();
+        int x0 = cx - half - 1, z0 = cz - half - 1;
+        for (int j = 0; j < n + 2; j++) for (int i = 0; i < n + 2; i++) {
+            int bx = x0 + i, bz = z0 + j;
+            long key = ((long) (bx >> 4) << 32) | ((bz >> 4) & 0xffffffffL);
+            var p = plans.computeIfAbsent(key, k -> planner.plan(bx >> 4, bz >> 4));
+            int idx = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.index(bx & 15, bz & 15);
+            surf[j * (n + 2) + i] = p.surfaceY[idx];
+            wat[j * (n + 2) + i] = p.waterY[idx];
+        }
+        final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE, W = n + 2;
+        var img = new java.awt.image.BufferedImage(n, n, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        int steps = 0, walls = 0;
+        for (int j = 1; j <= n; j++) for (int i = 1; i <= n; i++) {
+            int k = j * W + i, s = surf[k], w = wat[k];
+            int c;
+            if (w == NONE || w <= s) {
+                int hs = surf[k - 1] - surf[k + 1] + surf[k - W] - surf[k + W];
+                int g = Math.max(30, Math.min(230, 120 + (s - 63) / 2 + hs * 12));
+                c = (g << 16) | (Math.min(255, g + 20) << 8) | g;
+            } else {
+                int band = ((w % 4) + 4) % 4;
+                c = new int[] { 0x1e50c8, 0x2a6ae0, 0x3a84f0, 0x5aa0ff }[band];
+                if (w <= 63) c = 0x103070;
+                boolean step = false, wall = false;
+                for (int d : new int[] { 1, -1, W, -W }) {
+                    int wn = wat[k + d], sn = surf[k + d];
+                    if (wn != NONE && wn > sn) {
+                        if (w - wn >= 1) step = true;
+                    } else if (w > sn) {
+                        wall = true;
+                        if (walls < 6) System.out.printf("  wall at %d,%d water %d, dry neighbour %d,%d top %d%n",
+                            x0 + i, z0 + j, w, x0 + i + (d == 1 ? 1 : d == -1 ? -1 : 0),
+                            z0 + j + (d == W ? 1 : d == -W ? -1 : 0), sn);
+                    }
+                }
+                if (step) {
+                    c = 0xff3030;
+                    steps++;
+                }
+                if (wall) {
+                    c = 0xff30ff;
+                    walls++;
+                }
+            }
+            img.setRGB(i - 1, j - 1, c);
+        }
+        java.io.File dir = new java.io.File("build/reports/map");
+        dir.mkdirs();
+        java.io.File f = new java.io.File(dir, "water_" + cx + "_" + cz + ".png");
+        javax.imageio.ImageIO.write(img, "png", f);
+        System.out.println("water picture " + f + ": step edges " + steps + ", walls " + walls);
     }
 
     /** Times map tiles per layer and level, cold and warm (VIRIDIUM_MAPTIME = "layer,level,tx,tz"). */

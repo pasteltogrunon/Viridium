@@ -33,6 +33,16 @@ public final class RiverNet {
     public int nMouth;
     /** Reaches that belong to estuaries. */
     public int[] estSeg;
+    /**
+     * Delta distributaries: vertices (x, y, half-width, water level, distance to the branch tip or 1e9), {@link #DV}
+     * floats each; channels as (first vertex, vertex count) pairs; per mouth its channels (first, count) and its box
+     * (x0, y0, x1, y1, plain radius).
+     */
+    public float[] dv = new float[0], dbox = new float[0];
+    public int[] dch = new int[0], dmc = new int[0];
+    public static final int DV = 5;
+    /** Reaches replaced by a delta (the main stem between the delta apex and the old mouth). */
+    public byte[] skip;
     /** Valley field: distance to nearest river (65535 = none), its bed height ×16, width ×10, meander ×4, relief /2. */
     public char[] vd;
     public short[] vz;
