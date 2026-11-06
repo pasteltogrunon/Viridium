@@ -300,6 +300,26 @@ public class WorldMapScreen extends GuiScreen {
         else drawInspector(mouseX, mouseY);
     }
 
+    /** Coarser levels rendered first (relative to the view's level), ending with the view's level itself. */
+    private static final int[] LOD_STEPS = { 4, 3, 0 };
+    private static final int MAX_LEVEL = 16;
+
+    /** Tiles of a level covering a view rectangle, nearest to the map centre first. */
+    private List<MapTileCache.Key> tilesInView(MapLayer layer, int level, double x0, double z0, double x1, double z1) {
+        double tileBlocks = MapTileCache.TILE * Math.scalb(1.0, level);
+        int tx0 = (int) Math.floor(x0 / tileBlocks), tx1 = (int) Math.floor(x1 / tileBlocks);
+        int tz0 = (int) Math.floor(z0 / tileBlocks), tz1 = (int) Math.floor(z1 / tileBlocks);
+        double ctx = centerX / tileBlocks, ctz = centerZ / tileBlocks;
+        List<MapTileCache.Key> keys = new ArrayList<>();
+        for (int tz = tz0; tz <= tz1; tz++) for (int tx = tx0; tx <= tx1; tx++)
+            keys.add(new MapTileCache.Key(layer.id, borders, level, tx, tz));
+        keys.sort(
+            (a, b) -> Double.compare(
+                sq(a.tx() + 0.5 - ctx) + sq(a.tz() + 0.5 - ctz),
+                sq(b.tx() + 0.5 - ctx) + sq(b.tz() + 0.5 - ctz)));
+        return keys;
+    }
+
     private void drawTiles() {
         MapLayer layer = MapLayer.byId(layerId);
         double bpu = bpu();
@@ -307,18 +327,24 @@ public class WorldMapScreen extends GuiScreen {
         int level = Math.max(0, Math.min(16, (int) Math.floor(Math.log(zoom) / Math.log(2) + 1e-9)));
         double tileBlocks = MapTileCache.TILE * Math.scalb(1.0, level);
         double x0 = worldX(0), z0 = worldZ(0), x1 = worldX(width), z1 = worldZ(height);
-        int tx0 = (int) Math.floor(x0 / tileBlocks), tx1 = (int) Math.floor(x1 / tileBlocks);
-        int tz0 = (int) Math.floor(z0 / tileBlocks), tz1 = (int) Math.floor(z1 / tileBlocks);
-        double ctx = centerX / tileBlocks, ctz = centerZ / tileBlocks;
 
-        List<MapTileCache.Key> want = new ArrayList<>();
-        for (int tz = tz0; tz <= tz1; tz++) for (int tx = tx0; tx <= tx1; tx++)
-            want.add(new MapTileCache.Key(layer.id, borders, level, tx, tz));
-        want.sort(
-            (a, b) -> Double.compare(
-                sq(a.tx() + 0.5 - ctx) + sq(a.tz() + 0.5 - ctz),
-                sq(b.tx() + 0.5 - ctx) + sq(b.tz() + 0.5 - ctz)));
-        cache.request(want);
+        List<MapTileCache.Key> want = tilesInView(layer, level, x0, z0, x1, z1);
+        // progressive detail: the whole view at 1/16 and 1/8 resolution first (a handful of tiles), then the real
+        // level. A finer pass only starts once every tile of the coarser one is on screen.
+        List<MapTileCache.Key> queue = new ArrayList<>();
+        for (int up : LOD_STEPS) {
+            int lv = level + up;
+            if (lv > MAX_LEVEL) continue;
+            List<MapTileCache.Key> pass = up == 0 ? want : tilesInView(layer, lv, x0, z0, x1, z1);
+            queue.addAll(pass);
+            boolean complete = true;
+            for (MapTileCache.Key k : pass) if (!cache.has(k)) {
+                complete = false;
+                break;
+            }
+            if (!complete) break;
+        }
+        cache.request(queue);
 
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glColor4f(1, 1, 1, 1);
