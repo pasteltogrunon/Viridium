@@ -8,6 +8,8 @@ Code: `stages/BasinGraph.java`, `RiverNet.java`, `RiverNetBuilder.java`, `RiverS
 
 This page is the hub of the rivers section. This stage generates **rivers, lakes and salt flats, broad valleys, gorges, glacial troughs and fjords, deltas and estuaries**. It is by far the largest and most delicate part of the generator.
 
+Rivers that cross a cliff fall over it: see [[Landforms Overview|Waterfalls]] (lip, plunge pool, curtain of falling water).
+
 ## Why rivers are hard
 
 Every other stage is local: the value at (x, z) only depends on noise around (x, z). A river is not: whether there is a river here, how wide it is and at what level its water stands depend on **everything upstream**, possibly thousands of blocks away, and on where it ends, possibly thousands of blocks downstream. At the same time the world is infinite, generated in any order, on several threads, and must be identical every time.

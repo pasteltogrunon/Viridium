@@ -12,6 +12,8 @@ How the 2D pipeline output becomes blocks in a Cubic Chunks world. The order is:
 | [[Flora]] | trees and plants planned per column and drawn into each cube as it is generated |
 | [[Cubic Chunks Integration]] | world type, generator, background prefetch of plans and river networks, `/viridium` commands |
 
+Cliff detail (the notch at the foot of a cliff, talus, fallen boulders, falling water at river lips) is computed from the plans of a column and its neighbours and drawn by cube filling and flora: see [[Landforms Overview|Cliff Detail]].
+
 ## Design notes
 
 The crust follows the design in [[Geology]]; vegetation follows [[Ecology]].

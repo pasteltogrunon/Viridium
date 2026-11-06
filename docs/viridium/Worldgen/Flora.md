@@ -27,3 +27,7 @@ for trees, sand for palms and cacti.
 feature's shape depends only on its own seed, and `BlockSink` clips it to the cube, so the same tree comes out identical
 whichever cube draws which part. The largest feature reach is 7 blocks horizontally and 32 vertically, so 3×3 columns
 always cover it. Leaves stay within 4 blocks of a log so they decay normally.
+
+## Boulders and talus
+
+`FloraPlanner.setCliffs` gives the planner the [[Landforms Overview|Cliff Detail]]: nothing grows on talus, and `BOULDER` features (rough ellipsoids of the local rock, half buried) fall within 10 blocks of the foot of walls. Boulders draw through `FloraSink.rock`, which also replaces water.

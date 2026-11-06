@@ -45,3 +45,7 @@ the output.
 | `MIN_Y` | −2048 (bottom of the deep crust; one bedrock cube below) |
 | `MAX_Y` | 1024 |
 | `SURFACE_RULE_DEPTH` | 10 |
+
+## Waterfalls
+
+`fallTop[i]` is the top of a waterfall curtain above the water of the column (`NONE` otherwise) and `F_FALL` marks the columns within a few blocks of a waterfall lip; `maxTopY` includes curtains. See [[Landforms Overview|Waterfalls]].

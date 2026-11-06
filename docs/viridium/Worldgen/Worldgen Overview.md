@@ -14,13 +14,14 @@ The work is split in three layers:
 
 ## How the documentation is organised
 
-The pages are grouped into four sections. Each section has a hub page that lists its pages, and each page links to the pages of its own section that it draws on. When a page relies on something from another section, the link goes to that section's hub instead, so the sections stay readable as separate clusters in the graph view.
+The pages are grouped into five sections. Each section has a hub page that lists its pages, and each page links to the pages of its own section that it draws on. When a page relies on something from another section, the link goes to that section's hub instead, so the sections stay readable as separate clusters in the graph view.
 
 | Section | Hub | Covers |
 |---|---|---|
 | Foundations | [[Worldgen Foundations]] | how the pipeline is wired (`WorldGen`, `GenPoint`, stages, parameters, seeds) and the noise and math helpers every stage uses |
 | 2D pipeline stages | [[Worldgen Stages]] | every stage from base climate to biomes, except rivers |
 | Rivers | [[Rivers Overview]] | stage 10: drainage basins, per-basin networks, water levels, meanders, lakes, deltas, estuaries, valleys |
+| Landforms | [[Landforms Overview]] | plateaus and mesas, sea cliffs, continental rifts, waterfalls, and the notch, talus and boulders at the foot of cliffs |
 | Blocks and chunks | [[Blocks and Chunks]] | from pipeline output to blocks: 3D crust, column plans, cube filling, flora, Cubic Chunks wiring |
 
 ```mermaid

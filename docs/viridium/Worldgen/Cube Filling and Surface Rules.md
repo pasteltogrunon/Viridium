@@ -39,3 +39,7 @@ any cube can be painted on its own.
   on peaks and slopes, podzol patches in taiga, coarse dirt in savanna, grass + dirt elsewhere, with varying depth.
 - Steep ground (`slope > 0.7`): only one block of soil.
 - Snow layers only where `T < −0.5`, and only on an opaque non-ice block (a snow layer on ice breaks and cascades).
+
+## Cliffs and waterfalls
+
+After the column fill, `cliff(...)` applies the [[Landforms Overview|Cliff Detail]] of the column: notches (air, or water below the level of a wet foot; never under loose soil), talus (cobblestone, gravel or mossy cobblestone on top) and curtains of falling water. A cube that a notch or talus reaches is filled even if it would be crust-only or air. `ColumnPlan.fallTop` adds the curtain of a waterfall (`flowing_water` meta 8, ice when frozen) above the water of the column.

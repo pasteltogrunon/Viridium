@@ -27,3 +27,8 @@ h      = h0 + raw·amount
 ## Why it matters for rivers
 
 The river networks are computed on the smooth base relief (fast, coarse), but their **water levels** and **lake levels** are measured on the terrain after this stage (`Stage.EROSION`), because that is what the player sees. See River Water Levels.
+
+## Escarpments and mesas
+
+- The amount is multiplied by `1 − scarp`: next to a plateau scarp, a sea cliff or a rift fault the lattice gradient is smeared over ~20 blocks and would dig a moat along the foot (or leave a lip along the top). See [[Landforms Overview|Plateaus and Mesas]].
+- `mesas`: in arid land on sedimentary rock, slopes are terraced in 12-block steps with steep risers (mesas, buttes, ledges). `GenPoint.mesa` stores its weight.

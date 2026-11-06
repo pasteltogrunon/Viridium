@@ -45,3 +45,13 @@ Where `arc > 0.02`: islands at sea and volcanoes on the coast, `−75 + 150·isl
 ## Hotspots
 
 Finally `VolcanismStage.apply` raises the height with nearby hotspot volcanoes. See [[Volcanism]].
+
+## Landforms
+
+Three landforms are added to the base height here, each described in the landforms section:
+
+- **plateaus** on land (`plateau`, `plateauTop`): a masked step to a flat top 60–150 blocks up, basalt traps in three ledges ([[Landforms Overview|Plateaus and Mesas]]);
+- **sea cliffs** (`coastalCliff`): rocky coasts standing 14–60 blocks above the sea ([[Landforms Overview|Sea Cliffs]]);
+- **rift graben** (`rift`, geometry from [[Continents]]): fault scarps, shoulders, sills and basins along the floor, volcanoes ([[Landforms Overview|Continental Rifts]]).
+
+All three set `scarp` near their edge, which [[Erosion]] uses to leave the scarps alone.

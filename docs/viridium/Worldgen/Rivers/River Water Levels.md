@@ -91,3 +91,7 @@ confluences.
 
 At runtime the water surface is further limited to the terrain (`riverWL = min(h, surface)`, the water fills the
 channel up to its bank, never above it). See River Stage Evaluation.
+
+## Waterfalls
+
+Main-stem edges that drop 6+ blocks across a cliff (found only near a scarp, with terrain samples along the edge) skip the drop limit: the river keeps its level up to the lip and the reaches join there, the one below at the level of its pool. See [[Landforms Overview|Waterfalls]].

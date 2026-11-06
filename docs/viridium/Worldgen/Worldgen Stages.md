@@ -1,6 +1,6 @@
 # Worldgen Stages
 
-Back to [[Worldgen Overview]] · built on [[Worldgen Foundations]] · rivers (stage 10) have their own section: [[Rivers Overview]] · the output feeds [[Blocks and Chunks]].
+Back to [[Worldgen Overview]] · built on [[Worldgen Foundations]] · rivers (stage 10) have their own section: [[Rivers Overview]] · landforms built into stages 5, 6 and 9 (plateaus, sea cliffs, rifts, mesas) have theirs: [[Landforms Overview]] · the output feeds [[Blocks and Chunks]].
 
 The 2D pipeline stages, in evaluation order. Each one reads what the previous ones wrote into the shared `GenPoint` and adds its own fields.
 

@@ -31,3 +31,7 @@ L = c − (1 − size) + n
 
 - `L ≤ edge / (0.12·plateSize) − 0.5`: there is **always ocean next to a plate boundary** (ridges and trenches are underwater).
 - Except at collisions: where `collZ > 0`, `L` is blended towards `0.4 + 0.8·n`, so two continents fuse across the suture (Himalaya-like ranges sit on land).
+
+## Rifts
+
+`rift` (after the collision blend) gives some continents a rift line through their interior and stores its geometry (`rift`, `riftD`, `riftU`, `riftType`) for [[Relief]]. A mature rift lowers `L` inside its graben to −0.08: a narrow sea. See [[Landforms Overview|Continental Rifts]].

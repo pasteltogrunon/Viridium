@@ -181,6 +181,32 @@ flattened the whole area). A river starts at `riverStart` (1.6) times the thresh
 Scales: plates/continents `plateSize` 12000, temperature period 48000, precipitation period 36000 (3× the prototype;
 `ParityTest` sets the prototype values back).
 
+## Landforms
+
+Documented in the Obsidian vault (`docs/viridium/Worldgen/Landforms`); all Java-only, each off with its `GenParams`
+value at 0 (`ParityTest` turns them off):
+
+- **Plateaus** (`plateaus`, `plateauHeight`): tablelands 60–150 blocks above the plains behind an escarpment of ~15–20
+  blocks; basalt traps climb in three ledges and turn the rock to basalt. The mask is lowered towards coasts and
+  collisions, so plateaus end inland with their scarp. **Mesas** (`mesas`): arid sedimentary slopes terraced in 12-block
+  steps.
+- **Sea cliffs** (`cliffs`): about a third of the coast stands 14–60 blocks above the sea and drops in ~5 blocks; coves
+  open pocket beaches.
+- **Continental rifts** (`rifts`, `riftDepth`): some continents split along a meandering line: a graben 600–960 blocks
+  wide between fault scarps and raised shoulders; young ones with lakes and volcanoes, failed ones worn down, mature
+  ones a narrow sea.
+- **Cliff detail** (`cliffDetail`, `column/CliffDetail`): from the planned heights of a column and its neighbours, the
+  real foot of every wall gets a notch (flooded at the water line at the sea, above the talus on land), a talus cone and
+  fallen boulders of the local rock (`FeatureType.BOULDER`).
+- **Waterfalls** (`waterfalls`): main stems that drop 6+ blocks across a cliff (only near a scarp) keep their level to
+  the lip; the reaches join there, the lower one digs a plunge pool and never cuts back behind the lip; curtains of
+  falling water (`flowing_water` meta 8) from the plan (`fallTop`) and at every river lip standing 3+ blocks above a
+  neighbour.
+
+Scarps set `GenPoint.scarp`: erosion leaves them alone (its lattice gradient dug a moat along their foot or a rim along
+their top). Map layer **Landforms**; debug: `VIRIDIUM_PROFILE`, `VIRIDIUM_CLIFF`, `VIRIDIUM_FALLMAP`; tests:
+`CliffDetailTest`, `WaterfallTest` (`RiverWaterTest` skips waterfall zones).
+
 ## Memory
 
 `VIRIDIUM_MEM=1 ./gradlew cleanTest test --tests '*MemoryAuditTest'` fills every cache as a long session would
