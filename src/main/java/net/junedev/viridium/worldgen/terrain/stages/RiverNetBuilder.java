@@ -511,6 +511,7 @@ final class RiverNetBuilder {
         float[] inflow = new float[n];
         float[] rkey = new float[n]; // routing bias: makes the flow converge on smooth slopes and flats
         byte[] cer = new byte[n];
+        final float[] scarpG = new float[n]; // nearness to a cliff (plateau scarp, rift fault, sea cliff): waterfall sites
         final boolean serial = RiverStage.serialBuilds(); // background callers keep to their own thread
         // this network needs the exits of its upstream basins and the deltas of its lower-coloured coastal neighbours,
         // which need theirs in turn: build the missing ones side by side instead of one after another (a whole river
@@ -559,6 +560,7 @@ final class RiverNetBuilder {
                     continue;
                 }
                 hgt[idx] = (float) hb;
+                scarpG[idx] = (float) rt.scarp;
                 rkey[idx] = (float) (P.riverRouteNoise * Noise.fbm(x / 450, y / 450, SD.basinW + 7, 3));
                 rt.h0 = hgt[idx];
                 gen.geology.apply(x, y, rt, rs);
@@ -788,11 +790,16 @@ final class RiverNetBuilder {
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
         }
-        // ...and no reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level of
-        // the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
+        // waterfalls: where the main stem crosses a cliff (plateau scarp, rift fault, sea cliff) it keeps its level up to
+        // the lip and drops there, instead of being lowered upstream into a gorge
+        final float[] fallDrop = new float[n], fallT = new float[n];
+        findFalls(wl, recv, isRiv, mainUp, hgt, scarpG, n, fallDrop, fallT, serial);
+        // ...and no other reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level
+        // of the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
         final double MAX_DROP = 2.5;
         for (int k = 0; k < cnt; k++) {
             int idx = order[k], r = recv[idx];
+            if (fallDrop[idx] > 0) continue;
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] > wl[r] + MAX_DROP) wl[idx] = (float) (wl[r] + MAX_DROP);
         }
 
@@ -815,6 +822,8 @@ final class RiverNetBuilder {
         float[] w0 = new float[count], w1 = new float[count], z0 = new float[count], z1 = new float[count],
             sacc = new float[count];
         float[] ph0 = new float[count], ph1 = new float[count], am0 = new float[count], am1 = new float[count];
+        float[] fallIn = new float[count];
+        byte[] lipOut = new byte[count];
         float[] aUp = new float[count], cellA = new float[n];
         byte[] head = new byte[count];
         double[] BX = new double[NPT], BY = new double[NPT], TX = new double[NPT], TY = new double[NPT],
@@ -830,18 +839,21 @@ final class RiverNetBuilder {
             slot[idx] = sl;
             double ax = jx(idx), ay = jy(idx);
             int mu = mainUp[idx];
-            double sx = mu >= 0 ? (ax + jx(mu)) * 0.5 : ax, sy = mu >= 0 ? (ay + jy(mu)) * 0.5 : ay;
+            // reaches join halfway between nodes, or at the lip of a waterfall (the step of the terrain)
+            double fu = mu >= 0 && fallDrop[mu] > 0 ? fallT[mu] : 0.5;
+            double sx = mu >= 0 ? jx(mu) + fu * (ax - jx(mu)) : ax, sy = mu >= 0 ? jy(mu) + fu * (ay - jy(mu)) : ay;
+            double fe = fallDrop[idx] > 0 ? fallT[idx] : 0.5;
             double ex, ey, A1, P1, M1;
             if (!isRiv[r]) { // mouth, or the exit node on the divide (no meander there: the next basin starts on it)
-                ex = jx(r);
-                ey = jy(r);
-                A1 = hgt[r] < 0 ? ampAt(idx, r, filled, isRiv, hw, straight, AMAX, MA) : 0;
+                ex = fallDrop[idx] > 0 ? ax + fe * (jx(r) - ax) : jx(r); // a fall into the sea ends at its lip
+                ey = fallDrop[idx] > 0 ? ay + fe * (jy(r) - ay) : jy(r);
+                A1 = hgt[r] < 0 && fallDrop[idx] == 0 ? ampAt(idx, r, filled, isRiv, hw, straight, AMAX, MA) : 0;
                 P1 = 0;
                 M1 = 0;
             } else if (mainUp[r] == idx) { // main stem
                 int sr = slot[r];
-                ex = (ax + jx(r)) * 0.5;
-                ey = (ay + jy(r)) * 0.5;
+                ex = ax + fe * (jx(r) - ax);
+                ey = ay + fe * (jy(r) - ay);
                 A1 = aUp[sr];
                 P1 = ph0[sr];
                 M1 = am0[sr];
@@ -853,7 +865,7 @@ final class RiverNetBuilder {
                 P1 = ((double) ph0[sr] + ph1[sr]) * 0.5;
                 M1 = ((double) am0[sr] + am1[sr]) * 0.5;
             }
-            double A0 = mu >= 0 ? ampAt(mu, idx, filled, isRiv, hw, straight, AMAX, MA) : 0;
+            double A0 = mu >= 0 && fallDrop[mu] == 0 ? ampAt(mu, idx, filled, isRiv, hw, straight, AMAX, MA) : 0;
             aUp[sl] = (float) A0;
             head[sl] = (byte) (mu < 0 && !entry[idx] ? 1 : 0);
             cellA[idx] = (float) Math.max(A0, A1);
@@ -913,13 +925,16 @@ final class RiverNetBuilder {
                     Math.max(Math.abs(by0 - cyc), Math.abs(by1 - cyc))));
             w0[sl] = mu >= 0 ? hw[mu] : entry[idx] ? hw[idx] : 0.6f;
             w1[sl] = hw[idx];
-            z0[sl] = mu >= 0 ? (float) (0.5 * ((double) wl[mu] + wl[idx])) : wl[idx];
-            z1[sl] = !isRiv[r] ? (hgt[r] < 0 ? 0 : wl[r])
+            // a waterfall: the reach above keeps its level to the lip, the one below starts at the level of the pool
+            z0[sl] = mu >= 0 && fallDrop[mu] == 0 ? (float) (0.5 * ((double) wl[mu] + wl[idx])) : wl[idx];
+            fallIn[sl] = mu >= 0 ? fallDrop[mu] : 0;
+            lipOut[sl] = (byte) (fallDrop[idx] > 0 ? (isRiv[r] ? 1 : 2) : 0); // 2: falls into the sea
+            z1[sl] = fallDrop[idx] > 0 ? wl[idx] : !isRiv[r] ? (hgt[r] < 0 ? 0 : wl[r])
                 : mainUp[r] == idx ? (float) (0.5 * ((double) wl[idx] + wl[r]))
                     : (float) (0.5 * ((double) z0[slot[r]] + z1[slot[r]]));
             sacc[sl] = (float) (acc[idx] / thr);
             // mouth: sediment (flow × basin relief) vs tide decides delta or estuary
-            if (!isRiv[r] && hgt[r] < 0 && sacc[sl] >= 3) {
+            if (!isRiv[r] && hgt[r] < 0 && sacc[sl] >= 3 && fallDrop[idx] == 0) { // a fall into the sea has no mouth
                 double ux = ex - ax, uy = ey - ay;
                 double l = hypot(ux, uy);
                 if (l == 0) l = 1;
@@ -1023,6 +1038,24 @@ final class RiverNetBuilder {
                 }
             }
         }
+        // below a waterfall the valley belongs to the pool only on low ground: cells up at the level of the lip take the
+        // river above the fall (otherwise the valley of the pool would cut a ramp into the cliff behind the lip)
+        int[] poolTop = null; // river nodes just below a fall → the node at its lip
+        for (int idx = 0; idx < n; idx++) {
+            if (fallDrop[idx] <= 0) continue;
+            if (poolTop == null) {
+                poolTop = new int[n];
+                Arrays.fill(poolTop, -1);
+            }
+            int b = recv[idx];
+            for (int step = 0; step < 4 && b >= 0 && isRiv[b]; step++, b = recv[b]) if (poolTop[b] < 0) poolTop[b] = idx;
+        }
+        if (poolTop != null) for (int c = 0; c < n; c++) {
+            int top = src[c] >= 0 ? poolTop[src[c]] : -1;
+            if (top < 0 || hgt[c] < wl[top] - 0.3 * fallDrop[top]) continue;
+            src[c] = top;
+            dd[c] = (float) hypot(jx(c) - jx(top), jy(c) - jy(top));
+        }
         // local relief around each river cell: is the valley boxed in by mountains (glacial trough) or open?
         float[] lrel = new float[n];
         for (int idx = 0; idx < n; idx++) {
@@ -1077,6 +1110,8 @@ final class RiverNetBuilder {
         net.nMouth = nm;
         net.estSeg = Arrays.copyOf(estSeg, ne);
         net.skip = skip;
+        net.fallIn = fallIn;
+        net.lipOut = lipOut;
         net.dv = Arrays.copyOf(dOut.v, dOut.nv * RiverNet.DV);
         net.dch = Arrays.copyOf(dOut.ch, dOut.nc * 2);
         net.dmc = dOut.mc.length == nm * 2 ? dOut.mc : Arrays.copyOf(dOut.mc, nm * 2);
@@ -1093,6 +1128,55 @@ final class RiverNetBuilder {
         for (int q = 0; q < net.lakeIdx.length; q++) net.lakeLv[q] = lakes.get(net.lakeIdx[q]);
         net.bytes = 4L * n + 2L * n * 2 + 4L * n + (long) pts.length * 4 + (long) count * 4 * 14 + lakes.size() * 48L;
         return net;
+    }
+
+    /** Smallest drop (blocks) of a waterfall. */
+    static final double MIN_FALL = 6;
+
+    /**
+     * Waterfalls on the main stems: an edge to the next node (or to the sea) whose water drops at least MIN_FALL blocks
+     * and whose terrain does it in one step (a plateau scarp, a rift fault, a sea cliff: the largest step between samples
+     * 4-6 blocks apart is at least 40 % of the drop and 5 blocks). Tributaries keep their gentle descent to the main
+     * river (confluences are handled by the drop limit). Records the drop and where the lip is along the edge.
+     */
+    private void findFalls(float[] wl, int[] recv, boolean[] isRiv, int[] mainUp, float[] hgt, float[] scarpG, int n,
+        float[] fallDrop, float[] fallT, boolean serial) {
+        if (P.waterfalls <= 0) return;
+        final int N = 8;
+        // candidates first (cheap), then the terrain samples of each in parallel
+        int[] cand = new int[n];
+        int nc = 0;
+        for (int idx = 0; idx < n; idx++) {
+            if (!isRiv[idx]) continue;
+            int r = recv[idx];
+            if (r < 0) continue;
+            boolean sea = hgt[r] < 0;
+            if (!sea && (!isRiv[r] || mainUp[r] != idx)) continue;
+            if (Math.max(scarpG[idx], scarpG[r]) < 0.15) continue; // falls only where a cliff is near
+            if (wl[idx] - (sea ? 0 : wl[r]) < MIN_FALL / P.waterfalls) continue;
+            cand[nc++] = idx;
+        }
+        final int[] C = cand;
+        par(java.util.stream.IntStream.range(0, nc), serial).forEach(ci -> {
+            int idx = C[ci], r = recv[idx];
+            boolean sea = hgt[r] < 0;
+            double drop = wl[idx] - (sea ? 0 : wl[r]);
+            GenScratch s = null;
+            double ax = jx(idx), ay = jy(idx), bx = jx(r), by = jy(r);
+            double prev = finalHeight(ax, ay, s), best = 0;
+            int bk = -1;
+            for (int k = 1; k <= N; k++) {
+                double h = finalHeight(ax + (bx - ax) * k / N, ay + (by - ay) * k / N, s);
+                if (prev - h > best) {
+                    best = prev - h;
+                    bk = k;
+                }
+                prev = h;
+            }
+            if (bk < 0 || best < Math.max(5, 0.4 * drop)) return;
+            fallDrop[idx] = (float) drop;
+            fallT[idx] = (float) ((bk - 0.5) / N);
+        });
     }
 
     private final ThreadLocal<GenPoint> finalPoint = ThreadLocal.withInitial(GenPoint::new);

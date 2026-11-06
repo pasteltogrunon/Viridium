@@ -43,6 +43,15 @@ class RiverWaterTest {
         return p.waterY[i] != ColumnPlan.NONE ? Math.max(p.waterY[i], p.surfaceY[i]) : p.surfaceY[i];
     }
 
+    /** True near a waterfall (its lip, curtain and pool are steps by design). */
+    private boolean nearFall(int x, int z) {
+        for (int dz = -4; dz <= 4; dz++) for (int dx = -4; dx <= 4; dx++) {
+            ColumnPlan p = plan((x + dx) >> 4, (z + dz) >> 4);
+            if (p.has(ColumnPlan.index((x + dx) & 15, (z + dz) & 15), ColumnPlan.F_FALL)) return true;
+        }
+        return false;
+    }
+
     @Test
     void riverWaterStaysInItsChannel() {
         WorldGen gen = new WorldGen(new GenParams());
@@ -72,6 +81,7 @@ class RiverWaterTest {
                     int i = ColumnPlan.index(bx & 15, bz & 15);
                     if (!p.has(i, ColumnPlan.F_RIVER) || p.waterY[i] == ColumnPlan.NONE) continue;
                     if (p.surfaceY[i] < TerrainLayout.SEA_LEVEL - 1) continue; // drowned in the sea
+                    if (nearFall(bx, bz)) continue;
                     riverCols++;
                     int w = p.waterY[i];
                     depthSum += w - p.surfaceY[i];

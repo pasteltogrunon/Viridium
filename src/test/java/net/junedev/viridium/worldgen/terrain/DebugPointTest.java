@@ -327,6 +327,33 @@ class DebugPointTest {
         }
     }
 
+    /** Plan view around a waterfall: VIRIDIUM_FALLMAP=x0,z0,size,split (# dry above split, . dry below, A water above, b water below, | curtain, upper-case-ish F marks the fall zone on dry ground). */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_FALLMAP", matches = ".+")
+    void fallMap() {
+        WorldGen gen = new WorldGen(new GenParams());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+            net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
+        var plans = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache(planner);
+        String[] a = System.getenv("VIRIDIUM_FALLMAP").split(",");
+        int x0 = Integer.parseInt(a[0]), z0 = Integer.parseInt(a[1]), n = Integer.parseInt(a[2]), split = Integer.parseInt(a[3]);
+        final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE;
+        for (int z = z0; z < z0 + n; z++) {
+            StringBuilder sb = new StringBuilder(String.format("%6d ", z));
+            for (int x = x0; x < x0 + n; x++) {
+                var p = plans.get(x >> 4, z >> 4);
+                int i = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.index(x & 15, z & 15);
+                char ch;
+                if (p.fallTop[i] != NONE) ch = '|';
+                else if (p.waterY[i] != NONE) ch = p.waterY[i] >= split ? 'A' : 'b';
+                else if (p.has(i, net.junedev.viridium.worldgen.terrain.column.ColumnPlan.F_FALL)) ch = p.surfaceY[i] >= split ? 'F' : 'f';
+                else ch = p.surfaceY[i] >= split ? '#' : '.';
+                sb.append(ch);
+            }
+            System.out.println(sb);
+        }
+    }
+
     /** ASCII section of cliff detail along x: VIRIDIUM_CLIFF=x0,x1,z (# rock, ~ water, o notch air, w notch water, + talus). */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CLIFF", matches = ".+")
@@ -340,7 +367,7 @@ class DebugPointTest {
         int x0 = Integer.parseInt(a[0]), x1 = Integer.parseInt(a[1]), z = Integer.parseInt(a[2]);
         final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE;
         int n = x1 - x0 + 1, ymin = Integer.MAX_VALUE, ymax = Integer.MIN_VALUE;
-        int[] S = new int[n], Wl = new int[n], lo = new int[n], hi = new int[n], nw = new int[n], tt = new int[n];
+        int[] S = new int[n], Wl = new int[n], lo = new int[n], hi = new int[n], nw = new int[n], tt = new int[n], ft = new int[n];
         for (int k = 0; k < n; k++) {
             int x = x0 + k, i = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.index(x & 15, z & 15);
             var p = plans.get(x >> 4, z >> 4);
@@ -351,8 +378,9 @@ class DebugPointTest {
             hi[k] = c.notchHi[i];
             nw[k] = c.notchWater[i];
             tt[k] = c.talusTop[i];
+            ft[k] = p.fallTop[i];
             ymin = Math.min(ymin, S[k]);
-            ymax = Math.max(ymax, Math.max(S[k], Math.max(Wl[k], tt[k])));
+            ymax = Math.max(ymax, Math.max(Math.max(S[k], ft[k]), Math.max(Wl[k], tt[k])));
         }
         StringBuilder hs = new StringBuilder("S: ");
         for (int k = 0; k < n; k++) hs.append(S[k]).append(Wl[k] != NONE ? "~" : "").append(' ');
@@ -365,6 +393,7 @@ class DebugPointTest {
                 else if (y <= S[k]) ch = '#';
                 else if (tt[k] != NONE && y <= tt[k]) ch = '+';
                 else if (Wl[k] != NONE && y <= Wl[k]) ch = '~';
+                else if (ft[k] != NONE && y <= ft[k]) ch = '|';
                 sb.append(ch);
             }
             System.out.println(sb);

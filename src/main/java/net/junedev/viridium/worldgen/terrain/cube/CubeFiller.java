@@ -133,13 +133,24 @@ public class CubeFiller {
                 ebs.setExtBlockMetadata(lx, y - y0, lz, 0);
             }
         }
+        int ct = cc.curtainTop[i];
+        if (ct != NONE) { // falling water from a river above this column (waterfall lip, cascade)
+            boolean frozen = plan.temperature[i] < -6;
+            int from = Math.max(plan.surfaceY[i], plan.waterY[i]) + 1;
+            for (int y = Math.max(from, y0); y <= Math.min(ct, y0 + 15); y++) {
+                if (ebs.getBlockByExtId(lx, y - y0, lz) != Blocks.air) continue;
+                ebs.func_150818_a(lx, y - y0, lz, frozen ? Blocks.ice : Blocks.flowing_water);
+                ebs.setExtBlockMetadata(lx, y - y0, lz, frozen ? 0 : 8);
+            }
+        }
     }
 
     private void fillColumn(ExtendedBlockStorage ebs, ColumnPlan plan, CrustModel.Sampler s, SurfaceRules.Column sc,
         int i, int x, int z, int lx, int lz, int y0) {
         int sy = plan.surfaceY[i];
         int water = plan.waterY[i], iceTop = plan.iceTop[i], iceBottom = plan.iceBottom[i];
-        int top = Math.max(sy, Math.max(water, iceTop)) + 1;
+        int fallTop = plan.fallTop[i];
+        int top = Math.max(Math.max(sy, fallTop), Math.max(water, iceTop)) + 1;
         if (y0 > top) return;
         rules.resolve(plan, i, x, z, sc);
         boolean packed = plan.has(i, ColumnPlan.F_SHELF) || plan.has(i, ColumnPlan.F_BERG);
@@ -161,6 +172,11 @@ public class CubeFiller {
                 b = packed ? Blocks.packed_ice : Blocks.ice;
             } else if (water != NONE && y <= water) {
                 b = Blocks.water;
+            } else if (fallTop != NONE && y <= fallTop && water != NONE && y > water) {
+                // waterfall curtain: falling water (meta 8) from the pool up to the lip, frozen in cold climates
+                boolean frozen = plan.has(i, ColumnPlan.F_FROZEN);
+                b = frozen ? Blocks.ice : Blocks.flowing_water;
+                meta = frozen ? 0 : 8;
             } else if (y == top && sc.snow && iceTop == NONE && water == NONE && y == sy + 1) {
                 b = Blocks.snow_layer;
             } else continue; // no snow on ice: a snow layer cannot stand on ice and breaks in a cascade

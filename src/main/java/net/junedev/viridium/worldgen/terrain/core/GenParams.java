@@ -79,6 +79,8 @@ public final class GenParams implements Cloneable {
     public double cliffs = 1.0, cliffDetail = 1.0;
     /** Continental rifts: share of continents with one (scaled 0.35 per unit) and depth multiplier of their graben. */
     public double rifts = 1.0, riftDepth = 1.0;
+    /** Waterfalls where rivers cross cliffs (0 off; higher also allows lower falls). */
+    public double waterfalls = 1.0;
 
     // implementation
     /**

@@ -43,6 +43,13 @@ public final class RiverNet {
     public static final int DV = 5;
     /** Reaches replaced by a delta (the main stem between the delta apex and the old mouth). */
     public byte[] skip;
+    /**
+     * Waterfalls: drop (blocks) at the start of a reach that begins at the foot of a fall (0 none), and 1 for a reach that
+     * ends at the lip of one (the next reach, or the sea, lies below it).
+     */
+    public float[] fallIn = new float[0];
+    // lipOut: 1 the next reach lies below, 2 the sea lies below
+    public byte[] lipOut = new byte[0];
     /** Valley field: distance to nearest river (65535 = none), its bed height ×16, width ×10, meander ×4, relief /2. */
     public char[] vd;
     public short[] vz;

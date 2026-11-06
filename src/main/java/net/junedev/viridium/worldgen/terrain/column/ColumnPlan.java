@@ -15,7 +15,7 @@ public final class ColumnPlan {
     public static final int NONE = Integer.MIN_VALUE;
 
     public static final int F_RIVER = 1, F_LAKE = 2, F_SALT = 4, F_FLOE = 8, F_SHELF = 16, F_BERG = 32,
-        F_FROZEN = 64;
+        F_FROZEN = 64, F_FALL = 128;
 
     public final int chunkX, chunkZ;
 
@@ -27,6 +27,8 @@ public final class ColumnPlan {
     public final int[] waterY = new int[AREA];
     /** Ice body [iceBottom, iceTop] (absolute Y), or {@link #NONE}. */
     public final int[] iceTop = new int[AREA], iceBottom = new int[AREA];
+    /** Top of a waterfall curtain (falling water from the water below up to here), or {@link #NONE}. */
+    public final int[] fallTop = new int[AREA];
     /** F_* flags. */
     public final byte[] flags = new byte[AREA];
     /** Final temperature (°C at the surface), precipitation (mm/year), slope (gradient). */
@@ -50,7 +52,7 @@ public final class ColumnPlan {
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int i = 0; i < AREA; i++) {
             min = Math.min(min, surfaceY[i]);
-            max = Math.max(max, Math.max(surfaceY[i], Math.max(waterY[i], iceTop[i])));
+            max = Math.max(max, Math.max(Math.max(surfaceY[i], fallTop[i]), Math.max(waterY[i], iceTop[i])));
         }
         minSurfaceY = min;
         maxTopY = max + 1; // snow layer

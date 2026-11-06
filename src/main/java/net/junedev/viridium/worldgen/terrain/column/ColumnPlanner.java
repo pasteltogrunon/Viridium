@@ -69,6 +69,8 @@ public final class ColumnPlanner {
             flags |= ColumnPlan.F_RIVER;
             water = Math.max(water, TerrainLayout.surfaceY(p.riverWL));
         }
+        int fallTop = NONE;
+        if (p.fall != 0) flags |= ColumnPlan.F_FALL;
         if (surface < SEA_LEVEL - 1) water = Math.max(water, SEA_LEVEL - 1);
         if (water != NONE && water <= surface) water = NONE;
 
@@ -99,6 +101,11 @@ public final class ColumnPlanner {
         plan.iceTop[i] = iceTop;
         plan.iceBottom[i] = iceBottom;
         plan.flags[i] = (byte) flags;
+        if (p.fallTop > -1e8 && water != NONE) {
+            int ft = TerrainLayout.surfaceY(p.fallTop);
+            if (ft > water) fallTop = ft;
+        }
+        plan.fallTop[i] = fallTop;
         plan.temperature[i] = (float) p.T;
         plan.precipitation[i] = (float) p.P;
         plan.slope[i] = (float) p.slope;

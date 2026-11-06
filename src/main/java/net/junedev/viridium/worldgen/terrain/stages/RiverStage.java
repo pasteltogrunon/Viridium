@@ -468,6 +468,8 @@ public class RiverStage extends GenStage {
         o.lakeZ = 0;
         o.glac = 0;
         o.gorge = 0;
+        o.fall = 0;
+        o.fallTop = -1e9;
         if (o.L < -0.5 || s.riversOff) return;
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
         int nNear = basins.nearCells(x, y, RiverNetBuilder.MARGIN, s); // into s.NCK: no allocation per point
@@ -529,12 +531,19 @@ public class RiverStage extends GenStage {
                     double pad = VMAX + Math.max(net.w0[sl], net.w1[sl]);
                     if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad || qy < BB[sl * 4 + 1] - pad
                         || qy > BB[sl * 4 + 3] + pad) continue;
+                    if (net.fallIn.length > 0 && net.fallIn[sl] > 0) {
+                        // below a waterfall: nothing behind the lip belongs to this reach (its banks would cut a ramp
+                        // into the cliff from the level of the pool)
+                        int q0 = sl * NPT * 2;
+                        double vx0 = pts[q0 + 2] - pts[q0], vy0 = pts[q0 + 3] - pts[q0 + 1];
+                        if ((qx - pts[q0]) * vx0 + (qy - pts[q0 + 1]) * vy0 < 0) continue;
+                    }
                     for (int k = 0; k < SEG; k++) {
                         int q = (sl * NPT + k) * 2;
                         double ax = pts[q], ay = pts[q + 1], vx = pts[q + 2] - ax, vy = pts[q + 3] - ay;
                         double l2 = vx * vx + vy * vy;
                         if (l2 == 0) l2 = 1e-9;
-                        double t = clamp(((qx - ax) * vx + (qy - ay) * vy) / l2, 0, 1);
+                        double tr = ((qx - ax) * vx + (qy - ay) * vy) / l2, t = clamp(tr, 0, 1);
                         double dx = qx - (ax + vx * t), dy = qy - (ay + vy * t);
                         double dist = Math.sqrt(dx * dx + dy * dy);
                         double u = (k + t) / SEG;
@@ -542,6 +551,26 @@ public class RiverStage extends GenStage {
                         double v = dist - hw;
                         if (v >= VMAX) continue;
                         double z = lerp(net.z0[sl], net.z1[sl], u);
+                        // waterfalls: the reach below starts at the lip and never cuts back into it; the reach above
+                        // gives no water beyond its lip, where the curtain falls
+                        float fin = net.fallIn.length > 0 ? net.fallIn[sl] : 0;
+                        int lip = net.lipOut.length > 0 ? net.lipOut[sl] : 0;
+                        double pool = 0;
+                        if (fin > 0 && k == 0) {
+                            if (tr < 0) continue;
+                            double along = tr * Math.sqrt(l2);
+                            if (along < hw + 4 && v < 3) o.fall = 1;
+                            if (along < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z + fin);
+                        }
+                        if (fin > 0 && u < 0.3) pool = (2 + 0.1 * fin) * (1 - u / 0.3); // plunge pool
+                        if (lip != 0 && k == SEG - 1) {
+                            double past = (tr - 1) * Math.sqrt(l2);
+                            if (past > -(hw + 4) && v < 3) o.fall = 1;
+                            if (tr > 1) {
+                                if (lip == 2 && past < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z); // into the sea
+                                continue;
+                            }
+                        }
                         // the glacial trough is made by the broad valley; here the glacier only lowers the bed
                         double G = glacial(o, z) * (s.FOK ? ss(8, 45, s.FR) : 0);
                         double W = Math.min((5 + hw * 2) * wMul, VMAX);
@@ -560,7 +589,7 @@ public class RiverStage extends GenStage {
                         double hc;
                         if (v <= 0) {
                             double qq = dist / Math.max(hw, 1e-3), zc = lerp(z, zu, G);
-                            hc = Math.min(h, zc) - (1.2 + hw * 0.25) * (1 - qq * qq);
+                            hc = Math.min(h, zc) - (1.2 + hw * 0.25 + pool) * (1 - qq * qq);
                         } else {
                             double bank = lerp(z, zu, G) + v * bankSlope;
                             hc = h > bank ? lerp(bank, h, ss(0, W, v)) : h;

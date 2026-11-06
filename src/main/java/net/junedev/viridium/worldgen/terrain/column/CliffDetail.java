@@ -25,7 +25,7 @@ public final class CliffDetail {
     public static final class Cols {
 
         public final int[] notchLo = new int[256], notchHi = new int[256], notchWater = new int[256],
-            talusTop = new int[256];
+            talusTop = new int[256], curtainTop = new int[256];
         /** Distance (blocks) from the foot of the nearest wall (0 = none within reach) and that wall's height. */
         public final byte[] wallDist = new byte[256];
         public final short[] wallH = new short[256];
@@ -38,6 +38,7 @@ public final class CliffDetail {
             java.util.Arrays.fill(notchHi, NONE);
             java.util.Arrays.fill(notchWater, NONE);
             java.util.Arrays.fill(talusTop, NONE);
+            java.util.Arrays.fill(curtainTop, NONE);
         }
 
         void touch(int lo, int hi) {
@@ -76,6 +77,29 @@ public final class CliffDetail {
         return c;
     }
 
+    /**
+     * Falling water wherever river water stands 3+ blocks above a neighbouring column: the lip of a waterfall (also an
+     * oblique one, where a cliff crosses the river at an angle), a river falling off a sea cliff, a steep cascade. The
+     * lower column gets a curtain of falling water up to the level of the river above it.
+     */
+    private static void curtains(int[] S, int[] Wt, int[] F, Cols out) {
+        final int river = ColumnPlan.F_RIVER | ColumnPlan.F_FALL;
+        for (int lz = 0; lz < 16; lz++) for (int lx = 0; lx < 16; lx++) {
+            int c = (lz + M) * W + lx + M;
+            int top = Wt[c] != NONE ? Math.max(Wt[c], S[c]) : S[c];
+            int best = NONE;
+            for (int d = 0; d < 4; d++) {
+                int q = c + DZ[d] * W + DX[d];
+                if (Wt[q] == NONE || (F[q] & river) == 0 || Wt[q] <= S[q]) continue;
+                if (Wt[q] - top >= 3 && Wt[q] > best) best = Wt[q];
+            }
+            if (best == NONE) continue;
+            int ci = ColumnPlan.index(lx, lz);
+            out.curtainTop[ci] = best;
+            out.touch(top + 1, best);
+        }
+    }
+
     private Cols compute(int cx, int cz) {
         Cols out = new Cols();
         if (strength <= 0) return out;
@@ -96,8 +120,10 @@ public final class CliffDetail {
             lowest = Math.min(lowest, p.surfaceY[pi]);
             highest = Math.max(highest, p.surfaceY[pi]);
         }
-        if (highest - lowest < MIN_WALL) return out; // flat around: nothing to find
+        if (highest - lowest < 3) return out; // flat around: nothing to find
         final int skipF = ColumnPlan.F_RIVER | ColumnPlan.F_LAKE;
+        curtains(S, Wt, F, out);
+        if (highest - lowest < MIN_WALL) return out;
         // faces: any block within reach whose wall can touch this column
         for (int j = 3; j < W - 3; j++) for (int i = 3; i < W - 3; i++) {
             int f = j * W + i;
