@@ -112,6 +112,10 @@ final class RiverNetBuilder {
         return clamp(12 * w + 40, 60, 420);
     }
 
+    private static java.util.stream.IntStream par(java.util.stream.IntStream st, boolean serial) {
+        return serial ? st : st.parallel();
+    }
+
     /** Margin (blocks) around a basin cell: the valley field reaches this far into the neighbours, then fades out. */
     static final double MARGIN = 960;
 
@@ -151,7 +155,8 @@ final class RiverNetBuilder {
         }
         final int exitIdx = exit;
         // independent per cell: rows run in parallel, each with its own temporaries
-        java.util.stream.IntStream.range(0, ny).parallel().forEach(j -> {
+        final boolean serial = RiverStage.serialBuilds(); // background callers keep to their own thread
+        par(java.util.stream.IntStream.range(0, ny), serial).forEach(j -> {
             GenPoint rt = new GenPoint();
             GenScratch rs = new GenScratch();
             for (int i = 0; i < nx; i++) {
@@ -338,7 +343,7 @@ final class RiverNetBuilder {
         }
         float[] wl = filled.clone();
         final float[] wlf = wl;
-        java.util.stream.IntStream.range(0, n).parallel().forEach(idx -> { // independent per river node
+        par(java.util.stream.IntStream.range(0, n), serial).forEach(idx -> { // independent per river node
             if (entry[idx]) // divide node shared with the upstream basin: its exit level, or the same floor sample
                 wlf[idx] = entryLevel[idx] == entryLevel[idx] ? entryLevel[idx]
                     : (float) Math.max(0, valleyFloor(idx, idx, halfWidth(inflow[idx] / thr), null));

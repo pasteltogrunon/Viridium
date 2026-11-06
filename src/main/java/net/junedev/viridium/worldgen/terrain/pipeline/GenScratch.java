@@ -25,6 +25,8 @@ public final class GenScratch {
     public final GenPoint landPoint = new GenPoint();
     /** Skip the river networks (map overviews too far out for rivers to show): the rivers stage leaves no water. */
     public boolean riversOff;
+    /** Blocks per pixel of the current evaluation (1 in game): coarse caches step aside when it outgrows them. */
+    public double bpp = 1;
 
     /** Small output buffer for field lookups. */
     public final double[] tmp1 = new double[1];

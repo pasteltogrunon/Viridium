@@ -5,7 +5,9 @@ Select the **Viridium** world type when creating a world (or `level-type=viridiu
 Press **M** in game (singleplayer) for the world map. It shares the server's pipeline (warm caches and river
 networks), keeps finished tiles in memory between openings and on disk in `.minecraft/viridium/mapcache/<fingerprint>`
 (the fingerprint covers the parameters, the seed and the generator code, so changes never show stale tiles), and
-draws rivers only up to level 4 (8+ blocks per pixel further out would build hundreds of networks).
+draws rivers only up to level 4 (further out it would build hundreds of networks). It renders on at most 2
+low-priority threads, and the river networks it needs are built on those threads only. Beyond 128 blocks per pixel
+the climate samples the relief directly (its 32-block lattice would compute a 2048-block tile per pixel).
 
 ## Layout
 

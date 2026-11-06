@@ -119,6 +119,18 @@ class DebugPointTest {
         var r = new net.junedev.viridium.worldgen.terrain.map.MapTileRenderer(gen);
         var layer = net.junedev.viridium.worldgen.terrain.map.MapLayer.byId(a[0]);
         int level = Integer.parseInt(a[1]), tx = Integer.parseInt(a[2]), tz = Integer.parseInt(a[3]);
+        if (a.length > 4) { // sweep: one warm-up tile, then each level from `level` to a[4], two neighbouring tiles each
+            r.render(layer, 3, 0, 0, 128, false);
+            for (int lv = level; lv <= Integer.parseInt(a[4]); lv++) {
+                long t0 = System.nanoTime();
+                r.render(layer, lv, tx, tz, 128, false);
+                long t1 = System.nanoTime();
+                r.render(layer, lv, tx + 1, tz, 128, false);
+                System.out.printf("level %d: first tile %.0f ms, neighbour %.0f ms%n", lv, (t1 - t0) / 1e6,
+                    (System.nanoTime() - t1) / 1e6);
+            }
+            return;
+        }
         for (int pass = 0; pass < 3; pass++) {
             long b0 = gen.rivers.buildCount(), t0 = System.nanoTime();
             r.render(layer, level, tx, tz, 128, false);

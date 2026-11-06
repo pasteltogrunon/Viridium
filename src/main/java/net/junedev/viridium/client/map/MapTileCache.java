@@ -28,12 +28,17 @@ public final class MapTileCache {
     private static final int UPLOADS_PER_FRAME = 12;
 
     private static final ExecutorService POOL;
-    private static final int THREADS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+    // few, low-priority threads: the map loads a bit slower but leaves the game and the server their cores
+    private static final int THREADS = Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() / 4));
 
     static {
         AtomicInteger n = new AtomicInteger();
         POOL = Executors.newFixedThreadPool(THREADS, r -> {
-            Thread t = new Thread(r, "Viridium map worker " + n.incrementAndGet());
+            Thread t = new Thread(() -> {
+                // river networks the map needs are built on this thread, not spread over every core
+                net.junedev.viridium.worldgen.terrain.stages.RiverStage.buildSeriallyOnThisThread();
+                r.run();
+            }, "Viridium map worker " + n.incrementAndGet());
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
             return t;

@@ -91,6 +91,7 @@ public final class WorldGen {
 
     /** As above with explicit temporaries (for evaluations nested inside another one, e.g. river network builds). */
     public GenPoint evaluate(double x, double z, Stage upTo, double bpp, GenPoint o, GenScratch s) {
+        s.bpp = bpp;
         o.x = x;
         o.z = z;
         climate.apply(x, z, o);

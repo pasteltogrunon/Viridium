@@ -58,6 +58,20 @@ public class RiverStage extends GenStage {
         return ((long) pi << 32) | (pj & 0xffffffffL);
     }
 
+    private static final ThreadLocal<Boolean> SERIAL = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /**
+     * Marks the calling thread as background (e.g. the map workers): the networks it builds run on this thread only
+     * instead of spreading over every core.
+     */
+    public static void buildSeriallyOnThisThread() {
+        SERIAL.set(Boolean.TRUE);
+    }
+
+    static boolean serialBuilds() {
+        return SERIAL.get();
+    }
+
     /** River network of basin cell (ci, cj), building it if needed (other threads wait for the same build). */
     public RiverNet net(int ci, int cj) {
         long key = key(ci, cj);
