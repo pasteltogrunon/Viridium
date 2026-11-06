@@ -48,6 +48,8 @@ public final class GenParams implements Cloneable {
      * instead of running in parallel down smooth slopes and flats (one river every grid node).
      */
     public double riverRouteNoise = 8;
+    /** Extra half-width per unit of flow (threshold units): large rivers get much wider than the square root alone. */
+    public double riverWidthGrowth = 0.16;
     /**
      * Continents measure their distance to the real plate edges (bisectors clipped at triple junctions). Off = the
      * prototype's infinite bisector lines, which cut straight ocean wedges past triple junctions.

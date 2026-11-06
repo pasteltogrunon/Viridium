@@ -110,8 +110,9 @@ Continents are split into **drainage basins** (`BasinGraph`): Voronoi cells of w
 "potential" (its land height plus a large-scale noise weighted by `basinMerge`, so basins chain into a few very large
 systems), through the lowest point of their shared divide. Every basin gets its own network with a margin around it;
 the water of the upstream basins enters at that divide point with its flow and water level. The size of the whole
-upstream system decides the size of the mouth: river half width up to `riverMaxHalfWidth` (48, ~100-block wide
-rivers) and delta radius up to `deltaMaxRadius` (1600); big rivers build deltas rather than estuaries. Waterfalls at
+upstream system decides the size of the mouth: half width 1.2 + 2.2·√q + `riverWidthGrowth`·q (q = flow in threshold
+units; flow 100 → ~40) up to `riverMaxHalfWidth` (48, ~100-block wide rivers) and delta radius 95·√q up to
+`deltaMaxRadius` (1600); one delta per stretch of coast (smaller rivers within reach of a larger delta end in it); big rivers build deltas rather than estuaries. Waterfalls at
 confluences are limited to 2.5 blocks per node (glacial hanging valleys can still drop ~10). Lake rims never cross a
 river channel or its banks, so rivers flow into and out of lakes freely. A cell with more than 10 % sea in its area
 is an outlet (its network sends its water to that coast; handing its whole flow to a neighbour made huge rivers appear

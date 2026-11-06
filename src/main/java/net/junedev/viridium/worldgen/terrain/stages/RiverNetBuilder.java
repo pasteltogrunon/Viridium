@@ -382,7 +382,8 @@ final class RiverNetBuilder {
 
     /** River half-width for a flow (in threshold units), capped by {@code riverMaxHalfWidth}. */
     float halfWidth(double flowOverThr) {
-        return (float) Math.min(P.riverMaxHalfWidth, 1.2 + 2.2 * Math.sqrt(flowOverThr));
+        // sqrt for small rivers, plus a linear term that makes the large ones grow much wider (flow 100 → ~40)
+        return (float) Math.min(P.riverMaxHalfWidth, 1.2 + 2.2 * Math.sqrt(flowOverThr) + P.riverWidthGrowth * flowOverThr);
     }
 
     RiverNet build(BasinGraph.Cell cell, BasinGraph graph, GenScratch s) {
@@ -781,7 +782,7 @@ final class RiverNetBuilder {
                 // big rivers carry so much sediment that they mostly build deltas (Nile, Mississippi, Ganges)
                 double E = ss(0.42, 0.62, tide - 0.55 * sed + 0.12) * Math.min(P.estuaries, 1) * ss(3, 5, sacc[sl])
                     * (1 - 0.75 * ss(40, 200, sacc[sl]));
-                double Rd = sacc[sl] >= 6 && P.deltaSize > 0 ? Math.min(P.deltaMaxRadius, 60 * Math.sqrt(sacc[sl])) * P.deltaSize
+                double Rd = sacc[sl] >= 6 && P.deltaSize > 0 ? Math.min(P.deltaMaxRadius, 95 * Math.sqrt(sacc[sl])) * P.deltaSize
                     : 0;
                 double Lest = Math.min(3000, 140 + 34 * hw[idx]) * Math.max(P.estuaries, 0.3);
                 double Wm = Math.min(8.0 * g, 10 + 4.2 * hw[idx]);
@@ -818,6 +819,23 @@ final class RiverNetBuilder {
 
         byte[] skip = new byte[count];
         DeltaOut dOut = new DeltaOut();
+        // one delta per stretch of coast: a smaller river reaching the sea within reach of a larger delta ends in it instead
+        // of building its own (overlapping fans crossed each other)
+        {
+            Integer[] byFlow = new Integer[nm];
+            for (int q = 0; q < nm; q++) byFlow[q] = q;
+            final float[] MO = mouthsOut;
+            Arrays.sort(byFlow, (p, r) -> Float.compare(MO[r * RiverNet.MS + 6], MO[p * RiverNet.MS + 6]));
+            for (int a = 0; a < nm; a++) {
+                int qa = byFlow[a] * RiverNet.MS;
+                if (MO[qa + 4] <= 0 || MO[qa + 8] >= 0.5) continue;
+                for (int b2 = a + 1; b2 < nm; b2++) {
+                    int qb = byFlow[b2] * RiverNet.MS;
+                    if (MO[qb + 4] <= 0) continue;
+                    if (hypot(MO[qa] - MO[qb], MO[qa + 1] - MO[qb + 1]) < 0.75 * (MO[qa + 4] + MO[qb + 4])) MO[qb + 4] = 0;
+                }
+            }
+        }
         for (int q = 0; q < nm; q++) buildDelta(q, mouthsOut, dOut, skip, pts, slot, mainUp, recv, isRiv, acc, hgt, z1, w1,
             am0, am1, s);
 
