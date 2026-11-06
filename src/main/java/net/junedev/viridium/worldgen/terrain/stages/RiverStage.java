@@ -508,9 +508,12 @@ public class RiverStage extends GenStage {
                     o.riverZ = bz;
                     o.riverWL = bwl;
                 }
-                // a low bank right next to the water would let it spill: keep the first blocks at least at water level
-                if (best > 0 && best < 3) o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
                 o.h = hmin;
+                // a low bank right next to the water would let it spill: keep the first blocks at least at water level
+                // (applied after the carve, and only when this network owns the nearest channel, so it never fills
+                // another network's or a delta's channel)
+                if (best > 0 && best < 3 && best <= o.riverD)
+                    o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
                 if (best <= 0) o.river = 1;
                 else o.valley = Math.max(o.valley, 1 - best / bW);
             }
