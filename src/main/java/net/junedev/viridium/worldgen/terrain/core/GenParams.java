@@ -77,6 +77,8 @@ public final class GenParams implements Cloneable {
      * talus and fallen boulders (0 turns the detail off).
      */
     public double cliffs = 1.0, cliffDetail = 1.0;
+    /** Continental rifts: share of continents with one (scaled 0.35 per unit) and depth multiplier of their graben. */
+    public double rifts = 1.0, riftDepth = 1.0;
 
     // implementation
     /**

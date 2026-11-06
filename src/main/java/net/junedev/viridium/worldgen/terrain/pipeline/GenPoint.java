@@ -34,6 +34,14 @@ public final class GenPoint {
     /** Continentality: &gt; 0 land, &lt; 0 sea. */
     public double L;
 
+    /**
+     * Continental rift: strength along the rift line (0 beyond its ends), distance across it in half-widths (&lt; 1 inside
+     * the graben), position along it (blocks) and stage (0 young with lakes, 1 failed and worn down, 2 mature: a narrow
+     * sea).
+     */
+    public double rift, riftD = 9, riftU;
+    public int riftType;
+
     // 7. relief
     /** Base height and current height (blocks relative to sea level). */
     public double h0, h;

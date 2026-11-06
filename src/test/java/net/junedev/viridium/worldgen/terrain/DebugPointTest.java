@@ -385,8 +385,8 @@ class DebugPointTest {
         for (double t = 0; t <= len; t += st) {
             double x = Math.floor(x0 + (x1 - x0) * t / len), z = Math.floor(z0 + (z1 - z0) * t / len);
             gen.evaluate(x, z, Stage.BIOMES, o);
-            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d  L %.4f cliff %.2f scarp %.2f%n", x, z,
-                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock, o.L, o.cliff, o.scarp);
+            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d  L %.4f cliff %.2f scarp %.2f rift %.2f d %.2f t%d%n", x, z,
+                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock, o.L, o.cliff, o.scarp, o.rift, o.riftD, o.riftType);
             prev = o.h;
         }
     }

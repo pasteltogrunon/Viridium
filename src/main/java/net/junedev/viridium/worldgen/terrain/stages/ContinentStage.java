@@ -50,6 +50,41 @@ public class ContinentStage extends GenStage {
         double eB = o.edge + S * 0.04 * bend;
         L = Math.min(L, eB / (S * 0.12) - 0.5);
         if (o.collZ > 0) L = lerp(L, 0.4 + 0.8 * n, ss(0, 0.6, o.collZ + 0.25 * bend)); // ...except at collisions
-        o.L = L;
+        o.L = rift(x, y, i, j, cx, cy, L, o);
+    }
+
+    /**
+     * Continental rifts (East Africa, Baikal, the Rhine graben, the Red Sea): a continent starts to split along a line
+     * through its interior. The crust stretches and a graben sinks between two raised shoulders. Some continents (0.35
+     * per unit of {@code rifts}) get one rift line, meandering, 0.5-0.9 plate sizes long, 600-960 blocks wide. Young
+     * rifts hold long lakes, failed ones are worn down, mature ones have opened into a narrow sea (continentality
+     * lowered inside the graben). Here only the geometry; ReliefStage digs the graben.
+     *
+     * @return continentality (lowered in a mature rift)
+     */
+    protected double rift(double x, double y, int i, int j, double cx, double cy, double L, GenPoint o) {
+        o.rift = 0;
+        o.riftD = 9;
+        o.riftU = 0;
+        o.riftType = 0;
+        if (P.rifts <= 0 || rnd(i, j, SD.rift) >= 0.35 * P.rifts) return L;
+        double S = P.plateSize;
+        double a = rnd(i, j, SD.rift + 1) * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+        double ox = cx + (rnd(i, j, SD.rift + 2) - 0.5) * 0.2 * S, oy = cy + (rnd(i, j, SD.rift + 4) - 0.5) * 0.2 * S;
+        double dx = o.wx - ox, dy = o.wy - oy;
+        double u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
+        v += 0.07 * S * fbm(u / (0.35 * S), 3.7, SD.rift + 5, 3); // meanders over a few thousand blocks
+        double half = (0.25 + 0.2 * rnd(i, j, SD.rift + 6)) * S;
+        double along = 1 - ss(0.7 * half, half, Math.abs(u));
+        if (along <= 0) return L;
+        double w = (0.025 + 0.015 * rnd(i, j, SD.rift + 7)) * S * (0.85 + 0.3 * fbm(u / 1500, 9.1, SD.rift + 8, 2));
+        double r = rnd(i, j, SD.rift + 3);
+        o.riftType = r < 0.45 ? 0 : r < 0.7 ? 1 : 2;
+        o.rift = along;
+        o.riftD = Math.abs(v) / w;
+        o.riftU = u;
+        if (o.riftType == 2 && o.riftD < 1.2) // mature: the floor of the graben is a narrow sea
+            L = lerp(L, Math.min(L, -0.08), along * (1 - ss(0.55, 1.0, o.riftD)));
+        return L;
     }
 }

@@ -1,6 +1,7 @@
 package net.junedev.viridium.worldgen.terrain.stages;
 
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
+import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.fbm;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.ridged;
@@ -52,6 +53,43 @@ public class ReliefStage extends GenStage {
         o.plat = k;
         o.platType = basalt ? 1 : 0;
         return k;
+    }
+
+    /**
+     * Continental rift (geometry from ContinentStage): two fault scarps drop a graben between raised shoulders. Young rifts
+     * are 60-110 blocks deep with sills and basins along the floor (long lakes form between them, as in East Africa or
+     * Baikal); failed rifts are shallow and worn down, with soft walls; mature rifts are a narrow, deep sea (the Red Sea).
+     * Volcanoes rise on the floor and the shoulders of young and mature rifts.
+     */
+    protected double rift(double x, double y, double h, boolean detail, GenPoint o) {
+        if (o.rift <= 0 || o.riftD > 2.6 || P.riftDepth <= 0) return h;
+        double d = o.riftD, a = o.rift;
+        int t = o.riftType;
+        double wall = t == 1 ? ss(0.7, 1.15, d) : ss(0.88, 0.97, d); // 0 inside the graben, 1 outside
+        double var = fbm(o.riftU / 2200, 4.4, SD.rift + 9, 3); // sills and basins along the floor
+        double U = (t == 1 ? 20 : 40 + 45 * clamp(0.5 + 0.7 * fbm(o.riftU / 3000, 1.3, SD.rift + 12, 2), 0, 1)) * P.riftDepth;
+        double shoulders = U * Math.exp(-((d - 1.0) / 0.6) * ((d - 1.0) / 0.6)) * wall;
+        double floor = t == 2 ? -45 + 15 * var
+            : t == 1 ? 0.6 * Math.max(h, 0) + 4 + 8 * var
+            : 0.4 * Math.max(h, 0) + 10 + 32 * var;
+        floor *= t == 2 ? P.riftDepth : 1;
+        double out = h + shoulders * a;
+        double res = lerp(out, Math.min(out, floor), (1 - wall) * a);
+        if (t != 1) o.scarp = Math.max(o.scarp, a * (1 - ss(0.02, 0.12, Math.abs(d - 0.925))));
+        // volcanoes on the floor and the shoulders
+        if (t != 1) {
+            double spot = ss(0.3, 0.55, fbm(x / 1400, y / 1400, SD.rift + 11, 2)) * (1 - ss(1.2, 1.8, d)) * a;
+            if (spot > 0.02) {
+                double c = ridged(x / 240, y / 240, SD.rift + 10, detail ? 3 : 1);
+                double cone = res + spot * (60 + 90 * c * c * c);
+                if (spot * c > 0.25 && cone > res) {
+                    res = lerp(res, cone, ss(0.25, 0.45, spot * c));
+                    o.volc = Math.max(o.volc, spot * c);
+                    o.volcType = 1;
+                }
+            }
+        }
+        return res;
     }
 
     /**
@@ -119,6 +157,7 @@ public class ReliefStage extends GenStage {
             h = -16 * ss(0, -0.06, L) + (floor + 16) * ss(-0.06, -0.3, L);
         }
         h += coastalCliff(x, y, L, o);
+        h = rift(x, y, h, detail, o);
         // continental collision: range on the suture + plateau on the overriding plate (Himalaya + Tibet)
         if (o.collK > 1e-3) {
             double S = P.plateSize, sd = o.collS;

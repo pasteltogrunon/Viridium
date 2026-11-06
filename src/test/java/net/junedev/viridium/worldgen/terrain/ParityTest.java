@@ -121,6 +121,7 @@ class ParityTest {
         p.plateaus = 0; // Java-only landforms
         p.mesas = 0;
         p.cliffs = 0;
+        p.rifts = 0;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 
