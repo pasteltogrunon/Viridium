@@ -1116,11 +1116,29 @@ final class RiverNetBuilder {
         Arrays.fill(dd, 1e9f);
         int[] src = new int[n];
         Arrays.fill(src, -1);
-        for (int idx = 0; idx < n; idx++) if (isRiv[idx] && skip[slot[idx]] == 0) { // not the stretch a delta replaced
-            dd[idx] = 0;
-            src[idx] = idx;
+        final int CHAMFER_PAD = 32;
+        int ri0 = nx, rj0 = ny, ri1 = -1, rj1 = -1; // box of all river cells
+        boolean skippedFall = false;
+        for (int idx = 0; idx < n; idx++) {
+            if (!isRiv[idx]) continue;
+            int i = idx % nx, j = idx / nx;
+            ri0 = Math.min(ri0, i);
+            ri1 = Math.max(ri1, i);
+            rj0 = Math.min(rj0, j);
+            rj1 = Math.max(rj1, j);
+            if (skip[slot[idx]] == 0) { // not the stretch a delta replaced
+                dd[idx] = 0;
+                src[idx] = idx;
+            } else if (fallDrop[idx] > 0) skippedFall = true;
         }
-        chamfer(dd, src, nx, ny, g);
+        // Only the river box plus CHAMFER_PAD cells is swept. Outside it every cell is at least (CHAMFER_PAD + 1) * g =
+        // 1056 blocks from any river, so it is dropped anyway (VLIM), and nothing it relays back inside can beat a cell's
+        // distance below that. Everything that reads the field (below VLIM, and the pool re-assignment below, whose
+        // Euclidean distance under VLIM means a chamfer distance under 1.083 * VLIM) is unchanged. A fall inside a
+        // stretch replaced by a delta is not a source, so then the whole grid is swept as before.
+        if (skippedFall || ri1 < 0) chamfer(dd, src, nx, 0, nx - 1, 0, ny - 1, g);
+        else chamfer(dd, src, nx, Math.max(0, ri0 - CHAMFER_PAD), Math.min(nx - 1, ri1 + CHAMFER_PAD),
+            Math.max(0, rj0 - CHAMFER_PAD), Math.min(ny - 1, rj1 + CHAMFER_PAD), g);
         // below a waterfall the valley belongs to the pool only on low ground: cells up at the level of the lip take the
         // river above the fall (otherwise the valley of the pool would cut a ramp into the cliff behind the lip)
         int[] poolTop = null; // river nodes just below a fall → the node at its lip
@@ -1184,27 +1202,28 @@ final class RiverNetBuilder {
     /**
      * Two-pass 8-neighbour chamfer distance (forward and backward raster sweeps, twice: the second pairs settle the
      * float rounding of the first and do change values, so both stay). The distance spreads over the margin too: the
-     * valley fades out before the grid ends.
+     * valley fades out before the grid ends. Sweeps the cells [i0, i1] x [j0, j1] of a grid nx wide; cells outside
+     * stay untouched.
      */
-    private static void chamfer(float[] dd, int[] src, int nx, int ny, double g) {
+    private static void chamfer(float[] dd, int[] src, int nx, int i0, int i1, int j0, int j1, double g) {
         final double DG = g * Math.sqrt(2);
         for (int pass = 0; pass < 2; pass++) {
-            for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
+            for (int j = j0; j <= j1; j++) for (int i = i0; i <= i1; i++) {
                 int idx = j * nx + i;
-                if (i > 0) relax(dd, src, idx, idx - 1, g);
-                if (j > 0) {
+                if (i > i0) relax(dd, src, idx, idx - 1, g);
+                if (j > j0) {
                     relax(dd, src, idx, idx - nx, g);
-                    if (i > 0) relax(dd, src, idx, idx - nx - 1, DG);
-                    if (i < nx - 1) relax(dd, src, idx, idx - nx + 1, DG);
+                    if (i > i0) relax(dd, src, idx, idx - nx - 1, DG);
+                    if (i < i1) relax(dd, src, idx, idx - nx + 1, DG);
                 }
             }
-            for (int j = ny - 1; j >= 0; j--) for (int i = nx - 1; i >= 0; i--) {
+            for (int j = j1; j >= j0; j--) for (int i = i1; i >= i0; i--) {
                 int idx = j * nx + i;
-                if (i < nx - 1) relax(dd, src, idx, idx + 1, g);
-                if (j < ny - 1) {
+                if (i < i1) relax(dd, src, idx, idx + 1, g);
+                if (j < j1) {
                     relax(dd, src, idx, idx + nx, g);
-                    if (i < nx - 1) relax(dd, src, idx, idx + nx + 1, DG);
-                    if (i > 0) relax(dd, src, idx, idx + nx - 1, DG);
+                    if (i < i1) relax(dd, src, idx, idx + nx + 1, DG);
+                    if (i > i0) relax(dd, src, idx, idx + nx - 1, DG);
                 }
             }
         }
