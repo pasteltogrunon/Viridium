@@ -39,36 +39,55 @@ public final class LatticeNoise3 {
         return e + (f - e) * w;
     }
 
-    /** Lattice values covering one 16³ cube (spacing must be ≥ 16). Reuse per thread. */
+    /**
+     * The noise over one 16³ cube, precomputed for per-block sampling. Reuse per thread.
+     *
+     * <p>
+     * The spacing must be a multiple of 16: a cube then lies inside a single lattice cell, so only its 8 corners
+     * matter. {@link #prepare} does the x and y interpolation of every (lx, ly) pair once (256 pairs) and keeps the 16
+     * z weights, so a sample is one lerp instead of three fades and seven lerps. The operations and their order are
+     * those of {@link LatticeNoise3#at} (x, then y, then z), so the values are bit-identical.
+     */
     public final class Cached {
 
-        private int bx, by, bz, i0, j0, k0;
-        private final double[] v = new double[27];
+        /** Values interpolated on the two z faces of the cell, per {@code lx * 16 + ly}, and the z weights per lz. */
+        private final double[] e = new double[256], f = new double[256], wz = new double[16];
+
+        public Cached() {
+            if (spacing % 16 != 0)
+                throw new IllegalStateException("cube cache needs a spacing multiple of 16: " + spacing);
+        }
 
         public void prepare(int blockX, int blockY, int blockZ) {
-            bx = blockX;
-            by = blockY;
-            bz = blockZ;
-            i0 = floor((double) blockX / spacing);
-            j0 = floor((double) blockY / spacing);
-            k0 = floor((double) blockZ / spacing);
-            for (int a = 0; a < 3; a++) for (int b = 0; b < 3; b++) for (int c = 0; c < 3; c++)
-                v[(a * 3 + b) * 3 + c] = lattice(i0 + a, j0 + b, k0 + c);
+            int i0 = floor((double) blockX / spacing), j0 = floor((double) blockY / spacing),
+                k0 = floor((double) blockZ / spacing);
+            double c000 = lattice(i0, j0, k0), c100 = lattice(i0 + 1, j0, k0), c010 = lattice(i0, j0 + 1, k0),
+                c110 = lattice(i0 + 1, j0 + 1, k0);
+            double c001 = lattice(i0, j0, k0 + 1), c101 = lattice(i0 + 1, j0, k0 + 1),
+                c011 = lattice(i0, j0 + 1, k0 + 1), c111 = lattice(i0 + 1, j0 + 1, k0 + 1);
+            for (int lx = 0; lx < 16; lx++) {
+                double fx = (double) (blockX + lx) / spacing - i0;
+                double u = fade(fx - (int) fx);
+                double a = c000 + (c100 - c000) * u, b = c010 + (c110 - c010) * u;
+                double c = c001 + (c101 - c001) * u, d = c011 + (c111 - c011) * u;
+                for (int ly = 0; ly < 16; ly++) {
+                    double fy = (double) (blockY + ly) / spacing - j0;
+                    double w1 = fade(fy - (int) fy);
+                    e[lx * 16 + ly] = a + (b - a) * w1;
+                    f[lx * 16 + ly] = c + (d - c) * w1;
+                }
+            }
+            for (int lz = 0; lz < 16; lz++) {
+                double fz = (double) (blockZ + lz) / spacing - k0;
+                wz[lz] = fade(fz - (int) fz);
+            }
         }
 
         /** Sample at local cube coordinates (0..15). */
         public double at(int lx, int ly, int lz) {
-            double fx = (double) (bx + lx) / spacing - i0, fy = (double) (by + ly) / spacing - j0,
-                fz = (double) (bz + lz) / spacing - k0;
-            int i = (int) fx, j = (int) fy, k = (int) fz;
-            double u = fade(fx - i), w1 = fade(fy - j), w = fade(fz - k);
-            int o = (i * 3 + j) * 3 + k;
-            double c000 = v[o], c001 = v[o + 1], c010 = v[o + 3], c011 = v[o + 4];
-            double c100 = v[o + 9], c101 = v[o + 10], c110 = v[o + 12], c111 = v[o + 13];
-            double a = c000 + (c100 - c000) * u, b = c010 + (c110 - c010) * u;
-            double c = c001 + (c101 - c001) * u, d = c011 + (c111 - c011) * u;
-            double e = a + (b - a) * w1, f = c + (d - c) * w1;
-            return e + (f - e) * w;
+            int k = lx * 16 + ly;
+            double ev = e[k];
+            return ev + (f[k] - ev) * wz[lz];
         }
     }
 }

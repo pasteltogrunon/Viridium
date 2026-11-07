@@ -41,7 +41,6 @@ public final class FloraPlanner {
     private net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs;
     private net.junedev.viridium.worldgen.terrain.crust.CrustModel crust;
     private Block[] lith;
-    private ThreadLocal<net.junedev.viridium.worldgen.terrain.crust.CrustModel.Sampler> rockSampler;
     private double boulders;
     private net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves;
 
@@ -64,7 +63,6 @@ public final class FloraPlanner {
         this.crust = crust;
         this.lith = lith;
         this.boulders = boulders;
-        this.rockSampler = ThreadLocal.withInitial(() -> crust.new Sampler());
     }
 
     // ------------------------------------------------------------------ densities per biome
@@ -209,11 +207,9 @@ public final class FloraPlanner {
         }
     }
 
+    /** One sample: evaluating the noise directly is cheaper than preparing a cube sampler for it. */
     private Block rockAt(ColumnPlan p, int i, int y) {
-        net.junedev.viridium.worldgen.terrain.crust.CrustModel.Sampler s = rockSampler.get();
-        int y0 = y & ~15;
-        s.prepare(p.chunkX << 4, y0, p.chunkZ << 4);
-        return lith[s.at(p.crust, i, i & 15, y - y0, i >> 4).ordinal()];
+        return lith[crust.lithologyAt(p.crust, i, (p.chunkX << 4) + (i & 15), y, (p.chunkZ << 4) + (i >> 4)).ordinal()];
     }
 
     /** Top block of a dry column (null when water/ice covers it or the rock is bare); fills {@code sc}. */

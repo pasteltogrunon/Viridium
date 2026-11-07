@@ -58,6 +58,10 @@ public final class PlanPrefetcher {
     private volatile int[] around = new int[0];
     private volatile int aroundRadius = 16;
     private final Map<EntityPlayer, long[]> lastPos = new WeakHashMap<>();
+    /** Per player, the last full scan: column, look-ahead column and radius (server thread only). */
+    private final Map<EntityPlayer, long[]> lastScan = new WeakHashMap<>();
+    /** Ticks between scans forced even when idle (a multiple of {@link #TICK_INTERVAL}). */
+    private static final int RESCAN_TICKS = 100;
 
     private PlanPrefetcher(WorldServer world, ColumnPlanCache plans, WorldGen gen) {
         this.world = world;
@@ -146,15 +150,22 @@ public final class PlanPrefetcher {
             pending.clear();
             pendingNets.clear();
         }
+        // a scan costs ~0.1-0.25 ms per player on the server thread (cache lookups for every column in range): skip it
+        // while nobody changed column and nothing is queued, but rescan now and then (evicted plans, missed nets)
+        boolean idle = !jumped && pending.isEmpty() && pendingNets.isEmpty() && ticks % RESCAN_TICKS != 0;
         for (Object o : world.playerEntities) {
             EntityPlayer player = (EntityPlayer) o;
             int pcx = (int) Math.floor(player.posX) >> 4, pcz = (int) Math.floor(player.posZ) >> 4;
+            // look a bit ahead in the direction the player moves
+            int ax = pcx + (int) Math.round(clampAhead(player.motionX)),
+                az = pcz + (int) Math.round(clampAhead(player.motionZ));
+            long[] last = lastScan.get(player);
+            if (idle && last != null && last[0] == pcx && last[1] == pcz && last[2] == ax && last[3] == az
+                && last[4] == radius) continue;
+            lastScan.put(player, new long[] { pcx, pcz, ax, az, radius });
             // the networks under the player first: every column here waits for them
             queueNetsAt(player.posX, player.posZ);
-            // look a bit ahead in the direction the player moves
-            pcx += (int) Math.round(clampAhead(player.motionX));
-            pcz += (int) Math.round(clampAhead(player.motionZ));
-            queueColumns(pcx, pcz, radius);
+            queueColumns(ax, az, radius);
             queueNets(player.posX, player.posZ);
         }
     }
