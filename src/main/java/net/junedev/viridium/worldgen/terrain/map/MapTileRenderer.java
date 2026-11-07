@@ -3,7 +3,9 @@ package net.junedev.viridium.worldgen.terrain.map;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 
 import net.junedev.viridium.worldgen.terrain.WorldGen;
+import net.junedev.viridium.worldgen.terrain.fields.FastErosionStage;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
+import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
 
 /**
@@ -53,9 +55,10 @@ public final class MapTileRenderer {
         float[] hb = shade ? new float[n * n] : null;
         int[] out = new int[size * size];
         GenPoint o = point.get();
-        net.junedev.viridium.worldgen.terrain.pipeline.GenScratch s = gen.scratch();
+        GenScratch s = gen.scratch();
         s.riversOff = level > RIVERS_MAX_LEVEL;
         try {
+            reliefLattice(s, stage, bpp, tx, tz, size);
             for (int j = 0; j < n; j++) {
                 for (int i = 0; i < n; i++) {
                     boolean inside = i < size && j < size;
@@ -75,6 +78,7 @@ public final class MapTileRenderer {
             }
         } finally {
             s.riversOff = false;
+            s.reliefLattice = null;
         }
         if (shade) {
             for (int j = 0; j < size; j++) {
@@ -91,5 +95,25 @@ public final class MapTileRenderer {
         }
         for (int k = 0; k < out.length; k++) out[k] |= 0xff000000;
         return out;
+    }
+
+    /**
+     * Zoomed out (bpp > 8) the erosion stage would take its relief gradient from 4 coarse height evaluations per pixel
+     * (~60 % of a tile). Instead the tile gets one coarse height per pixel centre, with a one-pixel margin around the
+     * (size + 1)² evaluated points, and the gradient is a central difference over one pixel. Map only: the game never
+     * sets a lattice.
+     */
+    private void reliefLattice(GenScratch s, Stage stage, double bpp, int tx, int tz, int size) {
+        if (bpp <= 8 || stage.ordinal() < Stage.EROSION.ordinal() || !(gen.erosion instanceof FastErosionStage)) return;
+        int n = size + 3;
+        float[] l = new float[n * n];
+        double x0 = (tx * (double) size - 1 + 0.5) * bpp, z0 = (tz * (double) size - 1 + 0.5) * bpp;
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) l[j * n + i] = (float) gen.heightAt(x0 + i * bpp, z0 + j * bpp, false);
+        s.latticeX0 = x0;
+        s.latticeZ0 = z0;
+        s.latticeStep = bpp;
+        s.latticeN = n;
+        s.reliefLattice = l;
     }
 }
