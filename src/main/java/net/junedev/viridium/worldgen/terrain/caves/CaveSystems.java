@@ -222,9 +222,32 @@ public final class CaveSystems implements CaveFeatures {
      * compute the same value.
      */
     private void pit(Chamber ch) {
+        pit(ch, null);
+    }
+
+    /**
+     * As above; caller (not null) is the scratch of an evaluation that asked for cached river networks only (map
+     * previews): then no network is built for the pit, and if one it needs is missing the pit stays unresolved (none for
+     * now) and the caller is told so ({@code riversIncomplete}).
+     */
+    private void pit(Chamber ch, GenScratch caller) {
         if (ch.pitDone) return;
         GenPoint o = gen.evaluate(ch.x, ch.z, Stage.EROSION, 1, point.get(), scratch.get());
-        gen.rivers.apply(ch.x, ch.z, o, scratch.get());
+        GenScratch s = scratch.get();
+        if (caller != null) {
+            s.riversCachedOnly = true;
+            s.riversIncomplete = false;
+            try {
+                gen.rivers.applyNested(ch.x, ch.z, o, s);
+            } finally {
+                s.riversCachedOnly = false;
+            }
+            if (s.riversIncomplete) {
+                s.riversIncomplete = false;
+                caller.riversIncomplete = true;
+                return;
+            }
+        } else gen.rivers.applyNested(ch.x, ch.z, o, s);
         if (o.river == 0 && o.lake == 0 && o.riverD > 0.6 * Math.min(ch.rx, ch.rz) + 40 && o.h > 4)
             ch.pitR = 0.55 * Math.min(ch.rx, ch.rz);
         ch.pitDone = true;
@@ -458,6 +481,8 @@ public final class CaveSystems implements CaveFeatures {
      * walls; a chamber lake shows as a lake (a cenote).
      */
     public void surface(double x, double z, GenPoint o) {
+        // the evaluation this runs in may want cached river networks only (map previews): see pit(Chamber, GenScratch)
+        GenScratch caller = net.junedev.viridium.worldgen.terrain.stages.RiverStage.takeCachedOnlyCaller();
         if (P.plannedCaves <= 0) return;
         int ri = Math.floorDiv((int) Math.floor(x), R), rj = Math.floorDiv((int) Math.floor(z), R);
         // a pit reaches at most 0.55 * 70 + 10 blocks from its chamber, which sits at least 0.15 R inside its region:
@@ -479,7 +504,7 @@ public final class CaveSystems implements CaveFeatures {
             for (Chamber c : m.cands) {
                 double reach = 0.55 * Math.min(c.rx, c.rz) + 10;
                 if (Math.abs(x - c.x) > reach || Math.abs(z - c.z) > reach) continue;
-                pit(c);
+                pit(c, caller);
                 if (c.pitR <= 0) continue;
                 double d = Math.hypot(x - c.x, z - c.z);
                 if (d > c.pitR + 10) continue;

@@ -76,8 +76,8 @@ public class RiverStage extends GenStage {
         return SERIAL.get();
     }
 
-    /** River network of basin cell (ci, cj), building it if needed (other threads wait for the same build). */
-    public RiverNet net(int ci, int cj) {
+    /** River network of basin cell (ci, cj) if it is built and cached, else null (never builds one). */
+    public RiverNet cachedNet(int ci, int cj) {
         long key = key(ci, cj);
         Cached f = front[(int) key & (front.length - 1)];
         if (f != null && f.net.ci == ci && f.net.cj == cj) {
@@ -92,6 +92,14 @@ public class RiverStage extends GenStage {
             if (hit.used < now) hit.used = now;
             return hit.net;
         }
+        return null;
+    }
+
+    /** River network of basin cell (ci, cj), building it if needed (other threads wait for the same build). */
+    public RiverNet net(int ci, int cj) {
+        RiverNet hit = cachedNet(ci, cj);
+        if (hit != null) return hit;
+        long key = key(ci, cj);
         FutureTask<RiverNet> created = new FutureTask<>(() -> {
             long t0 = System.nanoTime();
             RiverNet n = new RiverNetBuilder(gen).build(basins.cell(ci, cj), basins, new GenScratch()); // builder holds per-build state
@@ -454,7 +462,46 @@ public class RiverStage extends GenStage {
 
     // ------------------------------------------------------------------ 10. main entry
 
+    /**
+     * The scratch of the evaluation on this thread that asked for cached networks only (map previews), from its river
+     * stage until the cave stage right after it takes it ({@link #takeCachedOnlyCaller}); null otherwise. The cave
+     * planners reached from there (collapse pits) use their own scratches, so this is how they learn the flag and report
+     * what they skipped.
+     */
+    private static final class Caller {
+
+        GenScratch cachedOnly;
+    }
+
+    private static final ThreadLocal<Caller> CALLER = ThreadLocal.withInitial(Caller::new);
+
+    /**
+     * For the 2D cave stage that runs right after this stage in an evaluation: the scratch of that evaluation if it asked
+     * for cached networks only (then the cave stage must not build any, and reports a skipped one by setting its
+     * {@code riversIncomplete}), else null. Clears it: a later call on this thread without a river stage in between
+     * sees null.
+     */
+    public static GenScratch takeCachedOnlyCaller() {
+        Caller c = CALLER.get();
+        GenScratch s = c.cachedOnly;
+        c.cachedOnly = null;
+        return s;
+    }
+
+    /**
+     * Rivers at (x, y). With {@code s.riversCachedOnly} no network is ever built: a basin that shapes the point but whose
+     * network is not cached is left out and {@code s.riversIncomplete} is set.
+     */
     public void apply(double x, double y, GenPoint o, GenScratch s) {
+        CALLER.get().cachedOnly = s.riversCachedOnly ? s : null;
+        applyNested(x, y, o, s);
+    }
+
+    /**
+     * As {@link #apply}, for planners that run inside another evaluation (cave pits): leaves what the enclosing
+     * evaluation told the cave stage ({@link #takeCachedOnlyCaller}) alone.
+     */
+    public void applyNested(double x, double y, GenPoint o, GenScratch s) {
         o.river = 0;
         o.riverD = 1e9;
         o.riverHW = 0;
@@ -478,7 +525,14 @@ public class RiverStage extends GenStage {
         for (int q = 0; q < nNear; q++) {
             BasinGraph.Cell c = basins.cell(s.NCK[q]);
             if (c.ocean) continue;
-            RiverNet net = net(c.ci, c.cj);
+            RiverNet net;
+            if (s.riversCachedOnly) {
+                net = cachedNet(c.ci, c.cj);
+                if (net == null) { // not built: left out, never built from here
+                    s.riversIncomplete = true;
+                    continue;
+                }
+            } else net = net(c.ci, c.cj);
             if (net.count > 0 || !net.lakes.isEmpty()) nets[nn++] = net;
         }
         // in phases across networks: all valleys first, then all channels (so each channel measures its water against
