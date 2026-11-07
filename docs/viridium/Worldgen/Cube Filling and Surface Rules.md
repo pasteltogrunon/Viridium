@@ -43,3 +43,7 @@ any cube can be painted on its own.
 ## Cliffs and waterfalls
 
 After the column fill, `cliff(...)` applies the [[Landforms Overview|Cliff Detail]] of the column: notches (air, or water below the level of a wet foot; never under loose soil), talus (cobblestone, gravel or mossy cobblestone on top) and curtains of falling water. A cube that a notch or talus reaches is filled even if it would be crust-only or air. `ColumnPlan.fallTop` adds the curtain of a waterfall (`flowing_water` meta 8, ice when frozen) above the water of the column.
+
+## Caves
+
+`CaveCarver.prepare` is called for every crust and surface cube; for each solid block `Cube.at(lx, ly, lz, rock)` decides rock, air, water or lava (nothing under loose soil). Crust-only cubes cost ~0.25 ms instead of ~0.15. See [[Caves Overview]].

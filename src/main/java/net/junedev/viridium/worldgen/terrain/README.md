@@ -207,6 +207,24 @@ Scarps set `GenPoint.scarp`: erosion leaves them alone (its lattice gradient dug
 their top). Map layer **Landforms**; debug: `VIRIDIUM_PROFILE`, `VIRIDIUM_CLIFF`, `VIRIDIUM_FALLMAP`; tests:
 `CliffDetailTest`, `WaterfallTest` (`RiverWaterTest` skips waterfall zones).
 
+## Caves
+
+Documented in the vault (`docs/viridium/Worldgen/Caves`). `caves/CaveCarver` decides, per block of every crust and
+surface cube, rock, air, water or lava:
+
+- **noise caves** on an 8-block lattice: caverns, huge caverns below −150, tunnels (two noises near zero), fissures,
+  lava tubes; the rock of the block sets the shape (karst big, crystalline narrow fissures, volcanic tubes, clastic
+  in between, mantle only huge caverns); cells whose corners exclude a cave cost nothing;
+- **aquifer cells** of 96×48×96 (dry, water, lava below −700) sealed by 2-block barriers; a lava sea in the last 48
+  blocks; 8 blocks of rock under rivers, lakes and the sea; a 6-block roof except in entrance zones;
+- **karst** (`Karst`): dolines in limestone and marble (2D, after the rivers) and shafts under a quarter of them;
+  sea caves and cave mouths come from `CliffDetail`;
+- **planned systems** (`CaveSystems`, 1024-block regions): giant chambers (up to ~360 blocks, some with a water or lava
+  lake), galleries between regions, collapse pits (cenotes) and entrance galleries for shallow chambers.
+
+Parameters `caves`, `caveEntrances`, `aquifers`, `dolines`, `plannedCaves`; tests in `CaveTest`
+(`VIRIDIUM_CAVES=x0,x1,z,yTop,yBottom` draws a section). Cost: +0.1 ms per crust cube, +0.5 µs per 2D point.
+
 ## Memory
 
 `VIRIDIUM_MEM=1 ./gradlew cleanTest test --tests '*MemoryAuditTest'` fills every cache as a long session would

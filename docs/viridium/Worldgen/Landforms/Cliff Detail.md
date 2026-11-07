@@ -60,3 +60,7 @@ sea cliff (x −3975..−3930, z −1128)          escarpment foot (x 3400..3480
   62 #######################wwwwww~~~~        105 #############################################++++++
   61 #######################wwwwww#~~~~       103 ##############################################++++##+
 ```
+
+## Sea caves and cave mouths
+
+Some stretches of wall get a much deeper notch: a sea cave at the water line (25 % of wet stretches, up to 6 high and 9 deep) or a cave mouth at the foot of tall dry walls (6 %, 5–10 high, 8 deep). See [[Caves Overview|Karst]].

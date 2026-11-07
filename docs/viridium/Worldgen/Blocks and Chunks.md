@@ -14,6 +14,8 @@ How the 2D pipeline output becomes blocks in a Cubic Chunks world. The order is:
 
 Cliff detail (the notch at the foot of a cliff, talus, fallen boulders, falling water at river lips) is computed from the plans of a column and its neighbours and drawn by cube filling and flora: see [[Landforms Overview|Cliff Detail]].
 
+Caves are carved while filling cubes, from noise fields, aquifer cells and planned shapes, with the shape chosen by the rock of each block: see [[Caves Overview]].
+
 ## Design notes
 
 The crust follows the design in [[Geology]]; vegetation follows [[Ecology]].
