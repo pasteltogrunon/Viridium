@@ -31,6 +31,18 @@ After merging, a leak showed up: `GenScratch` held a reference to its `PlateStag
 
 Regression baselines unchanged: `RiverWaterTest` (30662 columns, max step 2, walls 154, perched 155), `CliffDetailTest` (959 / 385 / 1509 / 2565), `WaterfallTest` (19, 116 blocks, 206 / 191), `CaveTest` (void 13.36 / 13.35 / 11.06 / 12.21 / 7.53 / 9.25 %, same 7 pits, 88 mouths, 16 great entrances).
 
+## Second round (2026-11-07)
+
+Done (proposals 1, 3, 4 and 5 below, plus the lake fix; nothing new adds threading risk):
+
+- **Map first paint without waiting for rivers**: with `GenScratch.riversCachedOnly` the river stage and cave pit planning never build a network; an incomplete tile is shown, not stored, and a complete render replaces it. Cold L4 tile: first paint 0.33 s (provisional), complete 2.9 s (was 3–11 s before anything showed).
+- **Channel search index** per network and a **shared basin-membership lattice**: per-point rivers −30–60 % on inland patches, relief grid of a build 36 → 25 ms; identical output.
+- **One evaluation per map tile** for every layer (LRU of 16 tiles, ≤ ~55 MB): switching through the 20 other layers of a drawn tile 2.4 s → 0.15 s.
+- **Erosion gradient from a per-tile relief lattice** at bpp > 8: warm L4 tiles ~205 → ~115 ms (map only; game output identical).
+- **Lakes**: the cap was the lowest point of the basin's whole divide, which is always its own outlet. Now a depression is capped by the lowest of its cells touching the divide (if any), by the water of rivers in or next to it, and by its shore once the broad valleys are carved (without the last two, lakes stood as walls over carved valleys). 0.1 → 3.4 lakes per network (half of them salt flats in arid basins); `LakeWaterTest`: 30 lakes in 8 basins, no walls. `RiverWaterTest` now: 30811 river columns, mean depth 4.00 (rest unchanged).
+
+Open: rivers flowing through a depression keep the carved valley level, so there are no large lakes crossed by a river (it would need the river's water raised to the lake level through it). Karst dolines are not lake-aware and could cut a lake shore.
+
 ## Proposals left for a decision
 
 1. **Map tiles without waiting for rivers**: draw provisional tiles from cached networks, build the missing ones at low priority, re-render. First paint of a cold tile ~3 s → ~0.3 s. Cross-area (map, rivers, caves), medium effort.

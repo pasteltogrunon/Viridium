@@ -36,7 +36,7 @@ public final class MapTileRenderer {
      */
     public static final int RIVERS_MAX_LEVEL = 4;
     /** Tile samples kept (~3.4 MB each for a 128² tile evaluated up to the biomes). */
-    private static final int SAMPLES_KEPT = 32;
+    private static final int SAMPLES_KEPT = 16; // up to ~3.4 MB each (BIOMES sample of a 128² tile)
 
     private record SampleKey(String params, int level, int tx, int tz, int size, Stage stage) {}
 
