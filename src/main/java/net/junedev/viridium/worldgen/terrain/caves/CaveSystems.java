@@ -60,6 +60,9 @@ public final class CaveSystems implements CaveFeatures {
         public final byte lakeKind;
         /** Collapse pit radius (0 none) and the floor height of the pit (absolute Y). */
         public double pitR;
+        /** May collapse into a pit (decided by {@link CaveSystems#pit} from the rivers); pitR is valid once pitDone. */
+        boolean pitCand;
+        volatile boolean pitDone = true;
         final int x0, x1, y0, y1, z0, z1;
 
         Chamber(double x, double y, double z, double rx, double ry, double rz, double lake, byte lakeKind) {
@@ -172,14 +175,62 @@ public final class CaveSystems implements CaveFeatures {
         final List<Segment> segments = new ArrayList<>();
         /** The first segments of the great entrance (its mouth), if any. */
         public final List<Segment> mouth = new ArrayList<>();
+        /** All segments of the great entrance (after the galleries), filled by ensureEntrance. */
+        final List<Segment> entrance = new ArrayList<>();
+        int ri, rj;
+        /** Target of the great entrance and how far from it (in x and z) its ramp may run; reach < 0: none. */
+        double ex, ez, reach = -1;
+        /** Pits and the great entrance resolved (they need the rivers). */
+        volatile boolean entDone;
     }
 
     private static long key(int ri, int rj) {
         return GenMath.mixKey(((long) ri << 32) | (rj & 0xffffffffL));
     }
 
-    /** Chambers of region (ri, rj) only (no galleries): cheap, used to link neighbours. */
+    private static final Chamber[] NO_CHAMBERS = {};
+
+    /** Per thread: the collapse pit candidates of the last region {@link #surface} looked at. */
+    private static final class PitMemo {
+
+        boolean set;
+        int ri, rj;
+        Chamber[] cands;
+    }
+
+    private final ThreadLocal<PitMemo> pitMemo = ThreadLocal.withInitial(PitMemo::new);
+
+    /** Chambers of a region, without pits or galleries (no rivers): cached, also used to link neighbours. */
+    private final Cache<Long, List<Chamber>> chamberLists = CacheBuilder.newBuilder()
+        .maximumSize(4096)
+        .build();
+
+    /** Chambers of region (ri, rj) only (no galleries, pits not resolved yet: see {@link #pit}). */
     private List<Chamber> chambers(int ri, int rj) {
+        long k = key(ri, rj);
+        List<Chamber> l = chamberLists.getIfPresent(k);
+        if (l == null) {
+            l = chambers0(ri, rj);
+            chamberLists.put(k, l);
+        }
+        return l;
+    }
+
+    /**
+     * Resolves the collapse pit of a chamber, once: it needs the rivers at the chamber centre, so it is only done when a
+     * point or a cube near the chamber needs it (river networks are never built just to plan caves far away). Races
+     * compute the same value.
+     */
+    private void pit(Chamber ch) {
+        if (ch.pitDone) return;
+        GenPoint o = gen.evaluate(ch.x, ch.z, Stage.EROSION, 1, point.get(), scratch.get());
+        gen.rivers.apply(ch.x, ch.z, o, scratch.get());
+        if (o.river == 0 && o.lake == 0 && o.riverD > 0.6 * Math.min(ch.rx, ch.rz) + 40 && o.h > 4)
+            ch.pitR = 0.55 * Math.min(ch.rx, ch.rz);
+        ch.pitDone = true;
+    }
+
+    private List<Chamber> chambers0(int ri, int rj) {
         List<Chamber> out = new ArrayList<>(2);
         if (P.plannedCaves <= 0) return out;
         double r0 = Noise.rnd(ri, rj, seed);
@@ -221,22 +272,45 @@ public final class CaveSystems implements CaveFeatures {
             } else if (lr < 0.45) lake = floor + 3 + 12 * Noise.rnd(ri, rj, s + 9);
             Chamber ch = new Chamber(x, y, z, rx, ry, rz, lake, lk);
             if (depthClass == 0 && Noise.rnd(ri, rj, s + 10) < 0.55) {
-                // a thin roof on land away from rivers collapses into a pit
-                gen.rivers.apply(x, z, o, scratch.get());
-                if (o.river == 0 && o.lake == 0 && o.riverD > 0.6 * Math.min(rx, rz) + 40 && o.h > 4)
-                    ch.pitR = 0.55 * Math.min(rx, rz);
+                // a thin roof on land away from rivers collapses into a pit (the rivers are checked lazily: pit())
+                ch.pitCand = true;
+                ch.pitDone = false;
             }
             out.add(ch);
         }
         return out;
     }
 
-    /** The region plan (chambers, galleries to the east and south neighbours, entrances). */
+    /** The full region plan (chambers with their pits, galleries to the east and south neighbours, great entrance). */
     public Region region(int ri, int rj) {
+        Region r = plan(ri, rj);
+        ensureEntrance(r);
+        return r;
+    }
+
+    private void ensureEntrance(Region r) {
+        if (r.entDone) return;
+        synchronized (r) {
+            if (r.entDone) return;
+            for (Chamber c : r.chambers) pit(c);
+            greatEntrance(r.ri, r.rj, r);
+            r.entDone = true;
+        }
+    }
+
+    /** True if a box centred at (x, z) with half-size hs may meet the great entrance of r. */
+    private static boolean mayMeetEntrance(Region r, double x, double z, double hs) {
+        return r.reach >= 0 && Math.abs(x - r.ex) <= r.reach + hs && Math.abs(z - r.ez) <= r.reach + hs;
+    }
+
+    /** Chambers and galleries, without rivers (pits and the great entrance are resolved on demand). */
+    private Region plan(int ri, int rj) {
         long k = key(ri, rj);
         Region r = regions.getIfPresent(k);
         if (r != null) return r;
         r = new Region();
+        r.ri = ri;
+        r.rj = rj;
         r.chambers.addAll(chambers(ri, rj));
         for (int c = 0; c < r.chambers.size(); c++) {
             Chamber a = r.chambers.get(c);
@@ -250,7 +324,18 @@ public final class CaveSystems implements CaveFeatures {
                     + e * 13 + c, galleryRadius(Math.min(a.y, b.y)), false);
             }
         }
-        greatEntrance(ri, rj, r);
+        Chamber best = null;
+        for (Chamber c : r.chambers) if (best == null || c.y > best.y) best = c;
+        if (best != null) {
+            double ty = best.y - 0.2 * best.ry;
+            GenPoint c0 = gen.evaluate(best.x, best.z, Stage.EROSION, 1, point.get(), scratch.get());
+            double depth = Math.max(40, TerrainLayout.SEA_LEVEL + Math.max(c0.h, 0) - ty);
+            r.ex = best.x;
+            r.ez = best.z;
+            // the ramp starts at most len away from the target (see greatEntrance), wanders 9 blocks sideways and its
+            // segments reach r * 1.4 + 1 (r <= 13) beyond their axis
+            r.reach = GenMath.clamp(depth * (depth < 600 ? 1.4 : 0.95), 120, 950) + 9 + 13 * 1.4 + 2;
+        } else r.entDone = true;
         regions.put(k, r);
         return r;
     }
@@ -278,9 +363,9 @@ public final class CaveSystems implements CaveFeatures {
             gen.rivers.apply(sx, sz, o, scratch.get());
             if (o.river != 0 || o.lake != 0 || o.riverD < 30) continue;
             double r0 = 9 + 4 * Noise.rnd(ri, rj, seed + 73);
-            int before = r.segments.size();
-            ramp(sx, TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0, sz, tx, ty, tz, r0, 7, r.segments, seed + 79 + ri * 31 + rj * 37);
-            for (int q = before; q < Math.min(r.segments.size(), before + 4); q++) r.mouth.add(r.segments.get(q));
+            int before = r.entrance.size();
+            ramp(sx, TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0, sz, tx, ty, tz, r0, 7, r.entrance, seed + 79 + ri * 31 + rj * 37);
+            for (int q = before; q < Math.min(r.entrance.size(), before + 4); q++) r.mouth.add(r.entrance.get(q));
             return;
         }
     }
@@ -335,8 +420,12 @@ public final class CaveSystems implements CaveFeatures {
     public boolean nearMouth(double x, double z) {
         if (P.plannedCaves <= 0) return false;
         int ri = Math.floorDiv((int) Math.floor(x), R), rj = Math.floorDiv((int) Math.floor(z), R);
-        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++)
-            for (Segment s : region(ri + di, rj + dj).mouth) if (s.near2d(x, z, 3)) return true;
+        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+            Region r = plan(ri + di, rj + dj);
+            if (!mayMeetEntrance(r, x, z, 4)) continue;
+            ensureEntrance(r);
+            for (Segment s : r.mouth) if (s.near2d(x, z, 3)) return true;
+        }
         return false;
     }
 
@@ -345,9 +434,17 @@ public final class CaveSystems implements CaveFeatures {
         if (P.plannedCaves <= 0) return;
         int ri = Math.floorDiv(bx, R), rj = Math.floorDiv(bz, R);
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
-            Region r = region(ri + di, rj + dj);
-            for (Chamber c : r.chambers) if (touches(c, bx, by, bz)) out.add(c);
+            Region r = plan(ri + di, rj + dj);
+            for (Chamber c : r.chambers) {
+                if (c.maxX() < bx || c.minX() > bx + 15 || c.maxZ() < bz || c.minZ() > bz + 15) continue;
+                pit(c);
+                if (touches(c, bx, by, bz)) out.add(c);
+            }
             for (Segment g : r.segments) if (touches(g, bx, by, bz)) out.add(g);
+            if (mayMeetEntrance(r, bx + 8, bz + 8, 8)) {
+                ensureEntrance(r);
+                for (Segment g : r.entrance) if (touches(g, bx, by, bz)) out.add(g);
+            }
         }
     }
 
@@ -363,8 +460,26 @@ public final class CaveSystems implements CaveFeatures {
     public void surface(double x, double z, GenPoint o) {
         if (P.plannedCaves <= 0) return;
         int ri = Math.floorDiv((int) Math.floor(x), R), rj = Math.floorDiv((int) Math.floor(z), R);
-        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
-            for (Chamber c : region(ri + di, rj + dj).chambers) {
+        // a pit reaches at most 0.55 * 70 + 10 blocks from its chamber, which sits at least 0.15 R inside its region:
+        // only the chambers of this region can touch (x, z)
+        PitMemo m = pitMemo.get();
+        if (!m.set || m.ri != ri || m.rj != rj) {
+            List<Chamber> l = chambers(ri, rj);
+            int n = 0;
+            for (Chamber c : l) if (c.pitCand) n++;
+            Chamber[] cands = n == 0 ? NO_CHAMBERS : new Chamber[n];
+            n = 0;
+            for (Chamber c : l) if (c.pitCand) cands[n++] = c;
+            m.cands = cands;
+            m.ri = ri;
+            m.rj = rj;
+            m.set = true;
+        }
+        {
+            for (Chamber c : m.cands) {
+                double reach = 0.55 * Math.min(c.rx, c.rz) + 10;
+                if (Math.abs(x - c.x) > reach || Math.abs(z - c.z) > reach) continue;
+                pit(c);
                 if (c.pitR <= 0) continue;
                 double d = Math.hypot(x - c.x, z - c.z);
                 if (d > c.pitR + 10) continue;
