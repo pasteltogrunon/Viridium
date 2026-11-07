@@ -22,12 +22,13 @@ import com.google.common.cache.CacheBuilder;
  * Planned cave systems, per region of {@value #R}×{@value #R} blocks (deterministic, any order):
  * <ul>
  * <li><b>giant chambers</b>: 0-2 per region, shallow (top 20-60 blocks under the ground), mid (y −150..−700) or deep
- * (y −900..−1850); 60-360 blocks across, domed with a flat floor, rough walls; some hold a lake (water, or lava deep
- * down);</li>
+ * (y −900..−1850); 60-360 blocks across, domed with a flat floor, rough walls, turned any way with a wobbly
+ * outline; some hold a lake (water, or lava deep down);</li>
  * <li><b>galleries</b>: wide winding tunnels from each chamber to one in the next region (east and south), 4-12 blocks
  * in radius;</li>
  * <li><b>collapse pits</b>: a shallow chamber whose roof is thin, on land away from rivers, has fallen in: a pit with
- * steep walls opens in the terrain down to its floor (a cenote when the chamber holds a lake);</li>
+ * steep walls opens in the terrain down to its floor (a cenote when the chamber holds a lake). Pits are not round: an
+ * ellipse along the chamber with a lobed outline, walls of 1-3 ledges and a mound of rubble from the fallen roof;</li>
  * <li><b>entrances</b>: other shallow chambers get a gallery climbing to the surface 100-220 blocks away.</li>
  * </ul>
  * Planning reads the relief, rivers and erosion directly (never the cave surface stage, which needs these plans).
@@ -55,8 +56,11 @@ public final class CaveSystems implements CaveFeatures {
     public static final class Chamber implements CaveCarver.Shape {
 
         public final double x, y, z, rx, ry, rz, floor;
-        /** Lake level (absolute Y; NaN none) and kind (WATER or LAVA). */
-        public final double lake;
+        /**
+         * Lake level (absolute Y; NaN none) and kind (WATER or LAVA). A collapse pit lowers it under its rim (so the
+         * cenote never spills), before pitDone is set.
+         */
+        public double lake;
         public final byte lakeKind;
         /** Collapse pit radius (0 none) and the floor height of the pit (absolute Y). */
         public double pitR;
@@ -64,8 +68,20 @@ public final class CaveSystems implements CaveFeatures {
         boolean pitCand;
         volatile boolean pitDone = true;
         final int x0, x1, y0, y1, z0, z1;
+        /** Orientation of the rx axis (cos, sin) and the wobble of the horizontal outline. */
+        final double ca, sa;
+        final Lobes outline;
+        /**
+         * Shape of a collapse pit, if the roof falls in: an ellipse of semi-axes pa (along rx) and pb, lobed; walls
+         * wallW wide (varying around), in 1-3 ledges, with a mound of rubble on the floor; nothing beyond pitReach (x and
+         * z) of the centre.
+         */
+        double pa, pb; // shrunk (before pitDone) when the full pit would cut into water
+        final double wallW, rubble, pitReach;
+        final int ledges, shape;
+        final Lobes pitOutline, wallOutline;
 
-        Chamber(double x, double y, double z, double rx, double ry, double rz, double lake, byte lakeKind) {
+        Chamber(double x, double y, double z, double rx, double ry, double rz, double lake, byte lakeKind, int shape) {
             this.x = x;
             this.y = y;
             this.z = z;
@@ -75,12 +91,75 @@ public final class CaveSystems implements CaveFeatures {
             this.floor = y - 0.55 * ry;
             this.lake = lake;
             this.lakeKind = lakeKind;
-            x0 = (int) Math.floor(x - rx * 1.3);
-            x1 = (int) Math.ceil(x + rx * 1.3);
-            z0 = (int) Math.floor(z - rz * 1.3);
-            z1 = (int) Math.ceil(z + rz * 1.3);
+            double ang = Noise.rnd(0, 0, shape) * Math.PI;
+            ca = Math.cos(ang);
+            sa = Math.sin(ang);
+            outline = new Lobes(new double[] { 0, 0.1, 0.08 }, shape, 10);
+            // as large as a round pit of radius 0.55 min(rx, rz) would be, stretched 1-1.8 times along the chamber
+            double base = 0.55 * Math.min(rx, rz), e = Math.sqrt(1 + 0.8 * Noise.rnd(1, 0, shape));
+            pa = base * (rx >= rz ? e : 1 / e);
+            pb = base * (rx >= rz ? 1 / e : e);
+            pitOutline = new Lobes(new double[] { 0, 0.1, 0.13, 0.06, 0.03 }, shape, 20);
+            wallOutline = new Lobes(new double[] { 0.25, 0.35 }, shape, 30);
+            wallW = 5 + 4 * Noise.rnd(3, 0, shape);
+            ledges = 1 + (int) (3 * Noise.rnd(4, 0, shape));
+            rubble = 2 + 7 * Noise.rnd(5, 0, shape);
+            this.shape = shape;
+            pitReach = Math.max(pa, pb) * (1 + pitOutline.amp) + wallW * (1 + wallOutline.amp) * 1.2 + 2;
+            double reach = Math.max(rx, rz) * 1.3 * (1 + outline.amp);
+            x0 = (int) Math.floor(x - reach);
+            x1 = (int) Math.ceil(x + reach);
+            z0 = (int) Math.floor(z - reach);
+            z1 = (int) Math.ceil(z + reach);
             y0 = (int) Math.floor(floor);
             y1 = (int) Math.ceil(y + ry * 1.3);
+        }
+
+        /**
+         * Where (px, pz) is relative to the pit outline: q < 1 inside; out (when not null) gets the distance in blocks
+         * outside the outline (0 inside) and the local wall width.
+         */
+        double pitQ(double px, double pz, double[] out) {
+            double ex = px - x, ez = pz - z;
+            double u = (ex * ca + ez * sa) / pa, w = (-ex * sa + ez * ca) / pb;
+            double rho = Math.sqrt(u * u + w * w);
+            if (rho < 1e-9) {
+                if (out != null) {
+                    out[0] = 0;
+                    out[1] = wallW;
+                }
+                return 0;
+            }
+            double c = u / rho, s = w / rho;
+            double q = rho / pitOutline.at(c, s);
+            if (out != null) {
+                double d = Math.sqrt(ex * ex + ez * ez);
+                out[0] = q > 1 ? d * (1 - 1 / q) : 0;
+                out[1] = wallW * wallOutline.at(c, s);
+            }
+            return q;
+        }
+
+        /**
+         * Floor of the open pit at (px, pz) (absolute Y): the chamber floor, rough, with a mound of rubble from the fallen
+         * roof in the middle (q from {@link #pitQ}). Both the 2D pit and the carved chamber use it.
+         */
+        double pitFloor(double px, double pz, double q) {
+            double rough = 2.5 * (Noise.fbm(px / 20, pz / 20, shape, 2) + 0.6);
+            return floor + 1 + Math.max(0, rough) + (q < 1 ? rubble * (1 - q * q) : 0);
+        }
+
+        /** Highest point the carved chamber may reach above (px, pz) (absolute Y, with its rough walls), or -inf. */
+        double ceilingAt(double px, double pz) {
+            double ex = px - x, ez = pz - z;
+            double u = (ex * ca + ez * sa) / rx, w = (-ex * sa + ez * ca) / rz;
+            double h2 = u * u + w * w;
+            if (h2 > 1e-12) {
+                double rho = Math.sqrt(h2), r = outline.at(u / rho, w / rho);
+                h2 /= r * r;
+            }
+            if (h2 >= 1.3) return Double.NEGATIVE_INFINITY; // 0.3 * c1 <= 0.3: the noise widens it a little
+            return y + ry * Math.sqrt(1.3 - h2);
         }
 
         public int minX() { return x0; }
@@ -93,11 +172,22 @@ public final class CaveSystems implements CaveFeatures {
         @Override
         public boolean inside(int px, int py, int pz, double c1) {
             if (py < floor) return false;
-            double dx = (px + 0.5 - x) / rx, dy = (py + 0.5 - y) / ry, dz = (pz + 0.5 - z) / rz;
-            double q = dx * dx + dy * dy + dz * dz + 0.3 * c1;
+            // under an open pit the floor is the rubble of the fallen roof (the same height as the 2D pit floor)
+            if (pitR > 0 && py < floor + 16) {
+                double q = pitQ(px + 0.5, pz + 0.5, null);
+                if (q < 1 && py < pitFloor(px + 0.5, pz + 0.5, q)) return false;
+            }
+            double ex = px + 0.5 - x, ez = pz + 0.5 - z;
+            double u = (ex * ca + ez * sa) / rx, w = (-ex * sa + ez * ca) / rz, dy = (py + 0.5 - y) / ry;
+            double h2 = u * u + w * w;
+            if (h2 > 1e-12) {
+                double rho = Math.sqrt(h2), r = outline.at(u / rho, w / rho);
+                h2 /= r * r;
+            }
+            double q = h2 + dy * dy + 0.3 * c1;
             if (q < 1) return true;
-            // a collapsed roof: the pit above the chamber (the 2D stage lowers the ground to match)
-            return pitR > 0 && py > y && Math.hypot(px + 0.5 - x, pz + 0.5 - z) < pitR;
+            // a collapsed roof: the pit above the chamber (the 2D stage lowers the ground to match, same outline)
+            return pitR > 0 && py > y && pitQ(px + 0.5, pz + 0.5, null) < 1;
         }
 
         @Override
@@ -196,6 +286,16 @@ public final class CaveSystems implements CaveFeatures {
         boolean set;
         int ri, rj;
         Chamber[] cands;
+        final double[] ow = new double[2];
+    }
+
+    /** A wall profile in n ledges: 0 at t = 0 (pit floor), 1 at t = 1 (rim); flat shelves with steep risers. */
+    static double stairs(double t, int n) {
+        if (t <= 0) return 0;
+        if (t >= 1) return 1;
+        double s = t * n;
+        int k = (int) s;
+        return (k + ss(0.45, 0.85, s - k)) / n;
     }
 
     private final ThreadLocal<PitMemo> pitMemo = ThreadLocal.withInitial(PitMemo::new);
@@ -232,25 +332,61 @@ public final class CaveSystems implements CaveFeatures {
      */
     private void pit(Chamber ch, GenScratch caller) {
         if (ch.pitDone) return;
-        GenPoint o = gen.evaluate(ch.x, ch.z, Stage.EROSION, 1, point.get(), scratch.get());
+        GenPoint o = rivers(ch.x, ch.z, caller);
+        if (o == null) return; // a network it needs is not cached (map preview): undecided for now
+        if (!(o.river == 0 && o.lake == 0 && o.riverD > 0.6 * Math.min(ch.rx, ch.rz) + 40 && o.h > 4)) {
+            ch.pitDone = true;
+            return;
+        }
+        // the ground around the outer edge of the walls: no river, lake or high lake shore there (the pit would cut
+        // into them; a smaller pit is tried before none), and the cenote stays under its lowest point
+        for (double sc : new double[] { 1, 0.75, 0.55 }) {
+            boolean ok = true;
+            double low = Double.POSITIVE_INFINITY;
+            for (int k = 0; k < 32 && ok; k++) {
+                double a = k * Math.PI * 2 / 32, c = Math.cos(a), s = Math.sin(a);
+                double rho = ch.pitOutline.at(c, s), u = c * rho * ch.pa * sc, w = s * rho * ch.pb * sc; // pit frame
+                double d = Math.sqrt(u * u + w * w), out = ch.wallW * ch.wallOutline.at(c, s) * 1.2 + 1;
+                double eu = u * (1 + out / d), ew = w * (1 + out / d);
+                GenPoint p = rivers(ch.x + eu * ch.ca - ew * ch.sa, ch.z + eu * ch.sa + ew * ch.ca, caller);
+                if (p == null) return; // a network it needs is not cached (map preview): undecided for now
+                double shore = net.junedev.viridium.worldgen.terrain.stages.RiverStage.lakeShore();
+                if (p.river != 0 || p.lake != 0 || (shore == shore && shore > ch.floor - TerrainLayout.SEA_LEVEL - 4)
+                    || p.h < 3 || p.riverD < p.riverHW + 4) ok = false;
+                low = Math.min(low, TerrainLayout.SEA_LEVEL + p.h);
+            }
+            if (!ok) continue;
+            if (ch.lake == ch.lake) ch.lake = Math.min(ch.lake, low - 2);
+            ch.pa *= sc;
+            ch.pb *= sc;
+            ch.pitR = 0.55 * Math.min(ch.rx, ch.rz) * sc;
+            break;
+        }
+        ch.pitDone = true;
+    }
+
+    /**
+     * The terrain up to the rivers at (x, z) (this planner's own temporaries), or null when caller asked for cached
+     * networks only and one is missing (then caller.riversIncomplete is set).
+     */
+    private GenPoint rivers(double x, double z, GenScratch caller) {
+        GenPoint o = gen.evaluate(x, z, Stage.EROSION, 1, point.get(), scratch.get());
         GenScratch s = scratch.get();
         if (caller != null) {
             s.riversCachedOnly = true;
             s.riversIncomplete = false;
             try {
-                gen.rivers.applyNested(ch.x, ch.z, o, s);
+                gen.rivers.applyNested(x, z, o, s);
             } finally {
                 s.riversCachedOnly = false;
             }
             if (s.riversIncomplete) {
                 s.riversIncomplete = false;
                 caller.riversIncomplete = true;
-                return;
+                return null;
             }
-        } else gen.rivers.applyNested(ch.x, ch.z, o, s);
-        if (o.river == 0 && o.lake == 0 && o.riverD > 0.6 * Math.min(ch.rx, ch.rz) + 40 && o.h > 4)
-            ch.pitR = 0.55 * Math.min(ch.rx, ch.rz);
-        ch.pitDone = true;
+        } else gen.rivers.applyNested(x, z, o, s);
+        return o;
     }
 
     private List<Chamber> chambers0(int ri, int rj) {
@@ -293,8 +429,8 @@ public final class CaveSystems implements CaveFeatures {
                 lake = floor + 3 + 10 * Noise.rnd(ri, rj, s + 9);
                 lk = CaveCarver.LAVA;
             } else if (lr < 0.45) lake = floor + 3 + 12 * Noise.rnd(ri, rj, s + 9);
-            Chamber ch = new Chamber(x, y, z, rx, ry, rz, lake, lk);
-            if (depthClass == 0 && Noise.rnd(ri, rj, s + 10) < 0.55) {
+            Chamber ch = new Chamber(x, y, z, rx, ry, rz, lake, lk, Noise.hash(ri, rj, s + 11));
+            if (depthClass == 0 && Noise.rnd(ri, rj, s + 10) < 0.8) {
                 // a thin roof on land away from rivers collapses into a pit (the rivers are checked lazily: pit())
                 ch.pitCand = true;
                 ch.pitDone = false;
@@ -481,11 +617,16 @@ public final class CaveSystems implements CaveFeatures {
      * walls; a chamber lake shows as a lake (a cenote).
      */
     public void surface(double x, double z, GenPoint o) {
+        surface(x, z, o, net.junedev.viridium.worldgen.terrain.stages.RiverStage.lakeShore());
+    }
+
+    /** As above; shore is the lake shore level of the point (RiverStage.lakeShore() right after its rivers), or NaN. */
+    public void surface(double x, double z, GenPoint o, double shore) {
         // the evaluation this runs in may want cached river networks only (map previews): see pit(Chamber, GenScratch)
         GenScratch caller = net.junedev.viridium.worldgen.terrain.stages.RiverStage.takeCachedOnlyCaller();
         if (P.plannedCaves <= 0) return;
         int ri = Math.floorDiv((int) Math.floor(x), R), rj = Math.floorDiv((int) Math.floor(z), R);
-        // a pit reaches at most 0.55 * 70 + 10 blocks from its chamber, which sits at least 0.15 R inside its region:
+        // a pit reaches at most ~95 blocks (pitReach) from its chamber, which sits at least 0.15 R inside its region:
         // only the chambers of this region can touch (x, z)
         PitMemo m = pitMemo.get();
         if (!m.set || m.ri != ri || m.rj != rj) {
@@ -502,21 +643,36 @@ public final class CaveSystems implements CaveFeatures {
         }
         {
             for (Chamber c : m.cands) {
-                double reach = 0.55 * Math.min(c.rx, c.rz) + 10;
-                if (Math.abs(x - c.x) > reach || Math.abs(z - c.z) > reach) continue;
+                if (Math.abs(x - c.x) > c.pitReach || Math.abs(z - c.z) > c.pitReach) continue;
+                // a river lake stays as it is
+                if (o.lake == 1 && !(c.lake == c.lake && o.lakeZ == c.lake - TerrainLayout.SEA_LEVEL)) continue;
                 pit(c, caller);
                 if (c.pitR <= 0) continue;
-                double d = Math.hypot(x - c.x, z - c.z);
-                if (d > c.pitR + 10) continue;
-                double floorH = c.floor + 2 - TerrainLayout.SEA_LEVEL; // relative to sea level
-                double wall = ss(c.pitR + 10, c.pitR, d); // 1 inside, steep wall over 10 blocks
-                double target = lerp(o.h, Math.min(o.h, floorH + 4 * Noise.fbm(x / 20, z / 20, seed + 61, 2) + 3), wall);
+                double[] ow = m.ow;
+                double q = c.pitQ(x, z, ow);
+                double f; // 0 on the floor of the pit, 1 at the rim (untouched ground)
+                if (q < 1) f = 0;
+                else {
+                    // walls in ledges: flat shelves and steep risers, a little ragged
+                    double t = ow[0] / ow[1] + 0.15 * Noise.fbm(x / 7, z / 7, seed + 62, 2);
+                    if (t >= 1) continue;
+                    f = stairs(t, c.ledges);
+                }
+                // the floor (the chamber's, with the rubble of the fallen roof: the carved chamber stops at it too)
+                double bottom = c.pitFloor(x, z, q) - TerrainLayout.SEA_LEVEL; // relative to sea level
+                // nor the shore of a lake above the pit floor: the pit stops there, the shore holds the water
+                if (shore == shore && shore > bottom - 4) continue;
+                double target = lerp(Math.min(o.h, bottom), o.h, f);
+                // no thin shelves over the hollow chamber: where less than 5 blocks of rock would be left above it, the
+                // wall drops straight to the floor (an overhanging cenote rim, never a hanging lip)
+                double roof = c.ceilingAt(x, z) - TerrainLayout.SEA_LEVEL;
+                if (f > 0 && target < roof + 5) target = Math.min(target, bottom);
                 if (target < o.h) {
                     o.doline = Math.max(o.doline, o.h - target);
                     o.h = target;
                     o.river = 0;
-                    if (c.lake == c.lake && c.lakeKind == CaveCarver.WATER && wall > 0.99
-                        && o.h < c.lake - TerrainLayout.SEA_LEVEL) {
+                    // a cenote: water wherever the pit is below the chamber's lake (the rim is always higher)
+                    if (c.lake == c.lake && c.lakeKind == CaveCarver.WATER && o.h < c.lake - TerrainLayout.SEA_LEVEL) {
                         o.lake = 1;
                         o.lakeZ = c.lake - TerrainLayout.SEA_LEVEL;
                     }

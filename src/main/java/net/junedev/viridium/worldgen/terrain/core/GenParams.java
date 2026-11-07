@@ -83,9 +83,10 @@ public final class GenParams implements Cloneable {
     public double waterfalls = 1.0;
     /**
      * Caves (Java-only, 0 off): amount of noise caves (&gt; 1 more void), entrances to the surface, aquifers (flooded and
-     * lava cells), karst dolines and shafts, planned systems (giant chambers and galleries).
+     * lava cells), karst dolines and shafts, planned systems (giant chambers and galleries), ground fissures (long narrow
+     * cracks in the land, ~1 per 3 km² of land per unit).
      */
-    public double caves = 1.0, caveEntrances = 1.0, aquifers = 1.0, dolines = 1.0, plannedCaves = 1.0;
+    public double caves = 1.0, caveEntrances = 1.0, aquifers = 1.0, dolines = 1.0, plannedCaves = 1.0, fissures = 1.0;
 
     // implementation
     /**
