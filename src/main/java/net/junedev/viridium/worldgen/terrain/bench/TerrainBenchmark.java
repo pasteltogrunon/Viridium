@@ -301,10 +301,11 @@ public final class TerrainBenchmark {
         line("");
         line("Map tiles 128x128 at level 4 (16 blocks/px), fast fields:");
         coldTile();
-        line("  every layer on a warm tile (nets cached after the first):");
+        line("  every layer on a warm tile, evaluated on its own (nets cached after the first):");
         MapTileRenderer r = new MapTileRenderer(gen);
         for (MapLayer l : MapLayer.ALL) {
             r.render(l, 4, 0, 0, 32, false); // warm
+            MapTileRenderer.clearSamples(); // a layer switch would reuse the tile's evaluation
             long t0 = System.nanoTime();
             int[] px = r.render(l, 4, 0, 0, 128, false);
             sink += px[0];
@@ -326,6 +327,7 @@ public final class TerrainBenchmark {
             String s = ex.submit(() -> {
                 WorldGen g = gen(true);
                 MapTileRenderer r = new MapTileRenderer(g);
+                MapTileRenderer.clearSamples();
                 long nets = g.rivers.buildCount();
                 long t0 = System.nanoTime();
                 int[] a = r.render(MapLayer.COMPOSITE, 4, tx, tz, 128, false);

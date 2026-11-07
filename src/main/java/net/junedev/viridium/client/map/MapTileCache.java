@@ -19,7 +19,9 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 
 /**
  * Map tiles: computed on worker threads by {@link MapTileRenderer}, uploaded to GL textures on the render thread (a
- * few per frame), kept in an LRU. Must be {@link #dispose disposed} on the render thread.
+ * few per frame), kept in an LRU. Must be {@link #dispose disposed} on the render thread. A tile whose river networks
+ * are not built yet is first shown without them (provisional, never stored) and replaced by a complete render queued
+ * behind the first paints.
  */
 public final class MapTileCache {
 
@@ -45,15 +47,42 @@ public final class MapTileCache {
         });
     }
 
+    /**
+     * Work for the pool: first paints before completions. Every task added to either queue submits one
+     * {@link #RUN_NEXT}, which runs the most urgent task waiting.
+     */
+    private static final ConcurrentLinkedQueue<Runnable> URGENT = new ConcurrentLinkedQueue<>(),
+        BACKGROUND = new ConcurrentLinkedQueue<>();
+    private static final Runnable RUN_NEXT = () -> {
+        Runnable r = URGENT.poll();
+        if (r == null) r = BACKGROUND.poll();
+        if (r != null) r.run();
+    };
+
+    private static void urgent(Runnable r) {
+        URGENT.add(r);
+        POOL.execute(RUN_NEXT);
+    }
+
+    private static void background(Runnable r) {
+        BACKGROUND.add(r);
+        POOL.execute(RUN_NEXT);
+    }
+
     /** Identifies a tile image. */
     public record Key(String layer, boolean borders, int level, int tx, int tz) {}
 
-    private record Ready(Key key, int[] pixels) {}
+    /** complete = false: a first paint without the river networks not built yet; a complete one replaces it. */
+    private record Ready(Key key, int[] pixels, boolean complete) {}
 
     private final MapTileRenderer renderer;
     private final MapTileStore store;
     private final LinkedHashMap<Key, DynamicTexture> textures = new LinkedHashMap<>(256, 0.75f, true);
     private final Set<Key> pending = ConcurrentHashMap.newKeySet();
+    /** Tiles shown as a provisional first paint (render thread). */
+    private final Set<Key> provisional = new java.util.HashSet<>();
+    /** Tiles whose complete render is queued or running, or done and not uploaded yet. */
+    private final Set<Key> completing = ConcurrentHashMap.newKeySet();
     private final ConcurrentLinkedQueue<Ready> ready = new ConcurrentLinkedQueue<>();
     private volatile Set<Key> wanted = ConcurrentHashMap.newKeySet();
     private volatile boolean disposed;
@@ -86,7 +115,11 @@ public final class MapTileCache {
 
     /**
      * Declares the tiles the view needs, nearest first. Requests the missing ones, drops queued work that is no longer
-     * wanted.
+     * wanted. Render thread only.
+     * <p>
+     * A missing tile is first painted from the river networks already built (fast); when it needed others, it is shown
+     * as it is but not stored, and a complete render (which builds the networks, on the worker's own thread) is queued
+     * behind every first paint and replaces it.
      */
     public void request(Collection<Key> nearestFirst) {
         Set<Key> w = ConcurrentHashMap.newKeySet();
@@ -94,20 +127,27 @@ public final class MapTileCache {
         wanted = w;
         int budget = THREADS * 3 - pending.size();
         for (Key k : nearestFirst) {
-            if (budget <= 0) break;
-            if (textures.containsKey(k) || pending.contains(k)) continue;
+            if (textures.containsKey(k)) {
+                if (provisional.contains(k)) complete(k); // e.g. its completion was dropped while out of view
+                continue;
+            }
+            if (budget <= 0 || pending.contains(k)) continue;
             pending.add(k);
             budget--;
             MapLayer layer = MapLayer.byId(k.layer());
-            POOL.execute(() -> {
+            urgent(() -> {
                 try {
                     if (disposed || !wanted.contains(k)) return;
                     int[] px = store == null ? null : store.load(k);
-                    if (px == null) {
-                        px = renderer.render(layer, k.level(), k.tx(), k.tz(), TILE, k.borders());
-                        if (store != null) store.save(k, px);
+                    if (px != null) {
+                        ready.add(new Ready(k, px, true));
+                        return;
                     }
-                    if (!disposed) ready.add(new Ready(k, px));
+                    MapTileRenderer.Tile t = renderer.render(layer, k.level(), k.tx(), k.tz(), TILE, k.borders(), true);
+                    if (t.complete && store != null) store.save(k, t.pixels);
+                    if (disposed) return;
+                    ready.add(new Ready(k, t.pixels, t.complete));
+                    if (!t.complete) complete(k);
                 } catch (Throwable t) {
                     Viridium.LOGGER.warn("Map tile {} failed", k, t);
                 } finally {
@@ -115,6 +155,27 @@ public final class MapTileCache {
                 }
             });
         }
+    }
+
+    /** Queues the complete render of a provisional tile (once). */
+    private void complete(Key k) {
+        if (!completing.add(k)) return;
+        MapLayer layer = MapLayer.byId(k.layer());
+        background(() -> {
+            boolean queued = false;
+            try {
+                if (disposed || !wanted.contains(k)) return; // requested again when back in view
+                int[] px = renderer.render(layer, k.level(), k.tx(), k.tz(), TILE, k.borders());
+                if (store != null) store.save(k, px);
+                if (disposed) return;
+                ready.add(new Ready(k, px, true));
+                queued = true;
+            } catch (Throwable t) {
+                Viridium.LOGGER.warn("Map tile {} failed", k, t);
+            } finally {
+                if (!queued) completing.remove(k);
+            }
+        });
     }
 
     /** Uploads finished tiles. Render thread only. */
@@ -127,6 +188,10 @@ public final class MapTileCache {
             tex.updateDynamicTexture();
             DynamicTexture old = textures.put(r.key(), tex);
             if (old != null) old.deleteGlTexture();
+            if (r.complete()) {
+                provisional.remove(r.key());
+                completing.remove(r.key());
+            } else provisional.add(r.key());
         }
         if (textures.size() > MAX_TEXTURES) {
             Iterator<Map.Entry<Key, DynamicTexture>> it = textures.entrySet()
@@ -137,6 +202,7 @@ public final class MapTileCache {
                 if (wanted.contains(e.getKey())) continue;
                 e.getValue()
                     .deleteGlTexture();
+                provisional.remove(e.getKey());
                 it.remove();
             }
         }
@@ -144,11 +210,11 @@ public final class MapTileCache {
 
     /** Runs background work on the map worker pool. */
     public static void submit(Runnable r) {
-        POOL.execute(r);
+        urgent(r);
     }
 
     public int pendingCount() {
-        return pending.size() + ready.size();
+        return pending.size() + ready.size() + completing.size();
     }
 
     /** Frees every texture. Render thread only. */
@@ -157,5 +223,7 @@ public final class MapTileCache {
         for (DynamicTexture t : new ArrayList<>(textures.values())) t.deleteGlTexture();
         textures.clear();
         ready.clear();
+        provisional.clear();
+        completing.clear();
     }
 }
