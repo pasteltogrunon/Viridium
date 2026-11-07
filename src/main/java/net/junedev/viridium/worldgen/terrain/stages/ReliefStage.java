@@ -36,9 +36,13 @@ public class ReliefStage extends GenStage {
         if (P.plateaus <= 0 || L < 0.02) return 0;
         // towards the coast and collisions the mask is lowered: the plateau ends inland with its scarp, it does not ramp down
         double inland = ss(0.02, 0.2, L) * (1 - ss(0.05, 0.3, o.collZ));
-        double m = fbm(x / 9000, y / 9000, SD.plat, 3) + 0.22 * fbm(x / 1700, y / 1700, SD.plat + 1, 3)
-            + 0.06 * fbm(x / 300, y / 300, SD.plat + 2, 2) - 0.3 * (1 - inland);
         double thr = 0.16 - 0.12 * (P.plateaus - 1);
+        double m0 = fbm(x / 9000, y / 9000, SD.plat, 3);
+        // the two detail octaves add at most 0.28 (|fbm| <= ~1; 1.5 bounds it safely): far below the threshold they
+        // cannot lift m above it, so skip them (same result)
+        if (m0 + 0.28 * 1.5 - 0.3 * (1 - inland) < thr - 0.045) return 0;
+        double m = m0 + 0.22 * fbm(x / 1700, y / 1700, SD.plat + 1, 3) + 0.06 * fbm(x / 300, y / 300, SD.plat + 2, 2)
+            - 0.3 * (1 - inland);
         if (m < thr - 0.045) return 0;
         boolean basalt = fbm(x / 20000, y / 20000, SD.plat + 4, 2) > 0.2;
         double k;
@@ -143,7 +147,8 @@ public class ReliefStage extends GenStage {
                 mtn = r * r * 290 * mask * P.mountainStrength;
             }
             double k = plateau(x, y, L, o);
-            h = plains + hills * (1 - 0.65 * k) + mtn * (1 - 0.85 * k) + k * plateauTop(x, y);
+            // k * plateauTop is +0 when k == 0 (the top is positive): skip its noise there
+            h = plains + hills * (1 - 0.65 * k) + mtn * (1 - 0.85 * k) + (k > 0 ? k * plateauTop(x, y) : 0);
             o.mtnMask *= 1 - 0.85 * k;
         } else {
             o.mtnMask = 0;

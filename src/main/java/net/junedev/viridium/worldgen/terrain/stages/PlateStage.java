@@ -3,7 +3,6 @@ package net.junedev.viridium.worldgen.terrain.stages;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.TAU;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.floor;
-import static net.junedev.viridium.worldgen.terrain.core.GenMath.hypot;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.fbm;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.hash;
@@ -18,6 +17,12 @@ import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
  * boundaries are classified as divergent (ridge), subduction (trench + volcanic arc on the overriding plate) or
  * continental collision (suture range + plateau). Bands fade near the other boundaries so triple junctions stay
  * continuous.
+ *
+ * <p>
+ * Everything that depends only on the plate cell (feature points, velocities, pair normals, convergence, collision,
+ * override sign) is cached per thread in {@link GenScratch} for the last cell: consecutive points almost always share
+ * it (cells are {@code plateSize} wide). The cached values are computed with the same expressions as before, so the
+ * output is bit-identical.
  */
 public class PlateStage extends GenStage {
 
@@ -63,37 +68,86 @@ public class PlateStage extends GenStage {
         return conv > 0.12 && pairRnd(ai, aj, bi, bj, SD.coll) < P.collisionChance;
     }
 
-    /** Convergence between seeds ka and kb of the current neighbourhood. */
-    private double convOf(int ka, int kb, GenScratch s) {
-        double nx = s.FX[kb] - s.FX[ka], ny = s.FY[kb] - s.FY[ka];
-        double l = Math.sqrt(nx * nx + ny * ny);
-        if (l == 0) l = 1;
-        nx /= l;
-        ny /= l;
-        plateVel(s.FI[ka], s.FJ[ka], s);
-        double ax = s.VX, ay = s.VY;
-        plateVel(s.FI[kb], s.FJ[kb], s);
-        return (ax - s.VX) * nx + (ay - s.VY) * ny;
+    /** Loads the 5x5 neighbourhood of cell (ci, cj) into the scratch (kept if it is already there). */
+    private void loadCell(int ci, int cj, GenScratch s) {
+        if (s.plateOwner == this && s.plateCi == ci && s.plateCj == cj) return;
+        s.plateOwner = this;
+        s.plateCi = ci;
+        s.plateCj = cj;
+        if (++s.plateStamp == 0) { // wrapped: old stamps could match again
+            java.util.Arrays.fill(s.PVOK, 0);
+            java.util.Arrays.fill(s.PGOK, 0);
+            java.util.Arrays.fill(s.PDOK, 0);
+            java.util.Arrays.fill(s.PSOK, 0);
+            s.plateStamp = 1;
+        }
+        int k = 0;
+        for (int dj = -2; dj <= 2; dj++) {
+            for (int di = -2; di <= 2; di++, k++) {
+                int i = ci + di, j = cj + dj;
+                s.FX[k] = featX(i, j);
+                s.FY[k] = featY(i, j);
+                s.FI[k] = i;
+                s.FJ[k] = j;
+            }
+        }
+    }
+
+    /** Velocity of seed k of the current cell into s.PVX[k], s.PVY[k]. */
+    private void vel(int k, GenScratch s) {
+        if (s.PVOK[k] == s.plateStamp) return;
+        plateVel(s.FI[k], s.FJ[k], s);
+        s.PVX[k] = s.VX;
+        s.PVY[k] = s.VY;
+        s.PVOK[k] = s.plateStamp;
+    }
+
+    /** Geometry of the pair (a, b) of the current cell: unit normal a→b, distance, bisector midpoint. */
+    private int pair(int a, int b, GenScratch s) {
+        int q = a * 25 + b;
+        if (s.PGOK[q] == s.plateStamp) return q;
+        double ax = s.FX[a], ay = s.FY[a];
+        double nx = s.FX[b] - ax, ny = s.FY[b] - ay;
+        double len = Math.sqrt(nx * nx + ny * ny);
+        s.PNX[q] = nx / len;
+        s.PNY[q] = ny / len;
+        s.PLEN[q] = len;
+        s.PMX[q] = (ax + s.FX[b]) * 0.5;
+        s.PMY[q] = (ay + s.FY[b]) * 0.5;
+        s.PGOK[q] = s.plateStamp;
+        return q;
+    }
+
+    /** Geometry plus convergence (>0 convergent), collision flag and override sign of the pair (a, b). */
+    private int pairDyn(int a, int b, GenScratch s) {
+        int q = pair(a, b, s);
+        if (s.PDOK[q] == s.plateStamp) return q;
+        vel(a, s);
+        vel(b, s);
+        double conv = (s.PVX[a] - s.PVX[b]) * s.PNX[q] + (s.PVY[a] - s.PVY[b]) * s.PNY[q];
+        s.PCONV[q] = conv;
+        s.PCOLL[q] = isCollision(conv, s.FI[a], s.FJ[a], s.FI[b], s.FJ[b]);
+        s.POVER[q] = overSign(s.FI[a], s.FJ[a], s.FI[b], s.FJ[b]);
+        s.PDOK[q] = s.plateStamp;
+        return q;
     }
 
     /**
      * Distance from (wx, wy) in plate bk to the real Voronoi edge with plate k: the bisector clipped by the plate's other
      * half-planes (the bisector line alone runs on past a triple junction, where it is no boundary at all). Infinity if
-     * the two plates do not touch.
+     * the two plates do not touch. {@code q} is the pair index of (bk, k).
      */
-    private double edgeSegmentDistance(int bk, int k, double d, double nx, double ny, double wx, double wy, GenScratch s) {
-        final double[] FX = s.FX, FY = s.FY;
-        double ax = FX[bk], ay = FY[bk];
+    private double edgeSegmentDistance(int bk, int k, int q, double d, double wx, double wy, GenScratch s) {
+        double nx = s.PNX[q], ny = s.PNY[q];
         double px = wx + d * nx, py = wy + d * ny; // foot of the perpendicular on the bisector
         double ux = -ny, uy = nx; // along the bisector
         double tmin = Double.NEGATIVE_INFINITY, tmax = Double.POSITIVE_INFINITY;
         for (int m = 0; m < 25; m++) {
             if (m == bk || m == k) continue;
-            double mx = FX[m] - ax, my = FY[m] - ay, ml = Math.sqrt(mx * mx + my * my);
-            mx /= ml;
-            my /= ml;
+            int r = pair(bk, m, s);
+            double mx = s.PNX[r], my = s.PNY[r];
             // A's side of the bisector with m: (X - mid)·n <= 0
-            double c0 = (px - (ax + FX[m]) * 0.5) * mx + (py - (ay + FY[m]) * 0.5) * my, cu = ux * mx + uy * my;
+            double c0 = (px - s.PMX[r]) * mx + (py - s.PMY[r]) * my, cu = ux * mx + uy * my;
             if (Math.abs(cu) < 1e-12) {
                 if (c0 > 0) return Double.POSITIVE_INFINITY;
                 continue;
@@ -121,22 +175,26 @@ public class PlateStage extends GenStage {
     /**
      * Soft distance to the non-collisional boundaries, measured to their real segments: a bisector line alone runs on past
      * the triple junction where the boundary turns into a collision, and cut a straight ocean wedge there.
+     * {@code open} has a bit per non-collisional neighbour.
      */
-    private double softEdgeNC(int bk, double wx, double wy, GenScratch s) {
+    private double softEdgeNC(int bk, int open, double wx, double wy, GenScratch s) {
         final double K = P.plateSize * 0.02, S = P.plateSize;
-        final double[] FX = s.FX, FY = s.FY;
+        final double[] LD = s.LD;
         double best = 2 * S;
         int n = 0;
-        boolean[] done = s.LDONE;
-        java.util.Arrays.fill(done, false);
-        for (;;) { // nearest lines first, until the next line is beyond the best segment found (+ the soft margin)
+        while (open != 0) { // nearest lines first, until the next line is beyond the best segment found (+ the soft margin)
             int pick = -1;
-            for (int k = 0; k < 25; k++)
-                if (k != bk && s.LNC[k] && !done[k] && (pick < 0 || s.LD[k] < s.LD[pick])) pick = k;
-            if (pick < 0 || s.LD[pick] > best + 6 * K) break;
-            done[pick] = true;
-            double nx = FX[pick] - FX[bk], ny = FY[pick] - FY[bk], l = Math.sqrt(nx * nx + ny * ny);
-            double dd = edgeSegmentDistance(bk, pick, s.LD[pick], nx / l, ny / l, wx, wy, s);
+            double pd = 0;
+            for (int bits = open; bits != 0; bits &= bits - 1) {
+                int k = Integer.numberOfTrailingZeros(bits);
+                if (pick < 0 || LD[k] < pd) {
+                    pick = k;
+                    pd = LD[k];
+                }
+            }
+            if (pd > best + 6 * K) break;
+            open &= ~(1 << pick);
+            double dd = edgeSegmentDistance(bk, pick, pair(bk, pick, s), pd, wx, wy, s);
             s.SEGD[n++] = dd;
             if (dd < best) best = dd;
         }
@@ -146,38 +204,28 @@ public class PlateStage extends GenStage {
     }
 
     public void apply(double x, double y, GenPoint o, GenScratch s) {
-        final double[] FX = s.FX, FY = s.FY, PW = s.PW;
+        final double[] FX = s.FX, FY = s.FY, PW = s.PW, LD = s.LD;
         final int[] FI = s.FI, FJ = s.FJ;
         double S = P.plateSize, wa = S * P.plateWarp, ws = S * 0.55;
         double qx = x / ws, qy = y / ws;
         double wx = x + wa * fbm(qx, qy, SD.warp, 3);
         double wy = y + wa * fbm(qx + 17.31, qy - 9.17, SD.warp + 7, 3);
-        int ci = floor(wx / S), cj = floor(wy / S);
+        loadCell(floor(wx / S), floor(wy / S), s);
         double best = Double.POSITIVE_INFINITY;
-        int bk = 0, k = 0;
-        for (int dj = -2; dj <= 2; dj++) {
-            for (int di = -2; di <= 2; di++, k++) {
-                int i = ci + di, j = cj + dj;
-                double fx = featX(i, j), fy = featY(i, j);
-                FX[k] = fx;
-                FY[k] = fy;
-                FI[k] = i;
-                FJ[k] = j;
-                double dx = fx - wx, dy = fy - wy, d = dx * dx + dy * dy;
-                PW[k] = d;
-                if (d < best) {
-                    best = d;
-                    bk = k;
-                }
+        int bk = 0, k;
+        for (k = 0; k < 25; k++) {
+            double dx = FX[k] - wx, dy = FY[k] - wy, d = dx * dx + dy * dy;
+            PW[k] = d;
+            if (d < best) {
+                best = d;
+                bk = k;
             }
         }
         double ax = FX[bk], ay = FY[bk];
         int ai = FI[bk], aj = FJ[bk];
-        plateVel(ai, aj, s);
-        double avx = s.VX, avy = s.VY;
         double edge = Double.POSITIVE_INFINITY, edgeNC = 2 * S, ridge = 0, orog = 0, trench = 0, cw = 0, cs = 0, arc = 0;
         double collZ = 0, cwS = 0, cwK = 0, cwD = 0;
-        int nk = bk;
+        int nk = bk, ncMask = 0; // ncMask: neighbours whose boundary is not a collision
         double wR = S * 0.045, wO = S * 0.16, tW = S * 0.025, aC = S * 0.08, aW = S * 0.022, Wz = S * 0.3,
             Wf = S * 0.08;
         // two smallest "power distances" (|pK|²-|pA|²)/2S: fade a boundary's bands near the plate's OTHER boundaries
@@ -194,30 +242,30 @@ public class PlateStage extends GenStage {
         }
         for (k = 0; k < 25; k++) {
             if (k == bk) continue;
-            double nx = FX[k] - ax, ny = FY[k] - ay;
-            double len = Math.sqrt(nx * nx + ny * ny);
-            nx /= len;
-            ny /= len;
+            int q = pair(bk, k, s);
+            double nx = s.PNX[q], ny = s.PNY[q];
             // distance to the bisector (exact Voronoi edge in warped space)
-            double d = ((ax + FX[k]) * 0.5 - wx) * nx + ((ay + FY[k]) * 0.5 - wy) * ny;
+            double d = (s.PMX[q] - wx) * nx + (s.PMY[q] - wy) * ny;
             if (d < edge) {
                 edge = d;
                 nk = k;
             }
-            s.LD[k] = d;
-            s.LNC[k] = true;
+            LD[k] = d;
             if (d >= S) {
+                ncMask |= 1 << k;
                 if (d < edgeNC) edgeNC = d;
                 continue;
             }
-            plateVel(FI[k], FJ[k], s);
-            double conv = (avx - s.VX) * nx + (avy - s.VY) * ny; // >0 convergent, <0 divergent
-            boolean coll = isCollision(conv, ai, aj, FI[k], FJ[k]);
-            s.LNC[k] = !coll;
-            if (!coll && d < edgeNC) edgeNC = d;
+            pairDyn(bk, k, s);
+            double conv = s.PCONV[q]; // >0 convergent, <0 divergent
+            boolean coll = s.PCOLL[q];
+            if (!coll) {
+                ncMask |= 1 << k;
+                if (d < edgeNC) edgeNC = d;
+            }
             if (d >= S * 0.6) continue;
             double cP = clamp(conv, 0, 1), dP = clamp(-conv, 0, 1);
-            double sd = overSign(ai, aj, FI[k], FJ[k]) * d; // signed: + on the overriding plate
+            double sd = s.POVER[q] * d; // signed: + on the overriding plate
             double fk = ss(0, Wf, k == p1k ? p2 : p1); // fades near the other boundaries (triple junctions)
             double eR = Math.exp(-(d / wR) * (d / wR));
             double eO = Math.exp(-(d / wO) * (d / wO));
@@ -238,11 +286,11 @@ public class PlateStage extends GenStage {
                 double pA = PW[bk], pB = PW[k];
                 for (int m = 0; m < 25; m++) {
                     if (m == bk || m == k) continue;
-                    double den = hypot(FX[m] - ax, FY[m] - ay) + hypot(FX[m] - FX[k], FY[m] - FY[k]);
+                    int qa = pair(bk, m, s), qb = pair(k, m, s);
+                    double den = s.PLEN[qa] + s.PLEN[qb];
                     double nA = (PW[m] - pA) / den, nB = (PW[m] - pB) / den + 2 * d;
-                    if (nA < gnum && nA < S * 0.22 && !isCollision(convOf(bk, m, s), ai, aj, FI[m], FJ[m])) gnum = nA;
-                    if (nB < gnum && nB < S * 0.22 && !isCollision(convOf(k, m, s), FI[k], FJ[k], FI[m], FJ[m]))
-                        gnum = nB;
+                    if (nA < gnum && nA < S * 0.22 && !s.PCOLL[pairDyn(bk, m, s)]) gnum = nA;
+                    if (nB < gnum && nB < S * 0.22 && !s.PCOLL[pairDyn(k, m, s)]) gnum = nB;
                 }
                 double g = ss(S * 0.02, S * 0.22, gnum);
                 double z = (1 - ss(0, Wz, d)) * g * fk;
@@ -262,7 +310,7 @@ public class PlateStage extends GenStage {
         o.wy = wy;
         if (P.exactPlateEdges) {
             edge = softEdge(bk, edge, s);
-            edgeNC = softEdgeNC(bk, wx, wy, s);
+            edgeNC = softEdgeNC(bk, ncMask, wx, wy, s);
         }
         o.edge = edge;
         o.edgeNC = edgeNC;

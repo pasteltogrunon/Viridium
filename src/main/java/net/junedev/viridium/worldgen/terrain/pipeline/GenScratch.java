@@ -27,9 +27,28 @@ public final class GenScratch {
     public boolean riversOff;
     /** Blocks per pixel of the current evaluation (1 in game): coarse caches step aside when it outgrows them. */
     public double bpp = 1;
-    /** Plate stage: distance to each neighbour's bisector, whether it is a non-collisional boundary, segment distances. */
+    /** Plate stage: distance to each neighbour's bisector, segment distances. */
     public final double[] LD = new double[25], SEGD = new double[25];
-    public final boolean[] LNC = new boolean[25], LDONE = new boolean[25];
+    /**
+     * Plate stage cache of the last 5x5 neighbourhood (FX, FY, FI, FJ above): valid while {@code plateOwner} and
+     * (plateCi, plateCj) match. Velocities and pair values (index a*25+b) are filled lazily; an entry is valid when its
+     * stamp equals {@code plateStamp}. Everything here depends only on the cell, so it never changes the output.
+     */
+    public Object plateOwner;
+    public int plateCi, plateCj, plateStamp;
+    public final double[] PVX = new double[25], PVY = new double[25];
+    public final int[] PVOK = new int[25];
+    /** Pair geometry: unit normal a→b, length, bisector midpoint. */
+    public final double[] PNX = new double[625], PNY = new double[625], PLEN = new double[625], PMX = new double[625],
+        PMY = new double[625];
+    public final int[] PGOK = new int[625];
+    /** Pair dynamics: convergence, collision, override sign. */
+    public final double[] PCONV = new double[625];
+    public final boolean[] PCOLL = new boolean[625];
+    public final int[] POVER = new int[625], PDOK = new int[625];
+    /** Clip interval of the Voronoi edge (bk, k) along its bisector, from the midpoint (NaN: the plates do not touch). */
+    public final double[] PTMIN = new double[625], PTMAX = new double[625];
+    public final int[] PSOK = new int[625];
 
     /** Small output buffer for field lookups. */
     public final double[] tmp1 = new double[1];
