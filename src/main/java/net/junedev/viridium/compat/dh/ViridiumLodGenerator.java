@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.Consumer;
 
 import net.junedev.viridium.Viridium;
+import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanner;
@@ -21,7 +22,9 @@ import net.junedev.viridium.worldgen.terrain.cube.ViridiumWorldGenerator;
 import net.junedev.viridium.worldgen.terrain.cube.flora.Feature;
 import net.junedev.viridium.worldgen.terrain.cube.flora.FeatureType;
 import net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner;
+import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 import net.junedev.viridium.worldgen.terrain.stages.Biome;
+import net.junedev.viridium.worldgen.terrain.stages.RiverStage;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.WorldServer;
@@ -52,6 +55,13 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
 
     /** Coarsest LOD this generator fills itself (same reach as DH's own surface generator). */
     private static final byte LARGEST_DETAIL = (byte) (EDhApiDetailLevel.BLOCK.detailLevel + 12);
+    /**
+     * Widest column (blocks) that still draws rivers, lakes and collapse pits, like the map
+     * ({@code MapTileRenderer.RIVERS_MAX_LEVEL}). Wider columns would need a river network for nearly every column (a
+     * section at detail 10 spans ~90 drainage basins, more than the network cache holds), taking minutes per section
+     * and evicting the networks the server is using; that far out rivers are narrower than a column anyway.
+     */
+    private static final int RIVERS_MAX_STEP = 16;
     /** Chunk plans kept for block-resolution LODs (a 64-block section with its tree margin needs 36). */
     private static final int LOD_PLAN_CACHE = 512;
 
@@ -99,6 +109,8 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         if (generatorMode == EDhApiDistantGeneratorMode.PRE_EXISTING_ONLY)
             return CompletableFuture.completedFuture(null);
         return CompletableFuture.runAsync(() -> {
+            // river networks an LOD needs are built on this worker thread, not spread over every core (like the map)
+            RiverStage.buildSeriallyOnThisThread();
             try {
                 fill(chunkPosMinX << 4, chunkPosMinZ << 4, detailLevel, dataSource);
                 resultConsumer.accept(dataSource);
@@ -161,7 +173,7 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         for (int rz = 0; rz < width; rz++) {
             for (int rx = 0; rx < width; rx++) {
                 int x = blockMinX + rx, z = blockMinZ + rz;
-                ColumnPlan plan = p.lodPlans.get(x >> 4, z >> 4);
+                ColumnPlan plan = plan(p, x >> 4, z >> 4);
                 int i = ColumnPlan.index(x & 15, z & 15);
                 int ci = canopy.index(x, z);
                 if (canopy.hasTree(ci)) {
@@ -174,6 +186,12 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         }
     }
 
+    /** The game's plan when it already has one (no duplicate work near players), else the LOD cache's. */
+    private static ColumnPlan plan(Pipeline p, int cx, int cz) {
+        if (p.gamePlans.isCached(cx, cz)) return p.gamePlans.get(cx, cz);
+        return p.lodPlans.get(cx, cz);
+    }
+
     /**
      * Coarser LODs: one pipeline evaluation per column at the LOD's own resolution. Forests get a statistical canopy:
      * the column is under a crown with the probability the biome's tree density gives, at the height of the species
@@ -182,14 +200,20 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
     private void fillSampled(Pipeline p, Scratch s, int blockMinX, int blockMinZ, int width, int step, int minY,
         int maxY, IDhApiFullDataSource ds) {
         ColumnPlan plan = s.plan;
-        for (int rz = 0; rz < width; rz++) {
-            for (int rx = 0; rx < width; rx++) {
-                int x = blockMinX + rx * step + (step >> 1), z = blockMinZ + rz * step + (step >> 1);
-                p.planner.planPoint(plan, 0, x, z, step);
-                TreeShapes.Shape tree = sampleTree(p, s, plan, x, z);
-                emitColumn(p, s, plan, 0, x, z, minY, maxY, rx, rz, ds, tree == null ? null : tree.leaves(),
-                    tree == null ? 0 : tree.leavesMeta(), null, 0);
+        GenScratch gs = p.gen.scratch();
+        gs.riversOff = step > RIVERS_MAX_STEP; // far LODs: no rivers, lakes or collapse pits (see RIVERS_MAX_STEP)
+        try {
+            for (int rz = 0; rz < width; rz++) {
+                for (int rx = 0; rx < width; rx++) {
+                    int x = blockMinX + rx * step + (step >> 1), z = blockMinZ + rz * step + (step >> 1);
+                    p.planner.planPoint(plan, 0, x, z, step);
+                    TreeShapes.Shape tree = sampleTree(p, s, plan, x, z);
+                    emitColumn(p, s, plan, 0, x, z, minY, maxY, rx, rz, ds, tree == null ? null : tree.leaves(),
+                        tree == null ? 0 : tree.leavesMeta(), null, 0);
+                }
             }
+        } finally {
+            gs.riversOff = false;
         }
     }
 
@@ -263,8 +287,8 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         // separate caches: LOD work far from the players must not evict the plans the real world is using
         ColumnPlanCache lodPlans = new ColumnPlanCache(planner, LOD_PLAN_CACHE);
         FloraPlanner flora = new FloraPlanner(lodPlans, rules, world.getSeed(), true);
-        return pipeline = new Pipeline(planner, rules, g.gen().crust, LithologyBlocks.get(), lodPlans, flora,
-            world.getSeed());
+        return pipeline = new Pipeline(g.gen(), planner, rules, g.gen().crust, LithologyBlocks.get(), g.plans(),
+            lodPlans, flora, world.getSeed());
     }
 
     private static IDhApiBlockStateWrapper air() {
@@ -288,8 +312,8 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         return w;
     }
 
-    private record Pipeline(ColumnPlanner planner, SurfaceRules rules, CrustModel crust, Block[] lith,
-        ColumnPlanCache lodPlans, FloraPlanner flora, long seed) {}
+    private record Pipeline(WorldGen gen, ColumnPlanner planner, SurfaceRules rules, CrustModel crust, Block[] lith,
+        ColumnPlanCache gamePlans, ColumnPlanCache lodPlans, FloraPlanner flora, long seed) {}
 
     private static final class Scratch {
 
