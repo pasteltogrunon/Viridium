@@ -138,27 +138,44 @@ public class PlateStage extends GenStage {
      * the two plates do not touch. {@code q} is the pair index of (bk, k).
      */
     private double edgeSegmentDistance(int bk, int k, int q, double d, double wx, double wy, GenScratch s) {
+        segment(bk, k, q, s);
+        double tmin = s.PTMIN[q];
+        if (tmin != tmin) return Double.POSITIVE_INFINITY; // NaN: no shared edge
         double nx = s.PNX[q], ny = s.PNY[q];
-        double px = wx + d * nx, py = wy + d * ny; // foot of the perpendicular on the bisector
+        // position along the bisector (u = (-ny, nx), from the midpoint) of the foot of the perpendicular
+        double s0 = (wx + d * nx - s.PMX[q]) * -ny + (wy + d * ny - s.PMY[q]) * nx;
+        double tc = clamp(0, tmin - s0, s.PTMAX[q] - s0);
+        return Math.sqrt(d * d + tc * tc);
+    }
+
+    /**
+     * The edge (bk, k) as an interval [PTMIN, PTMAX] along its bisector measured from the midpoint: the bisector clipped
+     * by bk's half-planes with every other seed. Depends only on the cell, so it is computed once per pair.
+     */
+    private void segment(int bk, int k, int q, GenScratch s) {
+        if (s.PSOK[q] == s.plateStamp) return;
+        double nx = s.PNX[q], ny = s.PNY[q], px = s.PMX[q], py = s.PMY[q];
         double ux = -ny, uy = nx; // along the bisector
         double tmin = Double.NEGATIVE_INFINITY, tmax = Double.POSITIVE_INFINITY;
-        for (int m = 0; m < 25; m++) {
+        boolean none = false;
+        for (int m = 0; m < 25 && !none; m++) {
             if (m == bk || m == k) continue;
             int r = pair(bk, m, s);
             double mx = s.PNX[r], my = s.PNY[r];
-            // A's side of the bisector with m: (X - mid)·n <= 0
+            // bk's side of the bisector with m: (X - mid)·n <= 0
             double c0 = (px - s.PMX[r]) * mx + (py - s.PMY[r]) * my, cu = ux * mx + uy * my;
             if (Math.abs(cu) < 1e-12) {
-                if (c0 > 0) return Double.POSITIVE_INFINITY;
+                if (c0 > 0) none = true;
                 continue;
             }
             double t = -c0 / cu;
             if (cu > 0) tmax = Math.min(tmax, t);
             else tmin = Math.max(tmin, t);
-            if (tmin > tmax) return Double.POSITIVE_INFINITY;
+            if (tmin > tmax) none = true;
         }
-        double tc = clamp(0, tmin, tmax);
-        return Math.sqrt(d * d + tc * tc);
+        s.PTMIN[q] = none ? Double.NaN : tmin;
+        s.PTMAX[q] = tmax;
+        s.PSOK[q] = s.plateStamp;
     }
 
     /**
