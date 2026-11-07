@@ -16,25 +16,74 @@ import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
  */
 public class ErosionStage extends GenStage {
 
+    private static final int OCTAVES = 4;
+
+    /**
+     * Per-thread jitter of the 4x4 gully cells last used by each octave. Neighbouring points nearly always fall in the
+     * same cells (12 to 96 blocks wide), so the 32 hashes per octave are reused; values depend only on the cell.
+     */
+    protected static final class Jitter {
+
+        final int[] ix = new int[OCTAVES], iy = new int[OCTAVES];
+        final boolean[] valid = new boolean[OCTAVES];
+        final double[][] jx = new double[OCTAVES][16], jy = new double[OCTAVES][16];
+    }
+
+    private final ThreadLocal<Jitter> jitter = ThreadLocal.withInitial(Jitter::new);
+
     public ErosionStage(WorldGen gen) {
         super(gen);
     }
 
-    /** Writes value and gradient into {@code s.EV, s.EGX, s.EGY}. */
-    protected void gullies(double px, double py, double dx, double dy, GenScratch s) {
+    /** Writes value and gradient into {@code s.EV, s.EGX, s.EGY}. {@code oc} picks the octave's slot in {@code jt}. */
+    protected void gullies(double px, double py, double dx, double dy, Jitter jt, int oc, GenScratch s) {
         int ix = floor(px), iy = floor(py);
         double fx = px - ix, fy = py - iy;
-        double va = 0, vx = 0, vy = 0, wt = 0;
-        for (int j = -2; j <= 1; j++) {
-            for (int i = -2; i <= 1; i++) {
+        double[] jx = jt.jx[oc], jy = jt.jy[oc];
+        if (!jt.valid[oc] || jt.ix[oc] != ix || jt.iy[oc] != iy) {
+            for (int j = -2, c = 0; j <= 1; j++) for (int i = -2; i <= 1; i++, c++) {
                 int cx = ix - i, cy = iy - j;
-                double ppx = fx + i - (rnd(cx, cy, SD.ero) - 0.5);
-                double ppy = fy + j - (rnd(cx, cy, SD.ero + 1) - 0.5);
+                jx[c] = rnd(cx, cy, SD.ero) - 0.5;
+                jy[c] = rnd(cx, cy, SD.ero + 1) - 0.5;
+            }
+            jt.ix[oc] = ix;
+            jt.iy[oc] = iy;
+            jt.valid[oc] = true;
+        }
+        double va = 0, vx = 0, vy = 0, wt = 0;
+        for (int j = -2, c = 0; j <= 1; j++) {
+            for (int i = -2; i <= 1; i++, c++) {
+                double ppx = fx + i - jx[c];
+                double ppy = fy + j - jy[c];
                 double w = Math.exp(-2 * (ppx * ppx + ppy * ppy));
                 wt += w;
                 double m = (ppx * dx + ppy * dy) * TAU;
-                va += Math.cos(m) * w;
-                double sn = -Math.sin(m) * w;
+                // sin and cos of m together: quadrant reduction to |r| <= pi/4, then Taylor polynomials (error < 2e-9,
+                // far below a block; plain arithmetic, so also identical on every JVM unlike Math.sin/cos)
+                double q = Math.rint(m * (2 / Math.PI));
+                double r = m - q * (Math.PI / 2), r2 = r * r;
+                double sr = r * (1 + r2 * (-1.0 / 6 + r2 * (1.0 / 120 + r2 * (-1.0 / 5040 + r2 * (1.0 / 362880)))));
+                double cr = 1 + r2 * (-0.5 + r2 * (1.0 / 24 + r2 * (-1.0 / 720 + r2 * (1.0 / 40320 + r2 * (-1.0 / 3628800)))));
+                double cos, sin;
+                switch ((int) q & 3) {
+                    case 0:
+                        cos = cr;
+                        sin = sr;
+                        break;
+                    case 1:
+                        cos = -sr;
+                        sin = cr;
+                        break;
+                    case 2:
+                        cos = -cr;
+                        sin = -sr;
+                        break;
+                    default:
+                        cos = sr;
+                        sin = -cr;
+                }
+                va += cos * w;
+                double sn = -sin * w;
                 vx += sn * dx;
                 vy += sn * dy;
             }
@@ -85,10 +134,11 @@ public class ErosionStage extends GenStage {
         double freq = Math.min(g * 2.5, 1.1), inv = g > 1e-6 ? freq / g : 0;
         double dX = gy * inv, dY = -gx * inv; // perpendicular to the gradient
         double hv = 0, hdx = 0, hdy = 0, a = 0.5, f = 1, sumA = 0;
-        for (int oc = 0; oc < 4; oc++) {
+        Jitter jt = jitter.get();
+        for (int oc = 0; oc < OCTAVES; oc++) {
             double fade = ss(bpp * 1.2, bpp * 3, Lg / f); // anti-aliasing when zoomed out
             if (fade <= 0) break;
-            gullies(x * f / Lg, y * f / Lg, dX + hdy * BRANCH, dY - hdx * BRANCH, s);
+            gullies(x * f / Lg, y * f / Lg, dX + hdy * BRANCH, dY - hdx * BRANCH, jt, oc, s);
             double af = a * fade;
             hv += s.EV * af;
             hdx += s.EGX * af * f;

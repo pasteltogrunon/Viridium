@@ -17,11 +17,13 @@ public class FastClimateStage extends ClimateStage {
 
     public FastClimateStage(WorldGen gen) {
         super(gen);
-        this.grid = new HeightGrid(gen, 32, 64, 256);
+        // 1024-block tiles: the ocean-current probes reach 6000 and 10800 blocks away (plateSize 12000) and use a few nodes
+        // there; 2048-block tiles built 2.3-2.8x more nodes for a new area. Same 8 MB bound, same values.
+        this.grid = new HeightGrid(gen, 32, 32, 1024);
     }
 
     /**
-     * Map pixels at least this far apart sample the relief directly: a lattice tile (2048 blocks, 4096 nodes) would be
+     * Map pixels at least this far apart sample the relief directly: a lattice tile (1024 blocks, 1024 nodes) would be
      * computed for a handful of pixels, and the cache would thrash (minutes per map tile).
      */
     private static final double EXACT_BPP = 128;

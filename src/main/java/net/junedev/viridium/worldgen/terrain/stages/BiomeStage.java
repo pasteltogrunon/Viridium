@@ -30,6 +30,49 @@ public class BiomeStage extends GenStage {
         W[b.ordinal()] = (float) v;
     }
 
+    /** Coast, lowland, mountain and delta weights (only where there is land). */
+    private static void land(GenPoint o, float[] W, double land, double h, double T, double lp, double slope) {
+        double shore = land * sigLo(h, 4, 1.2), inland = land * sigHi(h, 4, 1.2);
+        double high = sigHi(h, 125, 12), peak = sigHi(h, 175, 10);
+        // coast
+        double hT1 = sigHi(T, 1, 2);
+        set(W, BEACH, shore * hT1 * sigLo(slope, 0.35, 0.08));
+        set(W, SNOWY_BEACH, shore * sigLo(T, 1, 2));
+        set(W, ROCKY_SHORE, shore * hT1 * sigHi(slope, 0.35, 0.08));
+        // lowlands (band(v, a, b, w) = sigHi(v, a, w) * sigLo(v, b, w))
+        double il = inland * (1 - high);
+        double hTm14 = sigHi(T, -14, 2.5), hTm3 = sigHi(T, -3, 2), hT7 = sigHi(T, 7, 2), hT14 = sigHi(T, 14, 2.5);
+        double hl6 = sigHi(lp, 6.0, 0.3), ll6 = sigLo(lp, 6.0, 0.3), flat = sigLo(slope, 0.06, 0.02);
+        set(W, GLACIER, il * sigLo(T, -14, 2.5));
+        set(W, TUNDRA, il * (hTm14 * sigLo(T, -3, 2.5)) * sigLo(lp, 6.5, 0.3));
+        set(W, SNOWY_TAIGA, il * (hTm14 * sigLo(T, -2, 2.5)) * sigHi(lp, 6.5, 0.3));
+        set(W, TAIGA, il * (hTm3 * sigLo(T, 7, 2)) * hl6);
+        set(W, COLD_STEPPE, il * (hTm3 * sigLo(T, 12, 2)) * ll6);
+        set(W, GRASSLAND, il * (hT7 * sigLo(T, 22, 2)) * band(lp, 5.7, 6.7, 0.25));
+        set(W, TEMPERATE_FOREST, il * (hT7 * sigLo(T, 20, 2)) * band(lp, 6.5, 7.35, 0.25));
+        set(W, TEMPERATE_RAINFOREST, il * band(T, 6, 18, 2) * sigHi(lp, 7.35, 0.25));
+        set(W, SAVANNA, il * sigHi(T, 20, 2) * band(lp, 5.7, 7.1, 0.25));
+        set(W, DESERT, il * hT14 * sigLo(lp, 5.7, 0.25));
+        set(W, BADLANDS, il * hT14 * sigLo(lp, 6.4, 0.3) * rockW(o, Rock.SANDSTONE) * 2.5);
+        set(W, TROPICAL_RAINFOREST, il * sigHi(T, 21, 2) * sigHi(lp, 7.2, 0.25));
+        set(W, SWAMP, il * sigHi(T, 8, 2) * sigHi(lp, 6.9, 0.3) * sigLo(h, 12, 2.5) * flat * 2);
+        set(W, MANGROVE, land * sigHi(T, 22, 2) * sigHi(lp, 7.0, 0.3) * sigLo(h, 7, 1.5) * flat * 2.5);
+        set(W, KARST, il * rockW(o, Rock.LIMESTONE)
+            * sigHi(lp, 6.8, 0.3)
+            * band(T, 4, 30, 2)
+            * sigHi(slope, 0.12, 0.04)
+            * 1.5);
+        // mountains
+        double hl = inland * high * (1 - peak);
+        set(W, ALPINE_MEADOW, hl * hTm3 * hl6);
+        set(W, COLD_STEPPE, W[COLD_STEPPE.ordinal()] + hl * hTm3 * ll6);
+        set(W, SNOWY_SLOPES, hl * sigLo(T, -3, 2));
+        double pk = inland * peak;
+        set(W, ROCKY_PEAKS, pk * sigHi(T, -5, 2));
+        set(W, SNOWY_PEAKS, pk * sigLo(T, -5, 2));
+        set(W, DELTA, land * Math.max(o.delta, o.estu) * sigHi(T, 0, 2) * 2.5);
+    }
+
     public void apply(GenPoint o) {
         float[] W = o.biomeW;
         Arrays.fill(W, 0f);
@@ -38,71 +81,37 @@ public class BiomeStage extends GenStage {
         double iceCov = o.lake != 0 ? 0 : o.iceFrac;
         double land = ss(-0.5, 0.5, h) * (1 - r), water = (1 - ss(-0.5, 0.5, h)) * (1 - r),
             ocean = water * (1 - iceCov);
-        double deep = ss(-26, -42, h);
-        double shore = land * sigLo(h, 4, 1.2), inland = land * sigHi(h, 4, 1.2);
-        double high = sigHi(h, 125, 12), peak = sigHi(h, 175, 10);
-
-        // oceans
-        double fr = sigLo(T, -1, 1.5), co = band(T, -1, 10, 1.5), te = band(T, 10, 20, 1.5), wa = sigHi(T, 20, 1.5);
-        set(W, FROZEN_OCEAN, ocean * fr * (1 - deep));
-        set(W, DEEP_FROZEN_OCEAN, ocean * fr * deep);
-        set(W, COLD_OCEAN, ocean * co * (1 - deep));
-        set(W, DEEP_COLD_OCEAN, ocean * co * deep);
-        set(W, OCEAN, ocean * te * (1 - deep));
-        set(W, DEEP_OCEAN, ocean * te * deep);
-        set(W, WARM_OCEAN, ocean * wa * (1 - deep));
-        set(W, DEEP_WARM_OCEAN, ocean * wa * deep);
-        // coast
-        set(W, BEACH, shore * sigHi(T, 1, 2) * sigLo(slope, 0.35, 0.08));
-        set(W, SNOWY_BEACH, shore * sigLo(T, 1, 2));
-        set(W, ROCKY_SHORE, shore * sigHi(T, 1, 2) * sigHi(slope, 0.35, 0.08));
-        set(W, RIVER, r * 1.5);
-        // lowlands
-        double il = inland * (1 - high);
-        set(W, GLACIER, il * sigLo(T, -14, 2.5));
-        set(W, TUNDRA, il * band(T, -14, -3, 2.5) * sigLo(lp, 6.5, 0.3));
-        set(W, SNOWY_TAIGA, il * band(T, -14, -2, 2.5) * sigHi(lp, 6.5, 0.3));
-        set(W, TAIGA, il * band(T, -3, 7, 2) * sigHi(lp, 6.0, 0.3));
-        set(W, COLD_STEPPE, il * band(T, -3, 12, 2) * sigLo(lp, 6.0, 0.3));
-        set(W, GRASSLAND, il * band(T, 7, 22, 2) * band(lp, 5.7, 6.7, 0.25));
-        set(W, TEMPERATE_FOREST, il * band(T, 7, 20, 2) * band(lp, 6.5, 7.35, 0.25));
-        set(W, TEMPERATE_RAINFOREST, il * band(T, 6, 18, 2) * sigHi(lp, 7.35, 0.25));
-        set(W, SAVANNA, il * sigHi(T, 20, 2) * band(lp, 5.7, 7.1, 0.25));
-        set(W, DESERT, il * sigHi(T, 14, 2.5) * sigLo(lp, 5.7, 0.25));
-        set(W, BADLANDS, il * sigHi(T, 14, 2.5) * sigLo(lp, 6.4, 0.3) * rockW(o, Rock.SANDSTONE) * 2.5);
-        set(W, TROPICAL_RAINFOREST, il * sigHi(T, 21, 2) * sigHi(lp, 7.2, 0.25));
-        set(W, SWAMP, il * sigHi(T, 8, 2) * sigHi(lp, 6.9, 0.3) * sigLo(h, 12, 2.5) * sigLo(slope, 0.06, 0.02) * 2);
-        set(W, MANGROVE,
-            land * sigHi(T, 22, 2) * sigHi(lp, 7.0, 0.3) * sigLo(h, 7, 1.5) * sigLo(slope, 0.06, 0.02) * 2.5);
-        set(W, KARST, il * rockW(o, Rock.LIMESTONE)
-            * sigHi(lp, 6.8, 0.3)
-            * band(T, 4, 30, 2)
-            * sigHi(slope, 0.12, 0.04)
-            * 1.5);
-        // mountains
-        double hl = inland * high * (1 - peak);
-        set(W, ALPINE_MEADOW, hl * sigHi(T, -3, 2) * sigHi(lp, 6.0, 0.3));
-        set(W, COLD_STEPPE, W[COLD_STEPPE.ordinal()] + hl * sigHi(T, -3, 2) * sigLo(lp, 6.0, 0.3));
-        set(W, SNOWY_SLOPES, hl * sigLo(T, -3, 2));
-        double pk = inland * peak;
-        set(W, ROCKY_PEAKS, pk * sigHi(T, -5, 2));
-        set(W, SNOWY_PEAKS, pk * sigLo(T, -5, 2));
-        // delta and ice
-        set(W, DELTA, land * Math.max(o.delta, o.estu) * sigHi(T, 0, 2) * 2.5);
-        set(W, SEA_ICE, water * (o.seaIce == 2 || o.berg > 0 ? 0 : o.iceFrac));
-        set(W, ICE_SHELF, water * (o.seaIce == 2 ? 1 : 0));
-        set(W, ICEBERG, water * (o.berg > 0 ? 1 : 0));
-        if (o.lake != 0) { // lakes replace whatever was there
-            Arrays.fill(W, 0f);
-            set(W, o.lake == 2 ? SALT_FLAT : o.seaIce == 3 ? FROZEN_LAKE : LAKE, 1);
-        }
+        // Blocks whose common factor is exactly 0 are skipped (every weight in them would be +0), and sigmoids that
+        // several biomes share are computed once; products keep their original order, so the result is bit-identical.
+        if (o.lake == 0) {
+            if (ocean != 0) { // oceans
+                double deep = ss(-26, -42, h);
+                double fr = sigLo(T, -1, 1.5), co = band(T, -1, 10, 1.5), te = band(T, 10, 20, 1.5),
+                    wa = sigHi(T, 20, 1.5);
+                set(W, FROZEN_OCEAN, ocean * fr * (1 - deep));
+                set(W, DEEP_FROZEN_OCEAN, ocean * fr * deep);
+                set(W, COLD_OCEAN, ocean * co * (1 - deep));
+                set(W, DEEP_COLD_OCEAN, ocean * co * deep);
+                set(W, OCEAN, ocean * te * (1 - deep));
+                set(W, DEEP_OCEAN, ocean * te * deep);
+                set(W, WARM_OCEAN, ocean * wa * (1 - deep));
+                set(W, DEEP_WARM_OCEAN, ocean * wa * deep);
+            }
+            if (land != 0) land(o, W, land, h, T, lp, slope);
+            if (r != 0) set(W, RIVER, r * 1.5);
+            set(W, SEA_ICE, water * (o.seaIce == 2 || o.berg > 0 ? 0 : o.iceFrac));
+            set(W, ICE_SHELF, water * (o.seaIce == 2 ? 1 : 0));
+            set(W, ICEBERG, water * (o.berg > 0 ? 1 : 0));
+        } else set(W, o.lake == 2 ? SALT_FLAT : o.seaIce == 3 ? FROZEN_LAKE : LAKE, 1); // lakes replace the rest
 
         // sharpen + normalise
         double k = P.biomeSharpness;
+        boolean cube = k == 3; // a float cubed in double has a single rounding: matches pow, far cheaper
         int nb = Biome.VALUES.length;
         double sum = 0;
         for (int i = 0; i < nb; i++) {
-            double v = W[i] > 1e-6 ? Math.pow(W[i], k) : 0;
+            double w = W[i];
+            double v = w > 1e-6 ? (cube ? w * w * w : Math.pow(w, k)) : 0;
             W[i] = (float) v;
             sum += v;
         }
