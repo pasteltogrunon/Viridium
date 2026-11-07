@@ -23,6 +23,8 @@ The pages are grouped into six sections. Each section has a hub page that lists 
 | Rivers | [[Rivers Overview]] | stage 10: drainage basins, per-basin networks, water levels, meanders, lakes, deltas, estuaries, valleys |
 | Landforms | [[Landforms Overview]] | plateaus and mesas, sea cliffs, continental rifts, waterfalls, and the notch, talus and boulders at the foot of cliffs |
 | Caves | [[Caves Overview]] | noise caves shaped by the rock, aquifers and lava, karst dolines and shafts, giant chambers, galleries and collapse pits |
+
+Performance: costs per stage and the audit of 2026-11-07 are in [[Performance Audit]].
 | Blocks and chunks | [[Blocks and Chunks]] | from pipeline output to blocks: 3D crust, column plans, cube filling, flora, Cubic Chunks wiring |
 
 ```mermaid

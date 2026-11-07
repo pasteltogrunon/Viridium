@@ -93,27 +93,28 @@ A new map layer is one `MapLayer.register(...)` line in `MapLayer`.
 - In game: `/viridium bench [radius] [cubesDown] [cubesUp]` (op) measures plans + real cube storage around you without
   touching the world. `VIRIDIUM_BENCH_ON_START=1 ./gradlew runServer` runs it at server start.
 
-### Results (2026-11-06, 48-thread machine)
+### Results (2026-11-07, 48-thread machine, after the performance audit)
 
-Per-stage costs are measured on 8x8 patches of contiguous points (the cached lattices are warm, as in the game).
+Per-stage costs are measured on 8x8 patches of contiguous points (the cached lattices are warm, as in the game). The
+audit of 2026-11-07 (six areas audited separately, see the vault note "Performance Audit") changed the numbers in the
+right-hand column from the "before" values in brackets; the terrain is unchanged (all regression tests identical).
 
-| | JS prototype | Java exact | Java fast |
-|---|---|---|---|
-| per land point, all stages | 77.5 µs | 52.4 µs | 11.4 µs |
-| plates | — | 2.0 µs | 2.0 µs |
-| final climate | 44.4 µs | 31.6 µs | 1.2 µs |
-| erosion | 16.5 µs | 13.1 µs | 2.7 µs |
-| rivers (networks cached) | — | 3.3 µs | 3.5 µs |
-| biomes | — | 1.6 µs | 1.2 µs |
-| column plan (16×16, + crust), 1 thread, Java 25 | — | ~13 ms | 2.4 ms |
-| column plan, 47 threads | — | — | 0.20 ms wall |
-| river network build (per drainage basin, cold, warm JIT) | ~390 ms (per plate) | — | 60–170 ms |
-| teleport, cold caches: centre column / whole view (8 threads) | — | — | 0.2–0.35 s / 0.55–0.8 s |
+| | Java fast (before) |
+|---|---|
+| per land / ocean point, all stages | 8.2 / 6.0 µs (11.6 / 8.6) |
+| column plan (16×16, + crust), 1 thread, Java 25 | 1.29 ms (2.2) |
+| river network build (per drainage basin, warm JIT) | ~33 ms (60–190) |
+| walk (60 s flight): CPU per new column, plan + cubes ±4 around the surface | 3.6 ms = 2.1 + 1.4 (6.4 = 3.8 + 2.6) |
+| walk: per-column p99 | 5.9 ms (14.3) |
+| teleport, cold: centre column / 21×21 view (8 threads, walk scenario) | 0.25 / 0.7 s (1.4 / 2.0) |
+| cold map tile at level 4 (fresh pipeline, serial nets) | 3.3 s (10.8) |
+| DH LOD row at detail 10–12 | ~5 ms (50–117 s: nets rebuilt forever) |
 
-River network phases (cold, teleport benchmark): its dependencies 100 ms (other networks), lakes 32 ms (floor
-samples up to erosion), water levels 11 ms, valley field 12 ms, relief grid 6 ms, flood 2 ms, deltas 1 ms. In a fresh
-JVM (no JIT yet) the first teleport takes 0.5–1.4 s to the centre column; before these changes 1.1–2.8 s.
-`VIRIDIUM_BENCH=teleport` runs only the teleport scenario.
+Main causes found: `RiverNetBuilder.build` exceeded HotSpot's 8000-byte limit and ran interpreted; plates recomputed
+per point what only depends on the plate cell; lithology sampled per block what is constant per cube or column; cave
+planning built river networks from every 2D evaluation; DH coarse LODs built river networks. Benchmarks:
+`VIRIDIUM_BENCH=1` (all), `=teleport`, `=walk` (teleport + 60 s flight, CPU per new column split into plan, cubes,
+nets and cave regions; `build/reports/worldgen-walk.txt`).
 
 In the dev server (`runServer`, **Java 8**): 4.9 ms per column plan, 0.17 ms per cube (crust-only 0.23 ms,
 surface-crossing 0.12 ms, air 0). A column has 192 cubes in the generation range: 31 % air, 67 % crust only, ≈ 3.3
