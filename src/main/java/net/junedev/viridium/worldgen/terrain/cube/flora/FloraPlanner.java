@@ -149,7 +149,8 @@ public final class FloraPlanner {
             Block ground = ground(p, lx, lz, sc);
             boolean ok = type == FeatureType.PALM ? ground == Blocks.sand || ground == Blocks.grass
                 : ground == Blocks.grass || ground == Blocks.dirt;
-            if (ok && caves != null && caves.entrance((chunkX << 4) + lx, (chunkZ << 4) + lz)) ok = false;
+            if (ok && caves != null && (caves.entrance((chunkX << 4) + lx, (chunkZ << 4) + lz)
+                || caves.nearOpening((chunkX << 4) + lx, (chunkZ << 4) + lz))) ok = false;
             if (ok) out.add(new Feature(type, (chunkX << 4) + lx, p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
         }
         int grass = grassCount(b);

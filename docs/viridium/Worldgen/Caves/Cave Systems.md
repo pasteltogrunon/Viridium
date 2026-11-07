@@ -22,7 +22,7 @@ Regions of 1024×1024 blocks, planned on demand and cached (deterministic, any o
 | lake | 45 % (water, floor + 3..15); deep chambers below −1200: 35 % lava |
 | galleries | from each chamber to one chamber of the east and of the south region (if they are within 700 blocks in height): polyline every ~48 blocks, jittered ±30 horizontally, ±8 vertically; radius 4 (shallow) to 10 (deep), × 0.8–1.3 per segment, slightly flatter than wide |
 | collapse pit | 55 % of shallow chambers, if the centre is on land, not in a river or lake, and rivers are further than 0.6·r + 40: a pit of radius 0.55·r |
-| entrance | 60 % of the other shallow chambers: a gallery (radius 4.5) climbing to the surface 100–220 blocks away; its last third may open the ground |
+| great entrance | every system whose shallowest chamber has no pit: a wide ramp (mouth radius 9–13, narrowing to 7) from the surface down to that chamber, 1.4 × as long as it is deep down to ~600 blocks, steeper below (120–950 blocks); see [[Cave Entrances]] |
 
 Planning reads the terrain up to erosion and applies the river stage directly at the chamber centre: never the cave 2D stage, which needs these plans.
 

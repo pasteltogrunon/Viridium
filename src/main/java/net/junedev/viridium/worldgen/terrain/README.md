@@ -220,10 +220,13 @@ surface cube, rock, air, water or lava:
 - **karst** (`Karst`): dolines in limestone and marble (2D, after the rivers) and shafts under a quarter of them;
   sea caves and cave mouths come from `CliffDetail`;
 - **planned systems** (`CaveSystems`, 1024-block regions): giant chambers (up to ~360 blocks, some with a water or lava
-  lake), galleries between regions, collapse pits (cenotes) and entrance galleries for shallow chambers.
+  lake), galleries between regions, collapse pits (cenotes) and a great entrance ramp (mouth radius 9-13) for every
+  system;
+- **hillside mouths** (`CaveMouths`): wide ramps entering slopes uphill in ~60 % of the 256-block cells of land.
 
 Parameters `caves`, `caveEntrances`, `aquifers`, `dolines`, `plannedCaves`; tests in `CaveTest`
-(`VIRIDIUM_CAVES=x0,x1,z,yTop,yBottom` draws a section). Cost: +0.1 ms per crust cube, +0.5 µs per 2D point.
+(`VIRIDIUM_CAVES=x0,x1,z,yTop,yBottom` draws a section). Void 7.5-13 % (rooms and horizontal tunnels, modern-Minecraft-like). Cost: +0.14 ms per crust cube, +0.5 µs per 2D
+point.
 
 ## Memory
 

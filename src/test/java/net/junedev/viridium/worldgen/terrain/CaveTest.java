@@ -188,6 +188,52 @@ class CaveTest {
         assertTrue(carved >= checked * 0.8, "chambers not carved");
     }
 
+    /** Entrances: hillside mouths and the great entrances of the systems, open at the surface. */
+    @Test
+    void entrancesAreOpen() {
+        Sample sm = new Sample();
+        int cells = 0, mouths = 0, open = 0, checked = 0, great = 0, gOpen = 0, systems = 0, pitSys = 0, landSys = 0;
+        for (int cj = -20; cj < 20; cj++) for (int ci = -20; ci < 20; ci++) {
+            cells++;
+            var l = sm.gen.caves.mouths.cell(ci, cj);
+            if (l.isEmpty()) continue;
+            mouths++;
+            if (checked < 25) {
+                checked++;
+                if (openAt(sm, l.get(0))) open++;
+            }
+        }
+        for (int rj = -5; rj <= 5; rj++) for (int ri = -5; ri <= 5; ri++) {
+            var r = sm.gen.caves.systems.region(ri, rj);
+            if (r.chambers.isEmpty()) continue;
+            systems++;
+            var top = r.chambers.get(0);
+            for (var c : r.chambers) if (c.y > top.y) top = c;
+            var oo = sm.gen.evaluate(top.x, top.z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION, new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint());
+            if (top.pitR > 0) pitSys++;
+            else if (oo.L > 0.05) landSys++;
+            if (r.mouth.isEmpty()) continue;
+            great++;
+            if (openAt(sm, r.mouth.get(0))) gOpen++;
+        }
+        System.out.printf("systems with a pit %d, on land without pit %d%n", pitSys, landSys);
+        System.out.printf("entrances: %d hillside mouths in %d cells (%d/%d checked open); %d great entrances for %d systems (%d open)%n",
+            mouths, cells, open, checked, great, systems, gOpen);
+        assertTrue(mouths > 0 && open >= checked * 0.7, "hillside mouths missing or closed");
+        assertTrue(great > 0 && gOpen >= great * 0.7, "great entrances missing or closed");
+    }
+
+    private static boolean openAt(Sample sm, net.junedev.viridium.worldgen.terrain.caves.CaveSystems.Segment s) {
+        int x = (int) Math.floor(s.minX() + (s.maxX() - s.minX()) * 0.5), z = (int) Math.floor(s.minZ() + (s.maxZ() - s.minZ()) * 0.5);
+        ColumnPlan p = sm.plans.get(x >> 4, z >> 4);
+        int y = p.surfaceY[ColumnPlan.index(x & 15, z & 15)] - 2;
+        for (int d = 0; d < 10; d++, y--) { // the first block below the ground that is part of the ramp
+            sm.cube(x >> 4, y >> 4, z >> 4);
+            if (sm.code[(((y & 15) * 16) + (z & 15)) * 16 + (x & 15)] > 0) return true;
+        }
+        return false;
+    }
+
     /** Cost per cube: lithology alone vs lithology + caves, same cubes, warm. */
     @Test
     void caveCost() {

@@ -11,7 +11,8 @@ Cubic Chunks lets the world go down to Y −2048. The crust was solid rock all t
 | [[Noise Caves]] | caverns, huge deep caverns, tunnels, fissures, lava tubes; the shape by rock; the cost |
 | [[Aquifers and Lava]] | flooded and lava cells, barriers, the lava sea at the bottom, the safety layer under water |
 | [[Karst]] | dolines, shafts, sea caves and cave mouths in cliffs |
-| [[Cave Systems]] | giant chambers, galleries, collapse pits (cenotes), entrances |
+| [[Cave Systems]] | giant chambers, galleries, collapse pits (cenotes), the great entrance of every system |
+| [[Cave Entrances]] | hillside cave mouths, entrance zones, great entrances: where caves open to the surface |
 
 ## In reality
 
@@ -21,12 +22,12 @@ Large caves form almost only in soluble rock (limestone, dolostone, gypsum, salt
 
 | Decision | Choice |
 |---|---|
-| depth and size | down to the bottom of the world; giant halls (up to ~360 blocks); a little more void than vanilla 1.7 (≈ 4–6 %) |
+| depth and size | down to the bottom of the world; giant halls (up to ~360 blocks); modern-Minecraft-like void (≈ 7.5–13 %, revised 2026-11-07 from 4–6 %: caves were too narrow and vertical) |
 | rock and shape | the rock changes the shape, not only the size |
 | water | aquifers, a safety layer under rivers, lakes and the sea, lava down deep |
-| entrances | fairly frequent small ones, a few large and striking ones that change the terrain |
+| entrances | frequent hillside mouths, and a great entrance for every planned system; collapse pits change the terrain |
 | decoration | none yet (no speleothem blocks in 1.7.10) |
-| cost | about the cost of the surface: +0.1 ms per crust cube |
+| cost | about the cost of the surface: +0.14 ms per crust cube |
 | GregTech ores | not handled yet |
 
 ## Pipeline

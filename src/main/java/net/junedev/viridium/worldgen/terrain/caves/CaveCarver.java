@@ -34,8 +34,8 @@ import net.junedev.viridium.worldgen.terrain.crust.Lithology;
  * <p>
  * <b>Fluids</b>: aquifer cells of 96×48×96 blocks are dry, flooded up to a level, or (deep down) full of lava up to a
  * level; caves crossing into a cell with another level are sealed by a 2-block barrier of rock, so water never stands
- * as a wall next to air. Lava fills everything carved in the last 48 blocks of the world. Near the surface (12 blocks)
- * caves stay dry.
+ * as a wall next to air. Lava fills everything carved in the last 48 blocks of the world. Water stays 24 blocks under
+ * the lowest coarse ground of its cell (a per-cell cap, so columns of different height never put water next to air).
  * <p>
  * <b>Surface</b>: caves keep a roof of 6 blocks, except in entrance zones (a 2D noise mask), and 8 blocks of rock under
  * rivers, lakes and the sea (they never drain them).
@@ -47,11 +47,11 @@ public final class CaveCarver {
     /** Cave style by rock. */
     public enum Style {
 
-        KARST(0.36, 0.085, 0.035),
-        CLASTIC(0.50, 0.065, 0),
-        CRYSTALLINE(0.60, 0.045, 0.028),
-        VOLCANIC(0.56, 0.055, 0),
-        MANTLE(0.80, 0.03, 0);
+        KARST(0.24, 0.11, 0.018),
+        CLASTIC(0.32, 0.095, 0),
+        CRYSTALLINE(0.38, 0.08, 0.012),
+        VOLCANIC(0.36, 0.085, 0),
+        MANTLE(0.62, 0.05, 0);
 
         /** Cavern threshold, tunnel half-width (in noise units), fissure half-width (0 none). */
         final double cavern, tunnel, fissure;
@@ -102,18 +102,25 @@ public final class CaveCarver {
     /** Lattice spacing (blocks), nodes per axis, cells per axis. */
     private static final int SH = 3, L = 1 << SH, N = 16 / L + 1, NN = N * N * N, CELLS = 16 / L;
     private static final int AX = 96, AY = 48;
-    private static final int ROOF = 6, WATER_ROOF = 8, DRY_DEPTH = 12;
+    private static final int ROOF = 6, WATER_ROOF = 8;
 
     private final GenParams P;
+    private final WorldGen gen;
+    /** Highest water level of an aquifer column (ci, ck): 24 blocks under the lowest coarse ground of the cell. */
+    private final com.google.common.cache.Cache<Long, Integer> caps = com.google.common.cache.CacheBuilder.newBuilder()
+        .maximumSize(16384)
+        .build();
     private final int seedC1, seedC2, seedA, seedB, seedF, seedE, seedT, seedAq;
     private final double amount;
     private final List<CaveFeatures> features = new ArrayList<>();
     public final Karst karst;
     public final CaveSystems systems;
+    public final CaveMouths mouths;
     private final ThreadLocal<Cube> cubes = ThreadLocal.withInitial(Cube::new);
 
     public CaveCarver(WorldGen gen) {
         this.P = gen.params;
+        this.gen = gen;
         int s = gen.seeds.cave;
         seedC1 = s;
         seedC2 = s + 1001;
@@ -128,6 +135,8 @@ public final class CaveCarver {
         features.add(karst);
         systems = new CaveSystems(gen);
         features.add(systems);
+        mouths = new CaveMouths(gen);
+        features.add(mouths);
     }
 
     /** Adds planned shapes (karst shafts, chambers, galleries). */
@@ -141,10 +150,15 @@ public final class CaveCarver {
         systems.surface(x, z, o);
     }
 
+    /** True where the ground is cut by a cave mouth or a great entrance (no trees: they would float). */
+    public boolean nearOpening(double x, double z) {
+        return mouths.nearMouth(x, z) || systems.nearMouth(x, z);
+    }
+
     /** True where caves may open at the surface (2D mask, ~15 % of the land per unit of caveEntrances). */
     public boolean entrance(int x, int z) {
         if (P.caveEntrances <= 0) return false;
-        return Noise.fbm(x / 220.0, z / 220.0, seedE, 3) > 0.42 - 0.12 * (P.caveEntrances - 1);
+        return Noise.fbm(x / 220.0, z / 220.0, seedE, 3) > 0.3 - 0.12 * (P.caveEntrances - 1);
     }
 
     /**
@@ -208,10 +222,10 @@ public final class CaveCarver {
             for (int a = 0; a < N; a++) for (int b = 0; b < N; b++) for (int k = 0; k < N; k++) {
                 double x = bx + L * a, y = by + L * b, z = bz + L * k;
                 int n = (a * N + b) * N + k;
-                C1[n] = CaveNoise.fbm3(x / 90, y / 55, z / 90, seedC1, 2);
+                C1[n] = CaveNoise.fbm3(x / 130, y / 62, z / 130, seedC1, 2);
                 C2[n] = deep ? CaveNoise.fbm3(x / 260, y / 150, z / 260, seedC2, 1) : -1;
-                A[n] = CaveNoise.fbm3(x / 75, y / 110, z / 75, seedA, 2);
-                B[n] = CaveNoise.fbm3(x / 75, y / 110, z / 75, seedB, 2);
+                A[n] = CaveNoise.fbm3(x / 90, y / 38, z / 90, seedA, 2);
+                B[n] = CaveNoise.fbm3(x / 90, y / 38, z / 90, seedB, 2);
                 F[n] = CaveNoise.fbm3(x / 38, y / 260, z / 38, seedF, 1);
             }
             // cells that may hold a cave, with the most permissive thresholds of any rock
@@ -302,10 +316,11 @@ public final class CaveCarver {
             if ((mask & 9) != 0) {
                 if (c1 != c1) c1 = lerp3(C1, a, b, k, u, v, w);
                 // fewer caverns just under the surface (thin roofs collapse), more and larger deep down
-                double tc = st.cavern - 0.1 * (amount - 1) + 0.12 * (1 - ss(12, 70, d)) - 0.05 * ss(100, 600, d);
+                double tc = st.cavern - 0.1 * (amount - 1) + (roofY[i] >= plan.surfaceY[i] ? 0 : 0.06 * (1 - ss(8, 40, d)))
+                    - 0.05 * ss(100, 600, d);
                 if ((mask & 1) != 0 && c1 > tc) return true;
-                if ((mask & 8) != 0 && st.fissure > 0 && c1 > 0.1
-                    && Math.abs(lerp3(F, a, b, k, u, v, w)) < st.fissure * amount * ss(0.1, 0.3, c1)) return true;
+                if ((mask & 8) != 0 && st.fissure > 0 && c1 > 0.2
+                    && Math.abs(lerp3(F, a, b, k, u, v, w)) < st.fissure * amount * ss(0.2, 0.35, c1)) return true;
             }
             if ((mask & 2) != 0 && lerp3(C2, a, b, k, u, v, w) > hugeThreshold(y)) return true;
             if ((mask & 20) == 0) return false;
@@ -324,7 +339,7 @@ public final class CaveCarver {
         /** Air, water or lava for a carved block, from the aquifer cells (and the lava at the bottom of the world). */
         private byte fluid(int x, int y, int z, int depth) {
             if (y < TerrainLayout.MIN_Y + 48) return LAVA;
-            if (depth < DRY_DEPTH || P.aquifers <= 0) return AIR;
+            if (P.aquifers <= 0) return AIR;
             int ci = Math.floorDiv(x, AX), cj = Math.floorDiv(y, AY), ck = Math.floorDiv(z, AZ_);
             long here = aquifer(ci, cj, ck);
             int lvl = level(here);
@@ -356,8 +371,25 @@ public final class CaveCarver {
         double pLava = 0.3 * ss(-700, -1500, bottom);
         double pWater = 0.38 * P.aquifers * (bottom > TerrainLayout.SEA_LEVEL - 80 ? 0.5 : 1);
         int kind = r1 < pLava ? 2 : r1 < pLava + pWater ? 1 : 0;
-        int level = kind == 0 ? Integer.MIN_VALUE : bottom + (int) ((0.15 + 0.7 * r2) * AY);
+        int level = kind == 0 ? Integer.MIN_VALUE : Math.min(bottom + (int) ((0.15 + 0.7 * r2) * AY), cap(ci, ck));
+        if (kind != 0 && level < bottom) kind = 0; // capped below its own cell: dry
         return ((long) kind << 32) | (level & 0xffffffffL);
+    }
+
+    /**
+     * Water never rises close to the ground: a per-cell constant (the lowest coarse ground at 9 points of the cell, minus
+     * 24 blocks), so neighbouring columns of different height never get water next to air.
+     */
+    private int cap(int ci, int ck) {
+        long key = net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(((long) ci << 32) | (ck & 0xffffffffL));
+        Integer c = caps.getIfPresent(key);
+        if (c != null) return c;
+        double low = Double.POSITIVE_INFINITY;
+        for (int a = 0; a <= 2; a++) for (int b = 0; b <= 2; b++)
+            low = Math.min(low, gen.heightAt(ci * AX + a * AX / 2.0, ck * AX + b * AX / 2.0, false));
+        int v = TerrainLayout.SEA_LEVEL + (int) Math.floor(low) - 24;
+        caps.put(key, v);
+        return v;
     }
 
     private static int kind(long a) {

@@ -110,7 +110,7 @@ public final class CaveSystems implements CaveFeatures {
     }
 
     /** A gallery segment: a capsule of radius r from (ax, ay, az) to (bx, by, bz). */
-    static final class Segment implements CaveCarver.Shape {
+    public static final class Segment implements CaveCarver.Shape {
 
         final double ax, ay, az, bx, by, bz, r;
         final boolean surface;
@@ -156,6 +156,13 @@ public final class CaveSystems implements CaveFeatures {
         public boolean opensSurface() {
             return surface;
         }
+
+        /** True if (x, z) is within the radius + pad of the segment seen from above. */
+        public boolean near2d(double x, double z, double pad) {
+            double vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz;
+            double t = l2 > 0 ? GenMath.clamp(((x - ax) * vx + (z - az) * vz) / l2, 0, 1) : 0;
+            return Math.hypot(x - ax - vx * t, z - az - vz * t) < r + pad;
+        }
     }
 
     /** Planned chambers and gallery segments of one region. */
@@ -163,6 +170,8 @@ public final class CaveSystems implements CaveFeatures {
 
         public final List<Chamber> chambers = new ArrayList<>();
         final List<Segment> segments = new ArrayList<>();
+        /** The first segments of the great entrance (its mouth), if any. */
+        public final List<Segment> mouth = new ArrayList<>();
     }
 
     private static long key(int ri, int rj) {
@@ -240,19 +249,62 @@ public final class CaveSystems implements CaveFeatures {
                 gallery(a.x, a.y - a.ry * 0.3, a.z, b.x, b.y - b.ry * 0.3, b.z, r.segments, seed + ri * 7919 + rj * 104729
                     + e * 13 + c, galleryRadius(Math.min(a.y, b.y)), false);
             }
-            // entrance: a shallow chamber without a pit climbs to the surface
-            if (a.pitR == 0 && a.y > -100 && Noise.rnd(ri, rj, seed + 41 + c) < 0.6) {
-                double ang = Noise.rnd(ri, rj, seed + 43 + c) * Math.PI * 2, dist = 100 + 120 * Noise.rnd(ri, rj, seed + 47 + c);
-                double ex = a.x + Math.cos(ang) * dist, ez = a.z + Math.sin(ang) * dist;
-                GenPoint o = gen.evaluate(ex, ez, Stage.EROSION, 1, point.get(), scratch.get());
-                if (o.L > 0.05 && o.h > 3) {
-                    double ey = TerrainLayout.SEA_LEVEL + o.h + 6;
-                    gallery(a.x, a.y, a.z, ex, ey, ez, r.segments, seed + 51 + c * 7 + ri * 31 + rj * 37, 4.5, true);
-                }
-            }
         }
+        greatEntrance(ri, rj, r);
         regions.put(k, r);
         return r;
+    }
+
+    /**
+     * Every system gets a great entrance: a wide ramp (mouth radius 9-13) from the surface down to its shallowest chamber
+     * (unless that one has a collapse pit), 1.4 times as long as it is deep down to ~600 blocks, steeper below (120-950
+     * blocks), starting on land away from rivers in one of six directions (then the same at 0.6 of the length).
+     */
+    private void greatEntrance(int ri, int rj, Region r) {
+        Chamber best = null;
+        for (Chamber c : r.chambers) if (best == null || c.y > best.y) best = c;
+        if (best == null || best.pitR > 0) return;
+        double tx = best.x, ty = best.y - 0.2 * best.ry, tz = best.z;
+        double base = Noise.rnd(ri, rj, seed + 71) * Math.PI * 2;
+        GenPoint c0 = gen.evaluate(tx, tz, Stage.EROSION, 1, point.get(), scratch.get());
+        double depth = Math.max(40, TerrainLayout.SEA_LEVEL + Math.max(c0.h, 0) - ty);
+        for (int k = 0; k < 12; k++) {
+            double ang = base + k * Math.PI / 3;
+            // gentle down to ~600 blocks deep, steeper (a great descending cave) below; shorter on the second round
+            double len = GenMath.clamp(depth * (depth < 600 ? 1.4 : 0.95), 120, 950) * (k < 6 ? 1 : 0.6);
+            double sx = tx + Math.cos(ang) * len, sz = tz + Math.sin(ang) * len;
+            GenPoint o = gen.evaluate(sx, sz, Stage.EROSION, 1, point.get(), scratch.get());
+            if (o.L < 0.05 || o.h < 4) continue;
+            gen.rivers.apply(sx, sz, o, scratch.get());
+            if (o.river != 0 || o.lake != 0 || o.riverD < 30) continue;
+            double r0 = 9 + 4 * Noise.rnd(ri, rj, seed + 73);
+            int before = r.segments.size();
+            ramp(sx, TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0, sz, tx, ty, tz, r0, 7, r.segments, seed + 79 + ri * 31 + rj * 37);
+            for (int q = before; q < Math.min(r.segments.size(), before + 4); q++) r.mouth.add(r.segments.get(q));
+            return;
+        }
+    }
+
+    /**
+     * A ramp from a mouth at the surface (a, wide) down to b (narrower): a winding polyline every ~20 blocks, jittered
+     * sideways, which may open the ground all along (the mouth, and skylights where it runs just under a slope).
+     */
+    static void ramp(double ax, double ay, double az, double bx, double by, double bz, double r0, double r1,
+        List<Segment> out, int s) {
+        double len = Math.sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
+        int n = Math.max(3, (int) (len / 20));
+        double ux = (bx - ax) / Math.max(len, 1), uz = (bz - az) / Math.max(len, 1);
+        double px = ax, py = ay, pz = az;
+        for (int i = 1; i <= n; i++) {
+            double t = (double) i / n;
+            double side = i == n ? 0 : (Noise.rnd(s, i, 5) - 0.5) * 18 * Math.sin(Math.PI * t);
+            double qx = lerp(ax, bx, t) - uz * side, qz = lerp(az, bz, t) + ux * side;
+            double qy = lerp(ay, by, t) + (i == n ? 0 : (Noise.rnd(s, i, 6) - 0.5) * 4);
+            out.add(new Segment(px, py, pz, qx, qy, qz, lerp(r0, r1, Math.min(1, t * 1.5)), true));
+            px = qx;
+            py = qy;
+            pz = qz;
+        }
     }
 
     private static double galleryRadius(double y) {
@@ -277,6 +329,15 @@ public final class CaveSystems implements CaveFeatures {
             py = qy;
             pz = qz;
         }
+    }
+
+    /** True near the mouth of a great entrance (no trees there: the ground is cut away). */
+    public boolean nearMouth(double x, double z) {
+        if (P.plannedCaves <= 0) return false;
+        int ri = Math.floorDiv((int) Math.floor(x), R), rj = Math.floorDiv((int) Math.floor(z), R);
+        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++)
+            for (Segment s : region(ri + di, rj + dj).mouth) if (s.near2d(x, z, 3)) return true;
+        return false;
     }
 
     @Override
