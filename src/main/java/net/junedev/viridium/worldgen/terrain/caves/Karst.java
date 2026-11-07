@@ -63,6 +63,19 @@ public final class Karst implements CaveFeatures {
             30 + 120 * Noise.rnd(ci, cj, seed + 7) };
     }
 
+    /** How much the doline of cell (ci, cj) lowers (x, z) (0 outside it); same values as {@link #doline}, no allocation. */
+    private double lowering(int ci, int cj, double x, double z) {
+        if (Noise.rnd(ci, cj, seed) >= 0.42 * P.dolines) return 0;
+        double dx = (ci + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 1)) * G,
+            dz = (cj + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 2)) * G;
+        double r = 5 + 15 * Noise.rnd(ci, cj, seed + 3);
+        double q = Math.hypot(x - dx, z - dz) / r;
+        if (q >= 1) return 0;
+        double depth = r * (0.35 + 0.45 * Noise.rnd(ci, cj, seed + 4));
+        double t = 1 - q * q;
+        return depth * t * Math.sqrt(t);
+    }
+
     /** How karstic the surface rock is (limestone, marble). */
     static double karst(GenPoint o) {
         double a = karstRock(o.rock), b = karstRock(o.rock2);
@@ -82,15 +95,14 @@ public final class Karst implements CaveFeatures {
         double away = ss(o.riverHW + 4, o.riverHW + 24, o.riverD);
         if (away <= 0) return;
         int ci = Math.floorDiv((int) Math.floor(x), G), cj = Math.floorDiv((int) Math.floor(z), G);
+        // a doline centre sits in [0.2, 0.8] of its cell and its radius is under 20 blocks: a neighbour cell only
+        // matters within 0.8 G + 20 - G = 10.4 blocks of the shared edge (0.1 of slack)
+        double lx = x - ci * G, lz = z - cj * G;
+        int di0 = lx < 0.8 * G + 20.1 - G ? -1 : 0, di1 = lx > 0.2 * G - 20.1 + G ? 1 : 0;
+        int dj0 = lz < 0.8 * G + 20.1 - G ? -1 : 0, dj1 = lz > 0.2 * G - 20.1 + G ? 1 : 0;
         double lower = 0;
-        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
-            double[] d = doline(ci + di, cj + dj);
-            if (d == null) continue;
-            double q = Math.hypot(x - d[0], z - d[1]) / d[2];
-            if (q >= 1) continue;
-            double t = 1 - q * q;
-            lower = Math.max(lower, d[3] * t * Math.sqrt(t));
-        }
+        for (int dj = dj0; dj <= dj1; dj++) for (int di = di0; di <= di1; di++)
+            lower = Math.max(lower, lowering(ci + di, cj + dj, x, z));
         if (lower <= 0) return;
         lower *= ss(0.05, 0.4, k) * away;
         o.h -= lower;
