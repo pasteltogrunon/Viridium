@@ -1,32 +1,41 @@
 package net.junedev.viridium.worldgen.terrain.bench;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import net.junedev.viridium.worldgen.terrain.GenStats;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
+import net.junedev.viridium.worldgen.terrain.caves.CaveCarver;
 import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
+import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanner;
 import net.junedev.viridium.worldgen.terrain.column.TerrainLayout;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.core.Noise;
 import net.junedev.viridium.worldgen.terrain.crust.CrustModel;
+import net.junedev.viridium.worldgen.terrain.crust.Lithology;
 import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
 import net.junedev.viridium.worldgen.terrain.stages.BasinGraph;
 import net.junedev.viridium.worldgen.terrain.stages.RiverNet;
+import net.junedev.viridium.worldgen.terrain.stages.RiverStage;
 
 /**
  * Headless benchmark of the terrain pipeline (no Minecraft classes). Mirrors bench/run.js (per-stage marginal cost for
  * land and ocean with the river networks already cached, primitives, cold river network builds, map tiles) and adds
  * the real case: planning contiguous 16x16 columns (single- and multi-threaded), the cube mix of a column, crust
- * sampling, and the exact vs fast-field comparison.
+ * sampling, and the exact vs fast-field comparison. {@link #walk} is the game's own workload (teleport, then a flight
+ * generating plans and cubes): the number to judge optimisations by.
  */
 public final class TerrainBenchmark {
 
@@ -81,6 +90,7 @@ public final class TerrainBenchmark {
         crust(fast);
         tiles(fast);
         teleport();
+        walk();
         line("(sink %.3f)", sink);
         return out.toString();
     }
@@ -289,15 +299,239 @@ public final class TerrainBenchmark {
 
     private void tiles(WorldGen gen) {
         line("");
-        line("Map tiles 128x128 at level 4 (16 blocks/px), fast fields, nets warm after the first:");
+        line("Map tiles 128x128 at level 4 (16 blocks/px), fast fields:");
+        coldTile();
+        line("  every layer on a warm tile (nets cached after the first):");
         MapTileRenderer r = new MapTileRenderer(gen);
         for (MapLayer l : MapLayer.ALL) {
             r.render(l, 4, 0, 0, 32, false); // warm
             long t0 = System.nanoTime();
             int[] px = r.render(l, 4, 0, 0, 128, false);
             sink += px[0];
-            line("  %-26s %6.0f ms", l.name, (System.nanoTime() - t0) / 1e6);
+            line("    %-24s %6.0f ms", l.name, (System.nanoTime() - t0) / 1e6);
         }
+    }
+
+    /**
+     * What the player waits for: the first tile of an unexplored area (fresh pipeline, its river networks built on the
+     * map worker's own thread, like {@code MapTileCache}), then a second layer of the same tile.
+     */
+    private void coldTile() {
+        int tx = 20, tz = 15;
+        ExecutorService ex = Executors.newSingleThreadExecutor(task -> new Thread(() -> {
+            RiverStage.buildSeriallyOnThisThread();
+            task.run();
+        }, "Viridium bench map worker"));
+        try {
+            String s = ex.submit(() -> {
+                WorldGen g = gen(true);
+                MapTileRenderer r = new MapTileRenderer(g);
+                long nets = g.rivers.buildCount();
+                long t0 = System.nanoTime();
+                int[] a = r.render(MapLayer.COMPOSITE, 4, tx, tz, 128, false);
+                double cold = (System.nanoTime() - t0) / 1e6;
+                nets = g.rivers.buildCount() - nets;
+                t0 = System.nanoTime();
+                int[] b = r.render(MapLayer.HEIGHT, 4, tx, tz, 128, false);
+                double warm = (System.nanoTime() - t0) / 1e6;
+                sink += a[0] + b[0];
+                return String.format("  cold tile (%d,%d), fresh pipeline: %s %6.0f ms (%d nets built) · then %s %5.0f ms",
+                    tx, tz, MapLayer.COMPOSITE.name, cold, nets, MapLayer.HEIGHT.name, warm);
+            })
+                .get();
+            line("%s", s);
+        } catch (Exception e) {
+            line("  cold tile failed: %s", e);
+        } finally {
+            ex.shutdownNow();
+        }
+    }
+
+    // ------------------------------------------------------------------ walk: the game's own workload
+
+    /** Horizontal view distance (chunks) and cubes generated below and above the surface of each column. */
+    private static final int WALK_VIEW = 10, WALK_CUBES = 4;
+    private static final double WALK_SPEED = 10, WALK_SECONDS = 60, TICK = 0.05;
+
+    /** CPU spent on one column, split by kind (ns). */
+    private static final class ColumnCost {
+
+        long plan, cubes, nets, caves;
+        int cubeCount;
+    }
+
+    /**
+     * The game's own workload, so every optimisation is judged on what a player waits for. A fresh pipeline at a far
+     * point: a teleport (the view window generated nearest first by the prefetch threads), then a 60 s flight at
+     * 10 blocks/s along a gently curving path. Every column entering the view gets its plan and the cubes from 4 below
+     * its lowest surface to 4 above its highest top (lithology + caves, like CubeFiller minus block storage, surface
+     * rules and flora). The flight runs flat out on one thread with serial river builds, so the CPU of each column
+     * splits exactly into plan, cubes, river networks (built on demand, nested in plans and cave planning) and cave
+     * region planning.
+     */
+    public void walk() {
+        line("");
+        WorldGen g = gen(true);
+        double[] p0 = landNear(g, 52000, 31000);
+        ColumnPlanCache plans = new ColumnPlanCache(new ColumnPlanner(g, BiomeMapper.FROM_STAGE));
+        line("Walk: seed %d from (%.0f, %.0f), %.0f blocks/s for %.0f s, view %d chunks, cubes ±%d around the surface",
+            base.seed, p0[0], p0[1], WALK_SPEED, WALK_SECONDS, WALK_VIEW, WALK_CUBES);
+        GenStats.reset();
+
+        // teleport: the whole window, nearest first, on prefetch-like threads (river builds parallel, as in the game)
+        int threads = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() / 3));
+        int pcx = (int) Math.floor(p0[0]) >> 4, pcz = (int) Math.floor(p0[1]) >> 4;
+        Set<Long> done = new HashSet<>();
+        List<int[]> window = window(pcx, pcz, done);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        long t0 = System.nanoTime();
+        double centre = -1, inner = -1;
+        int cubes = 0;
+        try {
+            List<Future<ColumnCost>> fs = new ArrayList<>();
+            for (int[] c : window) fs.add(pool.submit(() -> column(g, plans, c[0], c[1], false)));
+            for (int i = 0; i < fs.size(); i++) {
+                cubes += fs.get(i)
+                    .get().cubeCount;
+                double ms = (System.nanoTime() - t0) / 1e6;
+                if (i == 0) centre = ms;
+                if (window.get(i)[2] == 4 && (i + 1 == fs.size() || window.get(i + 1)[2] > 4)) inner = ms;
+            }
+        } catch (Exception e) {
+            line("  teleport failed: %s", e);
+        } finally {
+            pool.shutdownNow();
+        }
+        line("  teleport (%d threads, cold): centre %.0f ms · 9x9 %.0f ms · %dx%d %.0f ms · %d nets · %d cubes", threads,
+            centre, inner, 2 * WALK_VIEW + 1, 2 * WALK_VIEW + 1, (System.nanoTime() - t0) / 1e6, g.rivers.buildCount(),
+            cubes);
+
+        // flight: one thread, flat out, exact attribution
+        ExecutorService walker = Executors.newSingleThreadExecutor(task -> new Thread(() -> {
+            RiverStage.buildSeriallyOnThisThread();
+            task.run();
+        }, "Viridium bench walker"));
+        try {
+            walker.submit(() -> fly(g, plans, p0, done))
+                .get();
+        } catch (Exception e) {
+            line("  walk failed: %s", e);
+        } finally {
+            walker.shutdownNow();
+        }
+    }
+
+    private void fly(WorldGen g, ColumnPlanCache plans, double[] p0, Set<Long> done) {
+        GenStats.reset();
+        long nets0 = g.rivers.buildCount();
+        List<ColumnCost> costs = new ArrayList<>();
+        double x = p0[0], z = p0[1], heading = new Random(base.seed).nextDouble() * 2 * Math.PI;
+        int lastCx = Integer.MIN_VALUE, lastCz = Integer.MIN_VALUE;
+        long t0 = System.nanoTime();
+        int ticks = (int) Math.round(WALK_SECONDS / TICK);
+        for (int t = 0; t < ticks; t++) {
+            double a = heading + 0.6 * Math.sin(t * TICK / 15);
+            x += Math.cos(a) * WALK_SPEED * TICK;
+            z += Math.sin(a) * WALK_SPEED * TICK;
+            int cx = (int) Math.floor(x) >> 4, cz = (int) Math.floor(z) >> 4;
+            if (cx == lastCx && cz == lastCz) continue;
+            lastCx = cx;
+            lastCz = cz;
+            for (int[] c : window(cx, cz, done)) costs.add(column(g, plans, c[0], c[1], true));
+        }
+        double wall = (System.nanoTime() - t0) / 1e9;
+        int n = costs.size();
+        if (n == 0) {
+            line("  walk: no new columns");
+            return;
+        }
+        long plan = 0, cubeNs = 0, nets = 0, caves = 0;
+        int cubes = 0;
+        double[] per = new double[n];
+        for (int i = 0; i < n; i++) {
+            ColumnCost c = costs.get(i);
+            plan += c.plan;
+            cubeNs += c.cubes;
+            nets += c.nets;
+            caves += c.caves;
+            cubes += c.cubeCount;
+            per[i] = (c.plan + c.cubes + c.nets + c.caves) / 1e6;
+        }
+        Arrays.sort(per);
+        double k = 1e6 * n;
+        line("  walk (1 thread, serial river builds, flat out): %d new columns · %d cubes (%.1f/column) · %d nets built", n,
+            cubes, (double) cubes / n, g.rivers.buildCount() - nets0);
+        line("  CPU per new column: plan %.2f + cubes %.2f + nets %.2f + cave regions %.2f = %.2f ms", plan / k,
+            cubeNs / k, nets / k, caves / k, (plan + cubeNs + nets + caves) / k);
+        line("    per column: p50 %.1f ms · p90 %.1f ms · p99 %.1f ms · max %.0f ms", per[n / 2], per[(int) (n * 0.9)],
+            per[Math.min(n - 1, (int) (n * 0.99))], per[n - 1]);
+        line("  %.0f s of flight took %.1f s on one thread (%.2fx real time)", WALK_SECONDS, wall, wall / WALK_SECONDS);
+        line("  where the time went (flight only):");
+        for (String l : GenStats.report()
+            .split("\n")) line("    %s", l);
+    }
+
+    /** Columns of the view window around (cx, cz) not generated yet, nearest first: {x, z, ring}. Marks them done. */
+    private static List<int[]> window(int cx, int cz, Set<Long> done) {
+        List<int[]> out = new ArrayList<>();
+        for (int r = 0; r <= WALK_VIEW; r++) for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+            int x = cx + dx, z = cz + dz;
+            if (done.add(((long) x << 32) | (z & 0xffffffffL))) out.add(new int[] { x, z, r });
+        }
+        return out;
+    }
+
+    /** Net-building CPU so far (a build's wait for upstream nets is the nested builds, counted on their own). */
+    private static long netNs() {
+        return Math.round((GenStats.RIVER_NET.totalMs() - GenStats.RIVER_DEPS.totalMs()) * 1e6);
+    }
+
+    /**
+     * Generates one column: its cave regions (when {@code account}, on their own so they can be told apart), its plan
+     * and its cubes around the surface. River builds nested in any of them are moved to {@code nets} (exact only when
+     * this is the only thread generating).
+     */
+    private ColumnCost column(WorldGen g, ColumnPlanCache plans, int cx, int cz, boolean account) {
+        ColumnCost c = new ColumnCost();
+        long n0 = netNs(), t0 = System.nanoTime();
+        if (account) {
+            GenPoint tmp = new GenPoint(); // plans the 3x3 cave regions around the column (also done by the plan)
+            g.caves.surface((cx << 4) + 8, (cz << 4) + 8, tmp);
+        }
+        long n1 = netNs(), t1 = System.nanoTime();
+        ColumnPlan p = plans.get(cx, cz);
+        long n2 = netNs(), t2 = System.nanoTime();
+        CrustModel.Sampler s = g.crust.sampler();
+        byte[] code = new byte[4096];
+        int lo = (p.minSurfaceY >> 4) - WALK_CUBES, hi = (p.maxTopY >> 4) + WALK_CUBES;
+        for (int cy = lo; cy <= hi; cy++) if (cube(g, p, s, cx, cy, cz, code)) c.cubeCount++;
+        long n3 = netNs(), t3 = System.nanoTime();
+        c.caves = (t1 - t0) - (n1 - n0);
+        c.plan = (t2 - t1) - (n2 - n1);
+        c.cubes = (t3 - t2) - (n3 - n2);
+        c.nets = n3 - n0;
+        return c;
+    }
+
+    /** Lithology and caves of one cube (like CubeFiller without block storage); false for an air cube. */
+    private boolean cube(WorldGen g, ColumnPlan p, CrustModel.Sampler s, int cx, int cy, int cz, byte[] code) {
+        if ((cy << 4) > p.maxTopY) return false;
+        s.prepare(cx << 4, cy << 4, cz << 4);
+        CaveCarver.Cube cv = g.caves.prepare(p, cx, cy, cz);
+        int acc = 0;
+        for (int ly = 0; ly < 16; ly++) for (int lz = 0; lz < 16; lz++) for (int lx = 0; lx < 16; lx++) {
+            int i = ColumnPlan.index(lx, lz), y = (cy << 4) + ly, k = (ly * 16 + lz) * 16 + lx;
+            if (y > p.surfaceY[i]) {
+                code[k] = -1;
+                continue;
+            }
+            Lithology r = s.at(p.crust, i, lx, ly, lz);
+            code[k] = cv == null ? CaveCarver.SOLID : cv.at(lx, ly, lz, r);
+            acc += code[k] + r.ordinal();
+        }
+        sink += acc;
+        return true;
     }
 
     /**

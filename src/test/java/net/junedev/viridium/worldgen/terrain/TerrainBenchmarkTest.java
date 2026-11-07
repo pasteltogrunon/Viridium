@@ -26,6 +26,23 @@ class TerrainBenchmarkTest {
         System.out.print(b.report());
     }
 
+    /**
+     * Only the game's workload (teleport, then a 60 s flight generating plans and cubes): {@code VIRIDIUM_BENCH=walk}.
+     * Saved to build/reports/worldgen-walk.txt.
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_BENCH", matches = "walk")
+    void walk() throws IOException {
+        TerrainBenchmark b = new TerrainBenchmark(new GenParams(), 0);
+        b.walk();
+        System.out.print(b.report());
+        File f = new File("build/reports/worldgen-walk.txt");
+        f.getParentFile()
+            .mkdirs();
+        Files.write(f.toPath(), b.report()
+            .getBytes(StandardCharsets.UTF_8));
+    }
+
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_BENCH", matches = "1")
     void benchmark() throws IOException {
