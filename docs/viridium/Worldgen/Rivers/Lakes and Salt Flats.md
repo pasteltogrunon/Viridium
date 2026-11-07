@@ -54,7 +54,33 @@ already at or below `bot`).
 
 Every node of the component lower than the level is stored in `RiverNet.lakes` with the level (negative for salt).
 
-Rivers keep flowing through lakes: the river nodes and their receivers are not changed by lakes.
+The steps above are for depressions no river runs through (or that could not become a river lake, below).
+
+## River lakes
+
+Where a river runs through a depression, the depression fills up to the level where the water leaves it, and the river
+crosses it as a lake (`RiverNetBuilder.riverLakes`, during the water levels, on the **raw** profile: every river node at
+its valley floor on the eroded terrain, before the profile is made monotone).
+
+- **Outlet**: follow the depression's largest river downstream until it leaves the component. Its level `L0` is the
+  outlet's valley floor, lowered to what the river below allows (walking down: running minimum of the valley floors plus
+  2.5 blocks per node, the same `MAX_DROP` the profile gets later), capped by the divide like any lake. A coast within
+  64 nodes below caps it at 2.5 blocks per node above the sea.
+- **Level**: `floor + (L0 − floor)·(0.25 + 0.75·frac)` (`floor` = lowest river valley floor in the depression): humid
+  lakes are full to their outlet; arid ones partly (then the river cuts its outlet down to the lake). Salt flats keep the
+  plain rules.
+- **Extent**: a flood from the river nodes below the level over every node whose eroded terrain (river nodes: valley
+  floor) lies below it. It must be closed by terrain at or above the level: if it reaches the sea, another basin, an
+  entry or exit node, the outlet, or grows past `8·n + 100` nodes, there is no river lake (the water would leave
+  elsewhere, or the coarse depression does not match the real terrain).
+- **Skipped** (left to the plain rules): within 6 nodes of the sea (deltas, estuaries), depressions holding an entry or
+  the exit node, glacial troughs (the trough and its water lie below the river's level), level under 12 blocks.
+- **Water**: the river nodes in the lake take its level; the outlet leaves at it (then descends as usual); every river
+  node upstream keeps at least it (water never climbs) — enforced again after the clamps and the drop limit.
+- Its reaches are flagged `RiverNet.inLake`: at runtime they have no banks of their own, and the lake's rim closes
+  around them (the rim is only suppressed near channels outside lakes).
+
+Rivers keep flowing through lakes: the receivers are not changed, only the water levels.
 
 ## Shaping at runtime
 
@@ -70,7 +96,9 @@ Rivers keep flowing through lakes: the river nodes and their receivers are not c
   - any river flag is cleared: the lake replaces the channel.
 - **Outside**: a **rim** is raised so the lake is enclosed: `rim = Z + 30·(thr − m)`, blended in with
   `ss(thr − 0.3, thr, m)`. The rim is suppressed near river channels (`ss(2, 14, riverD − riverHW)`), so rivers flow
-  into and out of the lake freely.
+  into and out of the lake freely — except when the nearest channel lies in a river lake (it is the lake's own water).
+- The rim zone (`m > thr − 0.3`) is reported to the cave stage (`RiverStage.lakeShore`): karst dolines skip it (a doline
+  there would open a hole below the lake's water).
 
 Lakes override the biome ([[Worldgen Stages|Biome Stage]]: `LAKE`, `FROZEN_LAKE`, `SALT_FLAT`) and freeze below −2 °C
 ([[Worldgen Stages|Cryosphere]]).

@@ -514,7 +514,7 @@ final class RiverNetBuilder {
     private Map<Integer, Double> lakes;
     // reaches
     private float[] pts, bb, w0, w1, z0, z1, sacc, am0, am1, fallIn, mouthsOut;
-    private byte[] lipOut, head, skip;
+    private byte[] lipOut, inLake, head, skip;
     private DeltaOut dOut;
     // valley field
     private char[] vd;
@@ -774,9 +774,156 @@ final class RiverNetBuilder {
         lakeCells = cells;
     }
 
+    /** Largest drop of a river's water per grid node outside waterfalls (tributaries descend to the river they join). */
+    static final double WATER_MAX_DROP = 2.5;
+
     private List<double[]> lakeComps;
     private double[] lakeFloors;
     private int[] lakeCells;
+
+    /** Depressions made into river lakes (placeLakes leaves them alone), river nodes in one, their number. */
+    private boolean[] riverLakeDone, lakeRiv;
+    private int riverLakes;
+    /** Lowest water a river node may have: the level of the river lake it lies in or flows into (water never climbs). */
+    private float[] lakeReq;
+
+    /**
+     * River lakes, on the raw river profile (each node at its valley floor, before the profile is made monotone): where a
+     * river runs through a depression, the depression fills up to the floor of the valley where the river leaves it
+     * (its outlet), instead of the river cutting down through that rim. The lake covers the cells of the depression's
+     * spill area whose eroded terrain lies below that level (and the river nodes whose valley floor does), found by a
+     * flood over them from the river; the river's water there is the lake's level, and every river node upstream keeps at
+     * least that level. Arid basins fill partly (the river then cuts its outlet down to the lake), salt flats stay as they
+     * are; depressions near the sea (deltas, estuaries), on the basin's entries or exit, or in glacial troughs are left to
+     * {@link #placeLakes}.
+     */
+    private void riverLakes(GenScratch s) {
+        final int nx = this.nx, ny = this.ny, n = this.n, cnt = this.cnt;
+        final float[] hgt = this.hgt, wl = this.wl, acc = this.acc, filled = this.filled;
+        final int[] recv = this.recv, order = this.order;
+        final boolean[] isRiv = this.isRiv, own = this.own, entry = this.entry;
+        final float[] req = this.lakeReq = new float[n];
+        Arrays.fill(req, Float.NaN);
+        lakeRiv = new boolean[n];
+        final List<double[]> comps = lakeComps;
+        if (comps == null || comps.isEmpty()) return;
+        riverLakeDone = new boolean[comps.size()];
+        final int[] cells = lakeCells;
+        int[] compOf = new int[n], seen = new int[n];
+        Arrays.fill(compOf, -1);
+        int[] queue = new int[n];
+        for (int q0 = 0; q0 < comps.size(); q0++) {
+            double[] cp = comps.get(q0);
+            int st = (int) cp[0], nc = (int) cp[1];
+            double frac = ss(250, 700, cp[3] / nc * 1000);
+            if (frac < 0.12) continue; // salt flat
+            int main = -1;
+            boolean bad = false;
+            for (int q = 0; q < nc; q++) {
+                int c = cells[st + q];
+                compOf[c] = q0;
+                if (isRiv[c] && (main < 0 || acc[c] > acc[main])) main = c;
+                if (entry[c] || c == exitIdx) bad = true;
+            }
+            if (main < 0 || bad) continue;
+            int out = main;
+            for (int guard = 0; out >= 0 && compOf[out] == q0 && guard < n; guard++) out = recv[out];
+            if (out < 0 || hgt[out] < 0 || !isRiv[out] || entry[out]) continue;
+            double floorW = Double.POSITIVE_INFINITY;
+            for (int q = 0; q < nc; q++) if (isRiv[cells[st + q]]) floorW = Math.min(floorW, wl[cells[st + q]]);
+            // the outlet's water once the river below it is made monotone and descends at most MAX_DROP per node: walking
+            // down from the outlet, the running minimum of the valley floors plus the drop allowed back up to it
+            double run = wl[out], L0 = wl[out];
+            for (int p = recv[out], k = 1; p >= 0 && k < 64; p = recv[p], k++) {
+                if (hgt[p] < 0) { // the sea
+                    L0 = Math.min(L0, WATER_MAX_DROP * k);
+                    break;
+                }
+                if (isRiv[p] || p == exitIdx) run = Math.min(run, wl[p]);
+                L0 = Math.min(L0, run + WATER_MAX_DROP * k);
+            }
+            L0 = Math.min(L0, cp[5]);
+            if (L0 < 12 || L0 <= floorW + 1) continue;
+            final double L = floorW + (L0 - floorW) * (0.25 + 0.75 * frac);
+            if (L <= floorW + 1) continue;
+            // not near the sea (deltas, estuaries)
+            for (int q = 0; q < nc && !bad; q++) {
+                int c = cells[st + q], ci = c % nx, cj = c / nx;
+                for (int dj = -6; dj <= 6 && !bad; dj += 2) for (int di = -6; di <= 6; di += 2) {
+                    int ii = ci + di, jj = cj + dj;
+                    if (ii >= 0 && jj >= 0 && ii < nx && jj < ny && hgt[jj * nx + ii] < 0) {
+                        bad = true;
+                        break;
+                    }
+                }
+            }
+            if (bad) continue;
+            // not in a glacial trough (its water and floor lie below the river's level)
+            if (riverWater(main) < wl[main] - 0.5 || riverWater(out) < wl[out] - 0.5) continue;
+            // the lake: from the river nodes below the level, over every cell whose eroded terrain lies below it (river
+            // nodes: whose valley floor does). It must be closed by terrain at or above the level: reaching the sea,
+            // another basin, an entry or the exit below it means the water would leave elsewhere (or the coarse
+            // depression does not match the real terrain): then no river lake
+            final int stamp = q0 + 1, maxCells = 8 * nc + 100;
+            boolean leak = false;
+            int qh = 0, qt = 0;
+            for (int q = 0; q < nc; q++) {
+                int c = cells[st + q];
+                if (isRiv[c] && wl[c] < L && seen[c] != stamp) {
+                    seen[c] = stamp;
+                    queue[qt++] = c;
+                }
+            }
+            while (qh < qt && qt <= maxCells && !leak) {
+                int c = queue[qh++], ci = c % nx, cj = c / nx;
+                for (int k = 0; k < 4 && qt <= maxCells; k++) {
+                    int ii = ci + (k == 0 ? 1 : k == 1 ? -1 : 0), jj = cj + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) {
+                        leak = true;
+                        break;
+                    }
+                    int nb = jj * nx + ii;
+                    if (seen[nb] == stamp) continue;
+                    seen[nb] = stamp;
+                    boolean in = isRiv[nb] && own[nb] ? wl[nb] < L
+                        : hgt[nb] < 0 || finalHeight(x0 + (ii + 0.5) * g, y0 + (jj + 0.5) * g, s) < L;
+                    if (!in) continue; // the shore
+                    if (!own[nb] || hgt[nb] < 0 || entry[nb] || nb == exitIdx || nb == out) {
+                        leak = true;
+                        break;
+                    }
+                    queue[qt++] = nb;
+                }
+            }
+            if (leak || qt > maxCells || qt < 2) continue; // spills elsewhere, or too small: a plain lake (if any)
+            for (int q = 0; q < qt; q++) {
+                int c = queue[q];
+                lakes.put(c, L);
+                if (isRiv[c]) {
+                    lakeRiv[c] = true;
+                    wl[c] = (float) L;
+                    req[c] = (float) L;
+                }
+            }
+            req[out] = (float) L; // leaves at the lake's level, then descends as usual
+            riverLakeDone[q0] = true;
+            riverLakes++;
+        }
+        // water never climbs: every river node upstream of a lake keeps at least its level (downstream first)
+        for (int k = 0; k < cnt; k++) {
+            int idx = order[k], r = recv[idx];
+            if (!isRiv[idx] || r < 0 || req[r] != req[r]) continue;
+            if (!(req[idx] >= req[r])) req[idx] = req[r];
+        }
+        keepLakeLevels();
+    }
+
+    /** Raises every river node to the level of the lake it lies in or flows into (see {@link #riverLakes}). */
+    private void keepLakeLevels() {
+        final float[] req = lakeReq, wl = this.wl;
+        if (riverLakes == 0) return;
+        for (int idx = 0; idx < n; idx++) if (req[idx] == req[idx] && isRiv[idx] && wl[idx] < req[idx]) wl[idx] = req[idx];
+    }
 
     /**
      * Lake levels, once the rivers know their water on the final terrain: a lake never stands above the water of a river
@@ -840,6 +987,7 @@ final class RiverNetBuilder {
         for (int q0 = 0; q0 < comps.size(); q0++) {
             double[] cp = comps.get(q0);
             int st = (int) cp[0], nc = (int) cp[1];
+            if (riverLakeDone != null && riverLakeDone[q0]) continue; // a river lake, placed with the water levels
             double lev = cp[2], rr = cp[3], bot = cp[4], botF = lakeFloors[q0];
             double mm = rr / nc * 1000, frac = ss(250, 700, mm);
             boolean salt = frac < 0.12;
@@ -879,6 +1027,9 @@ final class RiverNetBuilder {
                 }
             }
             if (level <= Math.min(bot, botF)) continue;
+            boolean taken = false; // part of it already covered by a river lake: that one has the water there
+            for (int q = 0; q < nc && !taken; q++) taken = lakes.containsKey(cells[st + q]);
+            if (taken) continue;
             for (int q = 0; q < nc; q++) {
                 int c = cells[st + q];
                 if (hgt[c] < level) lakes.put(c, salt ? -level : level);
@@ -954,6 +1105,7 @@ final class RiverNetBuilder {
             else if (isRiv[idx]) wl[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
         });
         if (exitIdx >= 0) wl[exitIdx] = (float) Math.max(0, valleyFloor(exitIdx, exitIdx, halfWidth(acc[exitIdx] / thr), null));
+        riverLakes(null); // on the raw profile: depressions a river runs through fill up to their outlet
         for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
@@ -979,6 +1131,7 @@ final class RiverNetBuilder {
                 clamped = true;
             }
         }
+        keepLakeLevels();
         if (clamped) for (int k = cnt - 1; k >= 0; k--) {
             int idx = order[k], r = recv[idx];
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] < wl[r]) wl[r] = wl[idx];
@@ -989,12 +1142,13 @@ final class RiverNetBuilder {
         findFalls(wl, recv, isRiv, mainUp, hgt, scarpG, n, fallDrop, fallT, serial);
         // ...and no other reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level
         // of the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
-        final double MAX_DROP = 2.5;
+        final double MAX_DROP = WATER_MAX_DROP;
         for (int k = 0; k < cnt; k++) {
             int idx = order[k], r = recv[idx];
             if (fallDrop[idx] > 0) continue;
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] > wl[r] + MAX_DROP) wl[idx] = (float) (wl[r] + MAX_DROP);
         }
+        keepLakeLevels(); // a lake keeps its level (and the rivers above it theirs) whatever the drop below its outlet
     }
 
     /** River reaches as quadratic Béziers with meanders on gentle reaches, river mouths and estuary reaches. */
@@ -1025,7 +1179,7 @@ final class RiverNetBuilder {
         float[] ph0 = new float[count], ph1 = new float[count], am0 = this.am0 = new float[count],
             am1 = this.am1 = new float[count];
         float[] fallIn = this.fallIn = new float[count];
-        byte[] lipOut = this.lipOut = new byte[count];
+        byte[] lipOut = this.lipOut = new byte[count], inLake = this.inLake = new byte[count];
         float[] aUp = new float[count], cellA = this.cellA = new float[n];
         byte[] head = this.head = new byte[count];
         double[] BX = new double[NPT], BY = new double[NPT], TX = new double[NPT], TY = new double[NPT],
@@ -1131,6 +1285,7 @@ final class RiverNetBuilder {
             z0[sl] = mu >= 0 && fallDrop[mu] == 0 ? (float) (0.5 * ((double) wl[mu] + wl[idx])) : wl[idx];
             fallIn[sl] = mu >= 0 ? fallDrop[mu] : 0;
             lipOut[sl] = (byte) (fallDrop[idx] > 0 ? (isRiv[r] ? 1 : 2) : 0); // 2: falls into the sea
+            inLake[sl] = (byte) (lakeRiv != null && lakeRiv[idx] ? 1 : 0);
             z1[sl] = fallDrop[idx] > 0 ? wl[idx] : !isRiv[r] ? (hgt[r] < 0 ? 0 : wl[r])
                 : mainUp[r] == idx ? (float) (0.5 * ((double) wl[idx] + wl[r]))
                     : (float) (0.5 * ((double) z0[slot[r]] + z1[slot[r]]));
@@ -1370,6 +1525,8 @@ final class RiverNetBuilder {
         net.skip = skip;
         net.fallIn = fallIn;
         net.lipOut = lipOut;
+        net.inLake = inLake;
+        net.riverLakes = riverLakes;
         net.dv = Arrays.copyOf(dOut.v, dOut.nv * RiverNet.DV);
         net.dch = Arrays.copyOf(dOut.ch, dOut.nc * 2);
         net.dmc = dOut.mc.length == nm * 2 ? dOut.mc : Arrays.copyOf(dOut.mc, nm * 2);

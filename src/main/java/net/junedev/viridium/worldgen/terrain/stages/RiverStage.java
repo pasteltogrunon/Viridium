@@ -299,6 +299,7 @@ public class RiverStage extends GenStage {
                 o.river = 1;
             } else if (vZ > 0.3) o.h = Math.max(o.h, Math.min(o.h + 3, vZ + 0.6 * (1 - vBest / 3))); // banks
             if (vBest < o.riverD) {
+                FIELD_MEMO.get().nearestInLake = false;
                 o.riverD = vBest;
                 o.riverHW = vW;
                 o.riverZ = vZ;
@@ -517,6 +518,9 @@ public class RiverStage extends GenStage {
         o.gorge = 0;
         o.fall = 0;
         o.fallTop = -1e9;
+        FieldMemo memo = FIELD_MEMO.get();
+        memo.nearestInLake = false;
+        memo.shoreZ = Double.NaN;
         if (o.L < -0.5 || s.riversOff) return;
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
         int nNear = basins.nearCells(x, y, RiverNetBuilder.MARGIN, s); // into s.NCK: no allocation per point
@@ -537,8 +541,7 @@ public class RiverStage extends GenStage {
         }
         // in phases across networks: all valleys first, then all channels (so each channel measures its water against
         // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
-        FieldMemo m = FIELD_MEMO.get();
-        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase, m, q);
+        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase, memo, q);
         java.util.Arrays.fill(nets, 0, nn, null); // the scratch must not keep networks alive after the LRU drops them
         // last reach drowned by the sea (fjord, estuary): only where the river is at sea level anyway. A deep channel
         // inland keeps its own water (otherwise its middle would drop to sea level between higher river water)
@@ -556,9 +559,21 @@ public class RiverStage extends GenStage {
 
         final boolean[] ok = new boolean[9];
         final double[] fe = new double[9], few = new double[9], fr = new double[9];
+        /** The nearest channel at the current point lies in a river lake (its water is the lake's). */
+        boolean nearestInLake;
+        /** Level of the lake whose shore the current point is on (rim zone, not in the lake), or NaN. */
+        double shoreZ = Double.NaN;
     }
 
     private static final ThreadLocal<FieldMemo> FIELD_MEMO = ThreadLocal.withInitial(FieldMemo::new);
+
+    /**
+     * For the 2D cave stage right after this stage (karst dolines): the level of the lake whose shore the point this
+     * thread evaluated last lies on (its rim zone), or NaN. A doline there would open a hole below the lake's water.
+     */
+    public static double lakeShore() {
+        return FIELD_MEMO.get().shoreZ;
+    }
 
     /** Applies one phase of one basin network: 0 delta + broad valley, 1 channel, 2 estuary + lakes. */
     protected void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase) {
@@ -602,6 +617,7 @@ public class RiverStage extends GenStage {
             int g = net.g, gi = floor((qx - net.x0) / g), gj = floor((qy - net.y0) / g);
             float[] pts = net.pts, BB = net.bb;
             double best = 1e9, bhw = 0, bz = 0, bacc = 0, bW = 1, bwl = 0, bws = 0;
+            boolean bLake = false; // the nearest reach lies in a river lake
             double h = o.h, VMAX = 2 * g;
             int RC = (int) Math.ceil((VMAX + 24 + net.reach) / g);
             double wMul = lerp(0.45, 2.0, ef), bankSlope = lerp(1.5, 0.25, ef);
@@ -689,6 +705,7 @@ public class RiverStage extends GenStage {
                             bacc = net.acc[sl];
                             bW = W;
                             bws = lerp(z, zu, G); // water surface of the nearest reach
+                            bLake = net.inLake.length > 0 && net.inLake[sl] != 0;
                             bwl = Math.min(h, bws); // water fills the channel up to the bank
                         }
                         double hc;
@@ -711,12 +728,13 @@ public class RiverStage extends GenStage {
                     o.riverAcc = bacc;
                     o.riverZ = bz;
                     o.riverWL = bwl;
+                    if (m != null) m.nearestInLake = bLake;
                 }
                 o.h = hmin;
                 // a low bank right next to the water would let it spill: keep the first blocks at least at water level
                 // (applied after the carve, and only when this network owns the nearest channel, so it never fills
                 // another network's or a delta's channel)
-                if (best > 0 && best < 3 && best <= o.riverD)
+                if (best > 0 && best < 3 && best <= o.riverD && !bLake) // (in a river lake the lake holds the water)
                     o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
                 if (best <= 0) o.river = 1;
                 else o.valley = Math.max(o.valley, 1 - best / bW);
@@ -766,6 +784,9 @@ public class RiverStage extends GenStage {
         }
         double rim = Z + 30 * (thr - m);
         // the rim never crosses a river channel and its banks: rivers flow into and out of the lake freely
-        if (o.h < rim) o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m) * ss(2, 14, o.riverD - o.riverHW));
+        // (a channel inside a river lake is the lake's own water: the rim closes around it)
+        FieldMemo fm = FIELD_MEMO.get();
+        if (m > thr - 0.3) fm.shoreZ = fm.shoreZ == fm.shoreZ ? Math.max(fm.shoreZ, Z) : Z;
+        if (o.h < rim) o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m) * (fm.nearestInLake ? 1 : ss(2, 14, o.riverD - o.riverHW)));
     }
 }

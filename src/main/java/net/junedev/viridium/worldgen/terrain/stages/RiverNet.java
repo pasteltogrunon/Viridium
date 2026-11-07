@@ -50,6 +50,10 @@ public final class RiverNet {
     public float[] fallIn = new float[0];
     // lipOut: 1 the next reach lies below, 2 the sea lies below
     public byte[] lipOut = new byte[0];
+    /** 1 for a reach whose node lies in a river lake (its water is the lake's: no banks of its own), else 0. */
+    public byte[] inLake = new byte[0];
+    /** River lakes of this network (lakes a river flows through, full to their outlet). */
+    public int riverLakes;
     /** Valley field: distance to nearest river (65535 = none), its bed height ×16, width ×10, meander ×4, relief /2. */
     public char[] vd;
     public short[] vz;

@@ -35,7 +35,8 @@ class LakeWaterTest {
         planner = new ColumnPlanner(gen, BiomeMapper.FROM_STAGE);
         GenPoint o = new GenPoint();
         java.util.Set<Long> seen = new java.util.HashSet<>(), cols = new java.util.HashSet<>();
-        int basins = 0, lakes = 0, lakeCols = 0, walls = 0, tallWalls = 0, maxWall = 0, steps = 0, maxStep = 0;
+        int basins = 0, lakes = 0, lakeCols = 0, walls = 0, tallWalls = 0, maxWall = 0, steps = 0, maxStep = 0, riverLakes = 0,
+            biggest = 0, lakeCells = 0;
         String maxWallAt = "-";
         for (int probe = 0; probe < 400 && basins < 8; probe++) {
             double px = probe * 2300 + 500, pz = 1000 + (probe % 7) * 1700;
@@ -49,6 +50,13 @@ class LakeWaterTest {
             java.util.Set<Double> levels = new java.util.HashSet<>();
             for (double v : net.lakeLv) levels.add(v);
             lakes += levels.size();
+            riverLakes += net.riverLakes;
+            lakeCells += net.lakeIdx.length;
+            for (double v : levels) {
+                int size = 0;
+                for (double w : net.lakeLv) if (w == v) size++;
+                biggest = Math.max(biggest, size);
+            }
             // every lake cell of the network: its 32x32 square of columns
             for (int q = 0; q < net.lakeIdx.length; q += Math.max(1, net.lakeIdx.length / 60)) {
                 int c = net.lakeIdx[q];
@@ -81,9 +89,9 @@ class LakeWaterTest {
             }
         }
         System.out.printf(
-            "lakes: %d in %d basins, %d lake water columns, walls %d (>=2 blocks %d, tallest %d at %s), steps >1 to other water %d (max %d)%n",
-            lakes, basins, lakeCols, walls, tallWalls, maxWall, maxWallAt, steps, maxStep);
-        // regression guards (2026-11-08, per-depression lake caps: 8683 columns, no walls, no steps)
+            "lakes: %d (%d river lakes) in %d basins, %d cells of 32x32 (largest %d), %d lake water columns, walls %d (>=2 blocks %d, tallest %d at %s), steps >1 to other water %d (max %d)%n",
+            lakes, riverLakes, basins, lakeCells, biggest, lakeCols, walls, tallWalls, maxWall, maxWallAt, steps, maxStep);
+        // regression guards (2026-11-08, river lakes: 13 river lakes, 368096 columns, 31 one-block walls, no steps)
         assertTrue(lakeCols > 200, "test found too few lake columns: " + lakeCols);
         assertTrue(walls <= lakeCols * 0.01, "lake water stands above dry ground in " + walls + " columns");
         assertTrue(tallWalls <= lakeCols * 0.002, "lake water walls of 2+ blocks in " + tallWalls + " columns");

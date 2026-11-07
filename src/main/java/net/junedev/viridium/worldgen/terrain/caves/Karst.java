@@ -90,6 +90,9 @@ public final class Karst implements CaveFeatures {
     public void surface(double x, double z, GenPoint o) {
         o.doline = 0;
         if (P.dolines <= 0 || o.L < 0.02 || o.h < 3 || o.river != 0 || o.lake != 0) return;
+        // nor on a lake's shore: the hole would open below the lake's water next to it (a wall of water)
+        double shore = net.junedev.viridium.worldgen.terrain.stages.RiverStage.lakeShore();
+        if (shore == shore) return;
         double k = karst(o);
         if (k <= 0.05) return;
         double away = ss(o.riverHW + 4, o.riverHW + 24, o.riverD);
