@@ -1081,6 +1081,21 @@ final class RiverNetBuilder {
             va[idx] = (byte) Math.min(255, Math.round(cellA[sI] * 4.0));
             vr[idx] = (byte) Math.min(255, Math.round(lrel[sI] / 2.0));
         }
+        // no broad valley around a waterfall lip: the valley field is interpolated between grid cells, and between a cell
+        // above the fall and one at the pool it would cut a ramp into the cliff right where the river reaches it (its water
+        // would then stand over the lowered ground). There the terrain keeps its scarp; only the two channels are carved
+        for (int idx = 0; idx < n; idx++) {
+            if (fallDrop[idx] <= 0 || recv[idx] < 0) continue;
+            int r = recv[idx];
+            double lx = jx(idx) + fallT[idx] * (jx(r) - jx(idx)), ly = jy(idx) + fallT[idx] * (jy(r) - jy(idx));
+            int ci = idx % nx, cj = idx / nx;
+            for (int dj = -3; dj <= 3; dj++) for (int di = -3; di <= 3; di++) {
+                int ii = ci + di, jj = cj + dj;
+                if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                int c = jj * nx + ii;
+                if (hypot(jx(c) - lx, jy(c) - ly) < 1.6 * g) vd[c] = (char) 65535;
+            }
+        }
 
         lap(GenStats.RIVER_VALLEY, tLap);
         RiverNet net = new RiverNet();

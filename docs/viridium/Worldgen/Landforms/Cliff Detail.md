@@ -46,7 +46,7 @@ Every column within 10 blocks of a wall foot is a site (`wallDist`, `wallH`). Pr
 
 ## Falling water
 
-`CliffDetail` also finds the lips of [[Waterfalls]]: a column next to river water standing 3+ blocks above its own top gets a **curtain** of falling water (`flowing_water`, meta 8; ice where it is colder than −6 °C) up to that level. It covers oblique lips, where a cliff crosses the river at an angle, rivers falling off sea cliffs, and steep cascades.
+`CliffDetail` also finds the lips of [[Waterfalls]]: a column next to river water of a waterfall zone (`F_FALL`) standing 3+ blocks above its own top gets a **curtain** of falling water (`flowing_water`, meta 8; ice where it is colder than −6 °C) up to that level. It covers oblique lips, where a cliff crosses the river at an angle, rivers falling off sea cliffs, and steep cascades.
 
 ## Results
 

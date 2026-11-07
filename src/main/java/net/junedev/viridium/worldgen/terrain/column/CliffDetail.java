@@ -78,12 +78,13 @@ public final class CliffDetail {
     }
 
     /**
-     * Falling water wherever river water stands 3+ blocks above a neighbouring column: the lip of a waterfall (also an
-     * oblique one, where a cliff crosses the river at an angle), a river falling off a sea cliff, a steep cascade. The
-     * lower column gets a curtain of falling water up to the level of the river above it.
+     * Falling water at waterfall lips: a column next to river water of a waterfall zone (F_FALL) standing 3+ blocks above
+     * it gets a curtain up to that level. This covers oblique lips (a cliff crossing the river at an angle). Only in
+     * waterfall zones: elsewhere a river above a lower neighbour (a lake or the sea beside it) would raise a long
+     * curtain along its bank.
      */
     private static void curtains(int[] S, int[] Wt, int[] F, Cols out) {
-        final int river = ColumnPlan.F_RIVER | ColumnPlan.F_FALL;
+        final int river = ColumnPlan.F_FALL;
         for (int lz = 0; lz < 16; lz++) for (int lx = 0; lx < 16; lx++) {
             int c = (lz + M) * W + lx + M;
             int top = Wt[c] != NONE ? Math.max(Wt[c], S[c]) : S[c];

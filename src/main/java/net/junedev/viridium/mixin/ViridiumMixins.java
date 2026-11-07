@@ -6,7 +6,7 @@ import com.gtnewhorizon.gtnhmixins.builders.MixinBuilder;
 public enum ViridiumMixins implements IMixins {
 
     WATER_DEPTH_TINT(new MixinBuilder("Depth-dependent water tint and shore brightening")
-        .addClientMixins("minecraft.MixinRenderBlocks_WaterTint")
+        .addClientMixins("minecraft.MixinRenderBlocks_WaterTint", "minecraft.MixinBlockLiquid_FarWaterTint")
         .setPhase(Phase.EARLY)),
 
     WATER_TEXTURES(new MixinBuilder("Own water textures in the viridium namespace")

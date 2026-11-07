@@ -57,6 +57,22 @@ public final class WaterTint {
         return (to255(r) << 16) | (to255(g) << 8) | to255(b);
     }
 
+    /** Depth assumed for distant water (0 shallow .. 1 deep): LOD water seen from afar is mostly open, deep water. */
+    public static float FAR_DEPTH = 0.75F;
+
+    /**
+     * Tint for water drawn without its neighbours (Distant Horizons LODs: its FakeWorld only holds one block and the
+     * biome). Same biome profile as {@link #apply}, at a fixed depth, without the shore brightening.
+     */
+    public static int applyFar(int original, IBlockAccess world, int x, int y, int z) {
+        WaterProfile p = WaterProfileHandler.at(world, x, y, z);
+        float t = FAR_DEPTH;
+        float r = channel(original, 16) * lerp(p.shallowR, p.deepR, t);
+        float g = channel(original, 8) * lerp(p.shallowG, p.deepG, t);
+        float b = channel(original, 0) * lerp(p.shallowB, p.deepB, t);
+        return (to255(r) << 16) | (to255(g) << 8) | to255(b);
+    }
+
     /** One color channel (0..1) from a packed 0xRRGGBB value. */
     private static float channel(int rgb, int shift) {
         return ((rgb >> shift) & 0xFF) / 255.0F;

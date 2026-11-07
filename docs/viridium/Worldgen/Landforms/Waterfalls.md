@@ -41,7 +41,7 @@ Reaches normally join halfway between nodes. A fall moves the joint to the lip:
 ### Channels (`RiverStage`)
 
 - The reach below never uses a point behind its lip (its banks, cut from the level of the pool, would carve a ramp into the cliff).
-- The reach above gives no water beyond its lip.
+- The reach above gives no water beyond its lip, nor, in its last segments, where the ground has already dropped 6+ blocks below its water (past an oblique cliff edge it would stand as a wall of water over the low ground).
 - **Plunge pool**: the first 30 % of the reach below is dug `2 + 0.1·drop` blocks deeper.
 - `GenPoint.fallTop` (curtain top) on the first 1.5 blocks below the lip, and `fall = 1` within `hw + 4` blocks of it on both sides (`F_FALL` in the plan).
 
@@ -49,18 +49,20 @@ Reaches normally join halfway between nodes. A fall moves the joint to the lip:
 
 The broad valley of a river cell is taken from its nearest river node. Below a fall, cells up at the level of the lip used to take the pool's level and the valley cut a 50-block ramp into the plateau behind the lip. Now cells at least `0.7·drop` above the pool, whose nearest node is one of the 4 nodes below a fall, take the node at the lip.
 
+The valley field is also interpolated between grid cells (32 blocks): between a cell above the fall and one at the pool it still cut a ramp right where the river reaches the cliff, lowering the plateau by ~35 blocks under the water of the river. So there is **no broad valley within 1.6 cells of a lip**: the terrain keeps its scarp and only the two channels are carved.
+
 ### Blocks
 
 - `ColumnPlan.fallTop`: falling water (`flowing_water`, meta 8; ice when frozen) from the water of the column up to it.
-- `CliffDetail.curtainTop`: the same next to any river water standing 3+ blocks higher, which covers oblique lips (see [[Cliff Detail]]).
+- `CliffDetail.curtainTop`: the same next to river water of a waterfall zone (`F_FALL`) standing 3+ blocks higher, which covers oblique lips (see [[Cliff Detail]]). Only in waterfall zones: elsewhere a river standing above a lower neighbour (a lake or the sea beside it) raised a long curtain along its bank.
 
 ## Results (seed 12345)
 
-- `WaterfallTest` around a plateau, a sea cliff coast and a rift: 19 waterfalls (4 into the sea), the tallest 116 blocks; 236 curtain columns and 289 lip spills.
+- `WaterfallTest` around a plateau, a sea cliff coast and a rift: 19 waterfalls (4 into the sea), the tallest 116 blocks; 206 curtain columns and 191 lip spills. Around the 116-block fall: 179 water step edges and 72 walls (588 and 110 before the oblique-lip fixes).
 - `RiverWaterTest` (outside waterfall zones): max step 2, tallest wall 2, unchanged.
 - Cost: a few terrain samples per candidate, only near scarps.
 
 ## Known limits
 
-- The lip is found on the straight line between two grid nodes (32 blocks apart). Where a cliff crosses the river at an angle the top water borders the low ground along a few blocks; those columns spill falling water (curtains from `CliffDetail`).
+- The lip is found on the straight line between two grid nodes (32 blocks apart). Where a cliff crosses the river at an angle, the top water still borders the low ground along a few blocks of its bank; those low columns get falling water (water spilling over the side of the lip).
 - Waterfalls are static blocks until a block update: then Minecraft's own flow takes over (flowing water spreads at the pool and the lip).

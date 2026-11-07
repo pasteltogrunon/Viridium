@@ -563,6 +563,9 @@ public class RiverStage extends GenStage {
                             if (along < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z + fin);
                         }
                         if (fin > 0 && u < 0.3) pool = (2 + 0.1 * fin) * (1 - u / 0.3); // plunge pool
+                        // near its lip, the reach above stops where the ground has already dropped below its water: past
+                        // an oblique cliff edge it would stand as a wall of water over the low ground
+                        if (lip != 0 && k >= SEG - 3 && h < z - RiverNetBuilder.MIN_FALL) continue;
                         if (lip != 0 && k == SEG - 1) {
                             double past = (tr - 1) * Math.sqrt(l2);
                             if (past > -(hw + 4) && v < 3) o.fall = 1;
