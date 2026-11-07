@@ -116,6 +116,7 @@ public final class CaveCarver {
     public final Karst karst;
     public final CaveSystems systems;
     public final CaveMouths mouths;
+    public final Fissures fissures;
     private final ThreadLocal<Cube> cubes = ThreadLocal.withInitial(Cube::new);
 
     public CaveCarver(WorldGen gen) {
@@ -137,6 +138,8 @@ public final class CaveCarver {
         features.add(systems);
         mouths = new CaveMouths(gen);
         features.add(mouths);
+        fissures = new Fissures(gen);
+        features.add(fissures);
     }
 
     /** Adds planned shapes (karst shafts, chambers, galleries). */
@@ -144,10 +147,13 @@ public final class CaveCarver {
         features.add(f);
     }
 
-    /** 2D part of the caves, after the rivers: dolines (and the pits of collapsed chambers). */
+    /** 2D part of the caves, after the rivers: dolines, the pits of collapsed chambers and ground fissures. */
     public void surface(double x, double z, net.junedev.viridium.worldgen.terrain.pipeline.GenPoint o) {
+        // the lake shore of this point, read before any nested evaluation (a pit resolved here evaluates the rivers)
+        double shore = net.junedev.viridium.worldgen.terrain.stages.RiverStage.lakeShore();
         karst.surface(x, z, o);
-        systems.surface(x, z, o);
+        systems.surface(x, z, o, shore);
+        fissures.surface(x, z, o, shore);
     }
 
     /** True where the ground is cut by a cave mouth or a great entrance (no trees: they would float). */

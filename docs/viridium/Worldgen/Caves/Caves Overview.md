@@ -1,8 +1,8 @@
 # Caves Overview
 
-Back to [[Worldgen Overview]] · carved while filling cubes ([[Blocks and Chunks]]) · the karst and collapse pits also change the 2D terrain after [[Rivers Overview|the rivers]] · the shapes follow the rock of the [[Blocks and Chunks|3D Crust]].
+Back to [[Worldgen Overview]] · carved while filling cubes ([[Blocks and Chunks]]) · the karst, collapse pits and ground fissures also change the 2D terrain after [[Rivers Overview|the rivers]] · the shapes follow the rock of the [[Blocks and Chunks|3D Crust]].
 
-Code: `worldgen/terrain/caves/` (`CaveCarver`, `CaveNoise`, `Karst`, `CaveSystems`, `CaveFeatures`), `CubeFiller`, `WorldGen.evaluate` (2D part).
+Code: `worldgen/terrain/caves/` (`CaveCarver`, `CaveNoise`, `Karst`, `CaveSystems`, `CaveMouths`, `Fissures`, `Lobes`, `CaveFeatures`), `CubeFiller`, `WorldGen.evaluate` (2D part).
 
 Cubic Chunks lets the world go down to Y −2048. The crust was solid rock all the way: this section hollows it out with a **hybrid** system: noise caves everywhere (most of the void), plus planned pieces that make sense of the landscape.
 
@@ -13,6 +13,7 @@ Cubic Chunks lets the world go down to Y −2048. The crust was solid rock all t
 | [[Karst]] | dolines, shafts, sea caves and cave mouths in cliffs |
 | [[Cave Systems]] | giant chambers, galleries, collapse pits (cenotes), the great entrance of every system |
 | [[Cave Entrances]] | hillside cave mouths, entrance zones, great entrances: where caves open to the surface |
+| [[Ground Fissures]] | long narrow cracks in the land, sometimes opening into a slot down to the caves |
 
 ## In reality
 
@@ -34,7 +35,7 @@ Large caves form almost only in soluble rock (limestone, dolostone, gypsum, salt
 
 ```mermaid
 flowchart LR
-    R["2D: rivers"] --> K["2D: dolines (Karst.surface)<br/>collapse pits (CaveSystems.surface)"]
+    R["2D: rivers"] --> K["2D: dolines (Karst.surface)<br/>collapse pits (CaveSystems.surface)<br/>fissures (Fissures.surface)"]
     K --> P["Column plans"]
     P --> F["CubeFiller"]
     N["Noise fields<br/>(8-block lattice)"] --> C["CaveCarver.at(block, rock)"]
@@ -52,6 +53,7 @@ flowchart LR
 | `aquifers` | 1 | share of flooded cells |
 | `dolines` | 1 | doline density (and their shafts) |
 | `plannedCaves` | 1 | chambers per region (0 off) |
+| `fissures` | 1 | ground fissures per area (0 off) |
 
 All are 0 in `ParityTest`.
 
@@ -60,4 +62,5 @@ All are 0 in `ParityTest`.
 - `CaveTest.cavesAreSane`: void by depth band and by rock style, water and lava shares, nothing carved in the safety layer under water, no water standing next to air.
 - `CaveTest.caveCost`: crust cube with and without caves.
 - `CaveTest.karstDolinesAndShafts`, `CaveTest.plannedSystems`.
+- `CaveShapesTest.collapsePits` (outlines, aspect, no cenote water next to lower ground), `CaveShapesTest.fissures` (count, length, cut columns, none under water, cost).
 - `VIRIDIUM_CAVES=x0,x1,z,yTop,yBottom` (`CaveTest.section`): ASCII vertical section (`#` rock, space air, `~` water, `^` lava, `.` above the ground).
