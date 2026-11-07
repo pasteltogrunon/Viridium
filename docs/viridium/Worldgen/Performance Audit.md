@@ -41,7 +41,7 @@ Done (proposals 1, 3, 4 and 5 below, plus the lake fix; nothing new adds threadi
 - **Erosion gradient from a per-tile relief lattice** at bpp > 8: warm L4 tiles ~205 → ~115 ms (map only; game output identical).
 - **Lakes**: the cap was the lowest point of the basin's whole divide, which is always its own outlet. Now a depression is capped by the lowest of its cells touching the divide (if any), by the water of rivers in or next to it, and by its shore once the broad valleys are carved (without the last two, lakes stood as walls over carved valleys). 0.1 → 3.4 lakes per network (half of them salt flats in arid basins); `LakeWaterTest`: 30 lakes in 8 basins, no walls. `RiverWaterTest` now: 30811 river columns, mean depth 4.00 (rest unchanged).
 
-Open: rivers flowing through a depression keep the carved valley level, so there are no large lakes crossed by a river (it would need the river's water raised to the lake level through it). Karst dolines are not lake-aware and could cut a lake shore.
+Then **river lakes**: a river crossing a depression fills it to its outlet (partly in arid basins), the river enters and leaves it, upstream water stays at least at lake level, and the rim closes around in-lake channels; dolines skip lake shores. 0 → 50 river lakes in a 42-network probe (largest 133 cells of 32×32); `LakeWaterTest` 32 lakes (13 river lakes, largest 379 cells), walls 31 of 368k lake columns, all 1 block. Not near coasts or in glacial troughs. Details in [[Rivers Overview|Lakes and Salt Flats]].
 
 ## Proposals left for a decision
 
