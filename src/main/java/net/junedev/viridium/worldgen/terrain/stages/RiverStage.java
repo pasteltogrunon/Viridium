@@ -374,7 +374,7 @@ public class RiverStage extends GenStage {
         return ss(-1, -7, Tp) * ss(5.5, 6.2, Math.log(Math.max(o.P, 1)));
     }
 
-    private static double glacialDepth(double z, double hw) {
+    static double glacialDepth(double z, double hw) {
         return 20 + 1.2 * hw + 26 * ss(0, 140, z);
     }
 

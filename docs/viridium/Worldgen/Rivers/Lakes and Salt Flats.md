@@ -35,10 +35,22 @@ Then the level is corrected:
 1. **Anchored to the real basin floor**: up to ~24 nodes of the component are sampled on the eroded terrain
    (`finalHeight`, `Stage.EROSION`). If the real floor `botF` is lower than the coarse `bot`, the level is lowered by
    the difference. The coarse grid only knows the smoothed relief.
-2. **Never above the spill point of the basin**: the lowest owned land node on the edge of the basin's own area
-   (`spill`). A lake can never stand above the lowest point of the basin's whole divide, since it would spill there
-   first. Level ≤ `spill − 1`.
-3. If the level ends up at or below the floor, there is no lake.
+2. **Never above the divide it touches**: a component with a node on the basin's divide (next to a node of another
+   basin, or an entry node of an upstream basin) could spill into the neighbour there, which the flood of this basin
+   does not know: level ≤ (lowest such node) − 1. A depression wholly inside the basin is only limited by its own
+   spill level `lev`. (This used to be the lowest point of the basin's *whole* divide, which is always its own outlet:
+   almost no depression kept water.)
+3. **Never above the rivers' water** (applied after the water levels and the valley field): not above the water of any
+   river node in the component or within two nodes of it, lowered by the glacial trough there (`riverWater`: climate
+   of the final pipeline at the node, relief around it, as the river stage draws the trough). A river through a
+   depression is carved down to its own water, so a lake above it would stand as a wall over the river's valley.
+4. **Never above its shore as the valleys leave it**: every node next to the component (`carvedShore`) is lowered with
+   the shape of `RiverStage.broadValley` read from this network's valley field (rock of the node, no coastal fade).
+   Guarded by `LakeWaterTest` (no lake water column above a dry neighbour).
+5. If the level ends up at or below the floor, there is no lake.
+
+The floor samples of step 1 are skipped for components that cannot hold water even before them (level bound by 2
+already at or below `bot`).
 
 Every node of the component lower than the level is stored in `RiverNet.lakes` with the level (negative for salt).
 

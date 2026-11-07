@@ -4,6 +4,7 @@ import static net.junedev.viridium.worldgen.terrain.core.GenMath.TAU;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.floor;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.hypot;
+import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.perlin;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.rnd;
@@ -552,6 +553,7 @@ final class RiverNetBuilder {
         deltas(cell, graph, s);
         tLap = lap(GenStats.RIVER_DELTAS, tLap);
         valleyField();
+        placeLakes(); // their levels need the rivers' water and valleys
         lap(GenStats.RIVER_VALLEY, tLap);
         return assemble(cell);
     }
@@ -702,13 +704,6 @@ final class RiverNetBuilder {
         final boolean[] own = this.own, entry = this.entry;
         final boolean serial = this.serial;
         Map<Integer, Double> lakes = this.lakes = new HashMap<>();
-        // a lake can never stand above the lowest point of the basin's whole divide: it would spill there first
-        double spill = Double.POSITIVE_INFINITY;
-        for (int j = 1; j < ny - 1; j++) for (int i = 1; i < nx - 1; i++) {
-            int idx = j * nx + i;
-            if (!own[idx] || entry[idx] || hgt[idx] < 0) continue;
-            if (!own[idx - 1] || !own[idx + 1] || !own[idx - nx] || !own[idx + nx]) spill = Math.min(spill, hgt[idx]);
-        }
         if (P.lakes <= 0) return;
         byte[] inL = new byte[n];
         int[] stack = new int[n];
@@ -717,12 +712,16 @@ final class RiverNetBuilder {
             if (own[idx] && hgt[idx] >= 0 && filled[idx] - hgt[idx] > 2 / P.lakes) inL[idx] = 1;
         // depressions first (cells grouped in `cells`, one range each), then the real floor of every one of them
         // in parallel: those samples run the pipeline up to erosion and were most of a cold network build
-        final List<double[]> comps = new ArrayList<>(); // {start, count, lev, rr, bot}
+        final List<double[]> comps = new ArrayList<>(); // {start, count, lev, rr, bot, cap}
         int used = 0;
         for (int s0 = 0; s0 < n; s0++) {
             if (inL[s0] != 1) continue;
             int nc = 0, sp = 0;
             double lev = 0, rr = 0, bot = 1e9;
+            // a depression that reaches the basin's divide could spill into the neighbouring basin there (the flood only
+            // knows this basin): its water stays below the lowest of its cells on the divide. One wholly inside the basin
+            // is only limited by its own spill level (the flood level).
+            double cap = Double.POSITIVE_INFINITY;
             inL[s0] = 2;
             stack[sp++] = s0;
             while (sp > 0) {
@@ -732,22 +731,28 @@ final class RiverNetBuilder {
                 if (hgt[c] < bot) bot = hgt[c];
                 rr += run[c];
                 int ci = c % nx, cj = (c - ci) / nx;
+                boolean divide = entry[c];
                 for (int k = 0; k < 4; k++) {
                     int ii = ci + (k == 0 ? 1 : k == 1 ? -1 : 0), jj = cj + (k == 2 ? 1 : k == 3 ? -1 : 0);
-                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) {
+                        divide = true;
+                        continue;
+                    }
                     int nb = jj * nx + ii;
+                    if (!own[nb] || entry[nb]) divide = true;
                     if (inL[nb] == 1) {
                         inL[nb] = 2;
                         stack[sp++] = nb;
                     }
                 }
+                if (divide) cap = Math.min(cap, hgt[c] - 1);
             }
             if (nc < 2) continue;
             // the level set below only ends lower than this (the real floor can only lower it), and no cell of the
             // depression lies below bot: such a depression never holds water, so its floor is not worth sampling
             double frac0 = ss(250, 700, rr / nc * 1000);
-            if (Math.min(bot + (lev - bot) * (frac0 < 0.12 ? 0.1 : 0.25 + 0.75 * frac0), spill - 1) <= bot) continue;
-            comps.add(new double[] { used, nc, lev, rr, bot });
+            if (Math.min(bot + (lev - bot) * (frac0 < 0.12 ? 0.1 : 0.25 + 0.75 * frac0), cap) <= bot) continue;
+            comps.add(new double[] { used, nc, lev, rr, bot, cap });
             used += nc;
         }
         // anchor each lake to the real (eroded) basin floor: the coarse grid only knows the smoothed relief
@@ -762,15 +767,115 @@ final class RiverNetBuilder {
             }
             floors[q0] = botF;
         });
+        lakeComps = comps;
+        lakeFloors = floors;
+        lakeCells = cells;
+    }
+
+    private List<double[]> lakeComps;
+    private double[] lakeFloors;
+    private int[] lakeCells;
+
+    /**
+     * Lake levels, once the rivers know their water on the final terrain: a lake never stands above the water of a river
+     * that runs through it or along it (the river's valley is carved down to that water, and the lake would stand as a
+     * wall over it), so it drains through the river at the river's level.
+     */
+    /**
+     * Water of river node rn as the river stage draws it: its level, lowered where the valley was a glacial trough (the
+     * trough and its water lie below the river's level by up to the trough depth; see RiverStage.broadValley and the
+     * channel). Climate from the final pipeline at the node, relief from the coarse grid around it.
+     */
+    private double riverWater(int rn) {
+        double z = wl[rn];
+        GenPoint o = gen.evaluate(jx(rn), jy(rn), Stage.CLIMATE_FINAL, 1, finalPoint.get(), finalScratch.get());
+        double G = gen.rivers.glacial(o, z);
+        if (G <= 0) return z;
+        int ci = rn % nx, cj = rn / nx;
+        double mxh = 0;
+        for (int dj = -3; dj <= 3; dj++) for (int di = -3; di <= 3; di++) {
+            int ii = ci + di, jj = cj + dj;
+            if (ii >= 0 && jj >= 0 && ii < nx && jj < ny && hgt[jj * nx + ii] > mxh) mxh = hgt[jj * nx + ii];
+        }
+        G *= ss(8, 45, Math.max(0, mxh - z)); // troughs only where the ice was boxed in by mountains
+        return z - G * RiverStage.glacialDepth(z, hw[rn]);
+    }
+
+    /**
+     * Height of shore cell r (coarse height h) once the broad valley of its nearest river has been carved into it: the
+     * valley field of this network read at the cell, with the shape of {@code RiverStage.broadValley} (rock from the
+     * cell, no coastal fade).
+     */
+    private double carvedShore(int r, double h) {
+        int v = vd[r];
+        if (v == 65535) return h;
+        double D = v, zr = vz[r] / 16.0, hwv = (vw[r] & 255) / 4.0, A = (va[r] & 255) / 4.0, FR = (vr[r] & 255) * 2.0;
+        GenPoint o = gen.evaluate(x0 + (r % nx + 0.5) * g, y0 + (r / nx + 0.5) * g, Stage.CLIMATE_FINAL, 1, finalPoint.get(),
+            finalScratch.get());
+        double G = gen.rivers.glacial(o, zr) * ss(8, 45, FR);
+        double ef = clamp(lerp(0.5, ((cer[r] & 255) / 255.0 - 0.2) / 0.7, P.valleyRock), 0, 1);
+        double VW = P.valleyWidth, str = 0.4 + 0.6 * ss(3.4, 7, hwv);
+        double Wv = (70 + 12 * hwv) * lerp(0.7, 2.2, ef) * VW, Wu = (80 + 8 * hwv) * VW;
+        double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str);
+        double D0 = lerp(6 + hwv + 1.15 * A, 12 + 1.5 * hwv, G);
+        double floor = lerp(zr + 0.6, zr - RiverStage.glacialDepth(zr, hwv), G);
+        double t = clamp((D - D0) / W, 0, 1);
+        if (t >= 1 || h <= floor) return h;
+        double gam = lerp(lerp(0.6, 1.5, ef), 2.2, G);
+        double f = Math.pow(t * (2 - t), gam);
+        return lerp(h, floor + (h - floor) * f, str * (1 - ss(700, 899, D)));
+    }
+
+    private void placeLakes() {
+        final List<double[]> comps = lakeComps;
+        if (comps == null) return;
+        final int nx = this.nx, ny = this.ny;
+        final int[] cells = lakeCells;
+        final float[] hgt = this.hgt, wl = this.wl;
+        final boolean[] isRiv = this.isRiv;
+        final Map<Integer, Double> lakes = this.lakes;
+        final int[] inComp = new int[n]; // q0 + 1 in depression q0, -(q0 + 1) on its shore
         for (int q0 = 0; q0 < comps.size(); q0++) {
             double[] cp = comps.get(q0);
             int st = (int) cp[0], nc = (int) cp[1];
-            double lev = cp[2], rr = cp[3], bot = cp[4], botF = floors[q0];
+            double lev = cp[2], rr = cp[3], bot = cp[4], botF = lakeFloors[q0];
             double mm = rr / nc * 1000, frac = ss(250, 700, mm);
             boolean salt = frac < 0.12;
             double level = bot + (lev - bot) * (salt ? 0.1 : 0.25 + 0.75 * frac);
             if (botF < bot) level += botF - bot;
-            level = Math.min(level, spill - 1);
+            level = Math.min(level, cp[5]);
+            // rivers in the depression or within two cells of it
+            double riv = Double.POSITIVE_INFINITY;
+            java.util.Set<Integer> seen = null;
+            for (int q = 0; q < nc; q++) {
+                int c = cells[st + q], ci = c % nx, cj = c / nx;
+                for (int dj = -2; dj <= 2; dj++) for (int di = -2; di <= 2; di++) {
+                    int ii = ci + di, jj = cj + dj;
+                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                    int nb = jj * nx + ii;
+                    if (!isRiv[nb]) continue;
+                    if (seen == null) seen = new java.util.HashSet<>();
+                    if (seen.add(nb)) riv = Math.min(riv, riverWater(nb));
+                }
+            }
+            level = Math.min(level, riv);
+            // ...and its shore: the cells around it as the broad valleys of the rivers leave them (a valley carved below
+            // the lake's level next to it would leave its water standing as a wall)
+            if (level > Math.min(bot, botF)) {
+                double off = Math.min(0, botF - bot); // the coarse relief stands above the eroded terrain
+                for (int q = 0; q < nc; q++) inComp[cells[st + q]] = q0 + 1;
+                for (int q = 0; q < nc && level > Math.min(bot, botF); q++) {
+                    int c = cells[st + q], ci = c % nx, cj = c / nx;
+                    for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+                        int ii = ci + di, jj = cj + dj;
+                        if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                        int nb = jj * nx + ii;
+                        if (inComp[nb] == q0 + 1 || inComp[nb] == -(q0 + 1) || hgt[nb] < 0) continue;
+                        inComp[nb] = -(q0 + 1); // shore cell, looked at once
+                        level = Math.min(level, carvedShore(nb, hgt[nb] + off));
+                    }
+                }
+            }
             if (level <= Math.min(bot, botF)) continue;
             for (int q = 0; q < nc; q++) {
                 int c = cells[st + q];
