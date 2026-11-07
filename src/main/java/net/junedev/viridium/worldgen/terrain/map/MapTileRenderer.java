@@ -93,6 +93,27 @@ public final class MapTileRenderer {
      * @return ARGB pixels, row-major (z rows)
      */
     public int[] render(MapLayer layer, int level, int tx, int tz, int size, boolean borders) {
+        return render(layer, level, tx, tz, size, borders, false).pixels;
+    }
+
+    /** A rendered tile; {@link #complete} is false when river networks it needs were not built yet. */
+    public static final class Tile {
+
+        public final int[] pixels;
+        public final boolean complete;
+
+        Tile(int[] pixels, boolean complete) {
+            this.pixels = pixels;
+            this.complete = complete;
+        }
+    }
+
+    /**
+     * @param riversCachedOnly draw rivers only from networks already built, never build one (a quick first paint): the
+     *                         tile is then {@link Tile#complete incomplete} when a network it needs was missing, and
+     *                         its evaluation is not kept
+     */
+    public Tile render(MapLayer layer, int level, int tx, int tz, int size, boolean borders, boolean riversCachedOnly) {
         double bpp = blocksPerPixel(level);
         Stage need = layer.stage;
         if (borders && need.ordinal() < Stage.PLATES.ordinal()) need = Stage.PLATES;
@@ -100,12 +121,12 @@ public final class MapTileRenderer {
         if (shade && need.ordinal() < Stage.RELIEF.ordinal()) need = Stage.RELIEF;
         boolean usesH = shade && layer.heightField == MapLayer.HeightField.FINAL
             || layer.stage.ordinal() >= Stage.EROSION.ordinal();
-        TileSample smp = sample(level, tx, tz, size, need, usesH);
-        return paint(smp, layer, bpp, size, borders);
+        TileSample smp = sample(level, tx, tz, size, need, usesH, riversCachedOnly);
+        return new Tile(paint(smp, layer, bpp, size, borders), smp.complete);
     }
 
-    /** A kept sample that serves the layer, or a new evaluation (kept). */
-    private TileSample sample(int level, int tx, int tz, int size, Stage need, boolean usesH) {
+    /** A kept sample that serves the layer, or a new evaluation (kept when complete). */
+    private TileSample sample(int level, int tx, int tz, int size, Stage need, boolean usesH, boolean cachedOnly) {
         synchronized (SAMPLES) {
             for (int s = need.ordinal(); s < Stage.values().length; s++) {
                 TileSample t = SAMPLES.get(new SampleKey(params, level, tx, tz, size, Stage.values()[s]));
@@ -114,21 +135,23 @@ public final class MapTileRenderer {
         }
         // the river layers share one evaluation up to the biomes (cryosphere and biomes only add fields)
         Stage stage = need.ordinal() >= Stage.RIVERS.ordinal() ? Stage.BIOMES : need;
-        TileSample t = evaluate(level, tx, tz, size, stage);
-        synchronized (SAMPLES) {
+        TileSample t = evaluate(level, tx, tz, size, stage, cachedOnly);
+        if (t.complete) synchronized (SAMPLES) {
             SAMPLES.put(new SampleKey(params, level, tx, tz, size, stage), t);
         }
         return t;
     }
 
     /** The pipeline up to {@code stage} at the tile's (size + 1)² pixel centres (the extra row and column shade). */
-    private TileSample evaluate(int level, int tx, int tz, int size, Stage stage) {
+    private TileSample evaluate(int level, int tx, int tz, int size, Stage stage, boolean cachedOnly) {
         double bpp = blocksPerPixel(level);
         int n = size + 1;
         TileSample smp = new TileSample(stage, n * n);
         GenPoint o = point.get();
         GenScratch s = gen.scratch();
         s.riversOff = level > RIVERS_MAX_LEVEL;
+        s.riversCachedOnly = cachedOnly && !s.riversOff && stage.ordinal() >= Stage.RIVERS.ordinal();
+        s.riversIncomplete = false;
         try {
             reliefLattice(s, stage, bpp, tx, tz, size);
             for (int j = 0; j < n; j++) {
@@ -138,8 +161,11 @@ public final class MapTileRenderer {
                     smp.put(o, j * n + i);
                 }
             }
+            smp.complete = !s.riversIncomplete;
         } finally {
             s.riversOff = false;
+            s.riversCachedOnly = false;
+            s.riversIncomplete = false;
             s.reliefLattice = null;
         }
         return smp;

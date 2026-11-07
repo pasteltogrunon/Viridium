@@ -77,14 +77,18 @@ class MapPerfTest {
             out.append(String.format("  L%d switch through the other %d layers of a drawn tile: %.0f ms (%.0f mean, max %.0f)%n",
                 level, MapLayer.ALL.size() - 1, all, all / (MapLayer.ALL.size() - 1), max));
         }
-        // the first tile of an unexplored area
+        // the first tile of an unexplored area: first paint from the networks already built, then the complete one
         WorldGen c = gen();
         MapTileRenderer rc = new MapTileRenderer(c);
         clearSamples();
         long nets = c.rivers.buildCount();
-        double first = time(() -> sink += rc.render(MapLayer.COMPOSITE, 4, 20, 15, 128, false)[0]);
-        out.append(String.format("  cold L4 tile (20,15), complete: %.0f ms (%d nets built)%n", first,
-            c.rivers.buildCount() - nets));
+        MapTileRenderer.Tile[] t = new MapTileRenderer.Tile[1];
+        double first = time(() -> t[0] = rc.render(MapLayer.COMPOSITE, 4, 20, 15, 128, false, true));
+        long firstNets = c.rivers.buildCount() - nets;
+        double full = t[0].complete ? 0
+            : time(() -> sink += rc.render(MapLayer.COMPOSITE, 4, 20, 15, 128, false)[0]);
+        out.append(String.format("  cold L4 tile (20,15): first paint %.0f ms (%s, %d nets built) · complete render %.0f ms (%d nets)%n",
+            first, t[0].complete ? "complete" : "provisional", firstNets, full, c.rivers.buildCount() - nets - firstNets));
         System.out.print(out);
         System.out.println("(sink " + sink + ")");
     }

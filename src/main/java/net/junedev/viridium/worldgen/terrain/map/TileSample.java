@@ -53,6 +53,8 @@ final class TileSample {
 
     final Stage stage;
     final int points;
+    /** False when the rivers skipped networks not built yet (cached-only evaluation): never kept. */
+    boolean complete = true;
     final float[][] f;
     final int[][] i;
 
