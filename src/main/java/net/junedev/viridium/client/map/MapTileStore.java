@@ -8,8 +8,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -18,7 +16,7 @@ import java.util.zip.GZIPOutputStream;
 
 import net.junedev.viridium.Viridium;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
-import net.junedev.viridium.worldgen.terrain.core.GenParams;
+import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
 
 /**
  * Finished map tiles that outlive the map screen: the last {@link #MEM_TILES} in memory (reopening the map costs
@@ -46,7 +44,7 @@ final class MapTileStore {
     private final File dir;
 
     MapTileStore(WorldGen gen, File baseDir) {
-        fingerprint = Long.toHexString(hash(paramsString(gen.params) + "|" + codeStamp()));
+        fingerprint = Long.toHexString(hash(MapTileRenderer.paramsKey(gen.params) + "|" + codeStamp()));
         File root = new File(baseDir, "viridium/mapcache");
         dir = new File(root, fingerprint);
         if (!dir.isDirectory() && !dir.mkdirs()) Viridium.LOGGER.warn("Cannot create the map cache {}", dir);
@@ -118,20 +116,6 @@ final class MapTileStore {
             d.delete();
         }
         dir.setLastModified(now);
-    }
-
-    private static String paramsString(GenParams p) {
-        StringBuilder sb = new StringBuilder();
-        for (Field f : GenParams.class.getFields()) {
-            if (Modifier.isStatic(f.getModifiers())) continue;
-            try {
-                sb.append(f.getName())
-                    .append('=')
-                    .append(f.get(p))
-                    .append(';');
-            } catch (IllegalAccessException ignored) {}
-        }
-        return sb.toString();
     }
 
     /** Identifies the generator code: the jar (size, date), or in a dev workspace the newest compiled terrain class. */
