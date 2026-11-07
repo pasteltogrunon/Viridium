@@ -71,11 +71,22 @@ public final class CaveMouths implements CaveFeatures {
         return l;
     }
 
+    /** False when the mouth of cell (ci, cj), if any, cannot reach a box centred at (x, z) (no terrain needed). */
+    private boolean mayReach(int ci, int cj, double x, double z, double hs) {
+        if (Noise.rnd(ci, cj, seed) >= 0.6 * P.caveEntrances) return false;
+        double sx = (ci + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 1)) * G,
+            sz = (cj + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 2)) * G;
+        // the ramp runs at most 150 blocks from its start, wanders 9 sideways, its segments reach r * 1.4 + 1 (r <= 8)
+        double reach = 150 + 9 + 8 * 1.4 + 2 + hs;
+        return Math.abs(x - sx) <= reach && Math.abs(z - sz) <= reach;
+    }
+
     /** True near a mouth (its first 3 segments; no trees there). */
     public boolean nearMouth(double x, double z) {
         if (P.caveEntrances <= 0) return false;
         int ci = Math.floorDiv((int) Math.floor(x), G), cj = Math.floorDiv((int) Math.floor(z), G);
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+            if (!mayReach(ci + di, cj + dj, x, z, 4)) continue;
             List<CaveSystems.Segment> l = cell(ci + di, cj + dj);
             for (int q = 0; q < Math.min(3, l.size()); q++) if (l.get(q).near2d(x, z, 3)) return true;
         }
@@ -87,7 +98,7 @@ public final class CaveMouths implements CaveFeatures {
         if (P.caveEntrances <= 0) return;
         int ci = Math.floorDiv(bx, G), cj = Math.floorDiv(bz, G);
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++)
-            for (CaveSystems.Segment s : cell(ci + di, cj + dj))
+            if (mayReach(ci + di, cj + dj, bx + 8, bz + 8, 8)) for (CaveSystems.Segment s : cell(ci + di, cj + dj))
                 if (s.maxX() >= bx && s.minX() <= bx + 15 && s.maxY() >= by && s.minY() <= by + 15 && s.maxZ() >= bz
                     && s.minZ() <= bz + 15) out.add(s);
     }
