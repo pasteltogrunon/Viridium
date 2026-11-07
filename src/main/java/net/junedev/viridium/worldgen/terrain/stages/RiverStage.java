@@ -552,13 +552,29 @@ public class RiverStage extends GenStage {
             int RC = (int) Math.ceil((VMAX + 24 + net.reach) / g);
             double wMul = lerp(0.45, 2.0, ef), bankSlope = lerp(1.5, 0.25, ef);
             double hmin = h;
-            for (int dj = -RC; dj <= RC; dj++) {
-                int j = gj + dj;
-                if (j < 0 || j >= net.ny) continue;
-                for (int di = -RC; di <= RC; di++) {
-                    int i = gi + di;
-                    if (i < 0 || i >= net.nx) continue;
-                    int sl = net.slot[j * net.nx + i];
+            // the reaches in the window of RC cells around the point's cell, in grid order: from the network's index
+            // (the bucket of the cell lists those that can matter there), or by scanning the window
+            final int W2 = 2 * RC + 1;
+            final int[] CC = net.chCells;
+            final boolean indexed = net.chStart != null && gi >= 0 && gj >= 0 && gi < net.nx && gj < net.ny;
+            int a0 = 0, a1 = W2 * W2;
+            if (indexed) {
+                int b = (gj / RiverNet.CB) * net.chNbx + gi / RiverNet.CB;
+                a0 = net.chStart[b];
+                a1 = net.chStart[b + 1];
+            }
+            {
+                for (int a = a0; a < a1; a++) {
+                    int sl;
+                    if (indexed) {
+                        int cell = CC[a], i = cell % net.nx, j = cell / net.nx;
+                        if (i < gi - RC || i > gi + RC || j < gj - RC || j > gj + RC) continue;
+                        sl = net.slot[cell];
+                    } else {
+                        int j = gj + a / W2 - RC, i = gi + a % W2 - RC;
+                        if (j < 0 || j >= net.ny || i < 0 || i >= net.nx) continue;
+                        sl = net.slot[j * net.nx + i];
+                    }
                     if (sl < 0 || net.skip[sl] != 0) continue; // skipped: replaced by a delta
                     double pad = VMAX + Math.max(net.w0[sl], net.w1[sl]);
                     if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad || qy < BB[sl * 4 + 1] - pad

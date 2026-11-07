@@ -62,6 +62,63 @@ public final class RiverNet {
     public int[] lakeIdx = new int[0];
     public double[] lakeLv = new double[0];
 
+    /**
+     * Channel search index: the grid in buckets of {@link #CB}x{@link #CB} cells; bucket b lists, in [chStart[b],
+     * chStart[b + 1]) of chCells, the cells holding a reach that a point in the bucket may have to measure (a reach
+     * within the search window of one of its cells whose padded box meets the bucket), in grid order. Null: none.
+     */
+    public int[] chStart, chCells;
+    public int chNbx;
+    public static final int CB = 4;
+
+    /** Search window (cells) of the channel search around a point's cell (as in RiverStage.applyNet). */
+    int channelWindow() {
+        double VMAX = 2 * g;
+        return (int) Math.ceil((VMAX + 24 + reach) / g);
+    }
+
+    /** Builds {@link #chStart} / {@link #chCells} (after every reach field and {@link #reach} are set). */
+    void buildChannelIndex() {
+        if (count == 0) return;
+        final int RC = channelWindow();
+        final double VMAX = 2 * g;
+        int nbx = (nx + CB - 1) / CB, nby = (ny + CB - 1) / CB, nb = nbx * nby;
+        int[] start = new int[nb + 1];
+        int[] tmpB = new int[64], tmpC = new int[64];
+        int nt = 0;
+        for (int idx = 0; idx < nx * ny; idx++) { // grid order: each bucket's list comes out sorted
+            int sl = slot[idx];
+            if (sl < 0 || skip[sl] != 0) continue;
+            int ci = idx % nx, cj = idx / nx;
+            double pad = VMAX + Math.max(w0[sl], w1[sl]);
+            double bx0 = bb[sl * 4] - pad - 1, by0 = bb[sl * 4 + 1] - pad - 1, bx1 = bb[sl * 4 + 2] + pad + 1,
+                by1 = bb[sl * 4 + 3] + pad + 1;
+            int b0 = Math.max(0, Math.floorDiv(ci - RC, CB)), b1 = Math.min(nbx - 1, Math.floorDiv(ci + RC, CB));
+            int c0 = Math.max(0, Math.floorDiv(cj - RC, CB)), c1 = Math.min(nby - 1, Math.floorDiv(cj + RC, CB));
+            for (int by = c0; by <= c1; by++) {
+                double Y0 = y0 + (double) by * CB * g, Y1 = y0 + (double) (by + 1) * CB * g;
+                if (by1 < Y0 || by0 > Y1) continue;
+                for (int bx = b0; bx <= b1; bx++) {
+                    double X0 = x0 + (double) bx * CB * g, X1 = x0 + (double) (bx + 1) * CB * g;
+                    if (bx1 < X0 || bx0 > X1) continue;
+                    if (nt == tmpB.length) {
+                        tmpB = java.util.Arrays.copyOf(tmpB, nt * 2);
+                        tmpC = java.util.Arrays.copyOf(tmpC, nt * 2);
+                    }
+                    tmpB[nt] = by * nbx + bx;
+                    tmpC[nt++] = idx;
+                    start[by * nbx + bx + 1]++;
+                }
+            }
+        }
+        for (int b = 0; b < nb; b++) start[b + 1] += start[b];
+        int[] cells = new int[nt], fill = java.util.Arrays.copyOf(start, nb);
+        for (int t = 0; t < nt; t++) cells[fill[tmpB[t]]++] = tmpC[t];
+        chNbx = nbx;
+        chStart = start;
+        chCells = cells;
+    }
+
     /** Lake level of a cell (negative = salt flat), or NaN. */
     public double lakeAt(int idx) {
         int k = java.util.Arrays.binarySearch(lakeIdx, idx);

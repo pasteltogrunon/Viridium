@@ -603,10 +603,12 @@ final class RiverNetBuilder {
         par(java.util.stream.IntStream.range(0, ny), serial).forEach(j -> {
             GenPoint rt = ROW_POINT.get();
             GenScratch rs = ROW_SCRATCH.get();
+            long[] mem = new long[nx]; // basin cell of every node of the row, from the lattice shared by all networks
+            graph.memberRow(gx0, gy0 + j, nx, mem);
             for (int i = 0; i < nx; i++) {
                 int idx = j * nx + i;
                 double x = x0 + (i + 0.5) * g, y = y0 + (j + 0.5) * g;
-                if (!entry[idx] && graph.cellAt(x, y) != ck) continue;
+                if (!entry[idx] && mem[i] != ck) continue;
                 own[idx] = true;
                 gen.plates.apply(x, y, rt, rs);
                 gen.continents.apply(x, y, rt);
@@ -1382,7 +1384,9 @@ final class RiverNetBuilder {
         net.lakeIdx = lakes.keySet().stream().mapToInt(Integer::intValue).sorted().toArray();
         net.lakeLv = new double[net.lakeIdx.length];
         for (int q = 0; q < net.lakeIdx.length; q++) net.lakeLv[q] = lakes.get(net.lakeIdx[q]);
-        net.bytes = 4L * n + 2L * n * 2 + 4L * n + (long) pts.length * 4 + (long) count * 4 * 14 + lakes.size() * 48L;
+        net.buildChannelIndex();
+        net.bytes = 4L * n + 2L * n * 2 + 4L * n + (long) pts.length * 4 + (long) count * 4 * 14 + lakes.size() * 48L
+            + (net.chStart == null ? 0 : 4L * (net.chStart.length + net.chCells.length));
         return net;
     }
 

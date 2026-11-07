@@ -93,6 +93,64 @@ public final class BasinGraph {
 
     // ------------------------------------------------------------------ membership
 
+    /** Nodes per side of a membership tile, and how many tiles are kept (cleared beyond: recomputed identically). */
+    private static final int MT = 64, MT_MAX = 1024;
+
+    /** Basin cells of a tile of river-grid nodes: a palette of packed cells and an index into it per node. */
+    private static final class MemberTile {
+
+        final long[] palette;
+        final byte[] idx;
+
+        MemberTile(long[] palette, byte[] idx) {
+            this.palette = palette;
+            this.idx = idx;
+        }
+    }
+
+    private final ConcurrentHashMap<Long, MemberTile> members = new ConcurrentHashMap<>();
+
+    private MemberTile memberTile(int tx, int ty) {
+        long k = net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(key(tx, ty));
+        MemberTile t = members.get(k);
+        if (t != null) return t;
+        if (members.size() >= MT_MAX) members.clear(); // deterministic: anything dropped is recomputed identically
+        return members.computeIfAbsent(k, kk -> {
+            long[] pal = new long[8];
+            int np = 0;
+            byte[] idx = new byte[MT * MT];
+            for (int j = 0; j < MT; j++) for (int i = 0; i < MT; i++) {
+                long c = cellAt((tx * MT + i + 0.5) * g, (ty * MT + j + 0.5) * g);
+                int p = 0;
+                while (p < np && pal[p] != c) p++;
+                if (p == np) {
+                    if (np == 256) return null; // never in practice (a tile spans ~1 basin cell): no tile, cellAt per node
+                    if (np == pal.length) pal = java.util.Arrays.copyOf(pal, np * 2);
+                    pal[np++] = c;
+                }
+                idx[j * MT + i] = (byte) p;
+            }
+            return new MemberTile(java.util.Arrays.copyOf(pal, np), idx);
+        });
+    }
+
+    /**
+     * Basin cells of the river-grid nodes gx0 .. gx0 + n - 1 of row gy (node (gx, gy) is the point ((gx + 0.5) g,
+     * (gy + 0.5) g)), into out: exactly {@link #cellAt} there, from a lattice shared by all networks (each node lies in
+     * the grids of ~10 overlapping networks).
+     */
+    public void memberRow(int gx0, int gy, int n, long[] out) {
+        int ty = Math.floorDiv(gy, MT), lj = gy - ty * MT;
+        for (int i = 0; i < n;) {
+            int gx = gx0 + i, tx = Math.floorDiv(gx, MT), li = gx - tx * MT;
+            int run = Math.min(n - i, MT - li);
+            MemberTile t = memberTile(tx, ty);
+            if (t == null) for (int k = 0; k < run; k++) out[i + k] = cellAt((gx + k + 0.5) * g, (gy + 0.5) * g);
+            else for (int k = 0; k < run; k++) out[i + k] = t.palette[t.idx[lj * MT + li + k] & 255];
+            i += run;
+        }
+    }
+
     double featX(int ci, int cj) {
         return (ci + 0.15 + 0.7 * rnd(ci, cj, SD.basin)) * B;
     }
