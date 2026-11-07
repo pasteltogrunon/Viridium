@@ -115,6 +115,10 @@ final class RiverNetBuilder {
         return clamp(12 * w + 40, 60, 420);
     }
 
+    /** Temporaries of the relief grid rows, per thread (holding no reference to a WorldGen). */
+    private static final ThreadLocal<GenPoint> ROW_POINT = ThreadLocal.withInitial(GenPoint::new);
+    private static final ThreadLocal<GenScratch> ROW_SCRATCH = ThreadLocal.withInitial(GenScratch::new);
+
     private static long lap(GenStats.Timer t, long since) {
         long now = System.nanoTime();
         t.add(now - since);
@@ -593,10 +597,10 @@ final class RiverNetBuilder {
             if (xi >= 0 && xj >= 0 && xi < nx && xj < ny) exit = xj * nx + xi;
         }
         exitIdx = exit;
-        // independent per cell: rows run in parallel, each with its own temporaries
+        // independent per cell: rows run in parallel, with per-thread temporaries (a row never nests another build)
         par(java.util.stream.IntStream.range(0, ny), serial).forEach(j -> {
-            GenPoint rt = new GenPoint();
-            GenScratch rs = new GenScratch();
+            GenPoint rt = ROW_POINT.get();
+            GenScratch rs = ROW_SCRATCH.get();
             for (int i = 0; i < nx; i++) {
                 int idx = j * nx + i;
                 double x = x0 + (i + 0.5) * g, y = y0 + (j + 0.5) * g;

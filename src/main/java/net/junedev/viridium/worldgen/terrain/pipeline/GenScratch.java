@@ -30,25 +30,46 @@ public final class GenScratch {
     /** Plate stage: distance to each neighbour's bisector, segment distances. */
     public final double[] LD = new double[25], SEGD = new double[25];
     /**
-     * Plate stage cache of the last 5x5 neighbourhood (FX, FY, FI, FJ above): valid while {@code plateOwner} and
+     * Plate stage cache of the last 5x5 neighbourhood (FX, FY, FI, FJ above): valid while {@code plateOwner} (the id of
+     * the PlateStage, an int: a reference would keep a dead WorldGen alive through every thread-local scratch) and
      * (plateCi, plateCj) match. Velocities and pair values (index a*25+b) are filled lazily; an entry is valid when its
-     * stamp equals {@code plateStamp}. Everything here depends only on the cell, so it never changes the output.
+     * stamp equals {@code plateStamp}. Everything here depends only on the cell, so it never changes the output. The
+     * arrays (~50 KiB) are allocated on first use ({@link #plateCache}): most scratches never evaluate plates.
      */
-    public Object plateOwner;
-    public int plateCi, plateCj, plateStamp;
-    public final double[] PVX = new double[25], PVY = new double[25];
-    public final int[] PVOK = new int[25];
+    public int plateOwner, plateCi, plateCj, plateStamp;
+    public double[] PVX, PVY;
+    public int[] PVOK;
     /** Pair geometry: unit normal a→b, length, bisector midpoint. */
-    public final double[] PNX = new double[625], PNY = new double[625], PLEN = new double[625], PMX = new double[625],
-        PMY = new double[625];
-    public final int[] PGOK = new int[625];
+    public double[] PNX, PNY, PLEN, PMX, PMY;
+    public int[] PGOK;
     /** Pair dynamics: convergence, collision, override sign. */
-    public final double[] PCONV = new double[625];
-    public final boolean[] PCOLL = new boolean[625];
-    public final int[] POVER = new int[625], PDOK = new int[625];
+    public double[] PCONV;
+    public boolean[] PCOLL;
+    public int[] POVER, PDOK;
     /** Clip interval of the Voronoi edge (bk, k) along its bisector, from the midpoint (NaN: the plates do not touch). */
-    public final double[] PTMIN = new double[625], PTMAX = new double[625];
-    public final int[] PSOK = new int[625];
+    public double[] PTMIN, PTMAX;
+    public int[] PSOK;
+
+    /** Allocates the plate cache arrays (first plate evaluation with this scratch). */
+    public void plateCache() {
+        if (PVX != null) return;
+        PVX = new double[25];
+        PVY = new double[25];
+        PVOK = new int[25];
+        PNX = new double[625];
+        PNY = new double[625];
+        PLEN = new double[625];
+        PMX = new double[625];
+        PMY = new double[625];
+        PGOK = new int[625];
+        PCONV = new double[625];
+        PCOLL = new boolean[625];
+        POVER = new int[625];
+        PDOK = new int[625];
+        PTMIN = new double[625];
+        PTMAX = new double[625];
+        PSOK = new int[625];
+    }
 
     /** Small output buffer for field lookups. */
     public final double[] tmp1 = new double[1];

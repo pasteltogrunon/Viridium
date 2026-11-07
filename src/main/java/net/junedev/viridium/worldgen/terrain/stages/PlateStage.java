@@ -68,10 +68,15 @@ public class PlateStage extends GenStage {
         return conv > 0.12 && pairRnd(ai, aj, bi, bj, SD.coll) < P.collisionChance;
     }
 
+    private static final java.util.concurrent.atomic.AtomicInteger IDS = new java.util.concurrent.atomic.AtomicInteger();
+    /** Identifies this stage in the scratch cache (never 0, the value of a fresh scratch). */
+    private final int id = IDS.incrementAndGet();
+
     /** Loads the 5x5 neighbourhood of cell (ci, cj) into the scratch (kept if it is already there). */
     private void loadCell(int ci, int cj, GenScratch s) {
-        if (s.plateOwner == this && s.plateCi == ci && s.plateCj == cj) return;
-        s.plateOwner = this;
+        if (s.plateOwner == id && s.plateCi == ci && s.plateCj == cj) return;
+        s.plateCache();
+        s.plateOwner = id;
         s.plateCi = ci;
         s.plateCj = cj;
         if (++s.plateStamp == 0) { // wrapped: old stamps could match again

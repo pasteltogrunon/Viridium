@@ -485,6 +485,7 @@ public class RiverStage extends GenStage {
         // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
         FieldMemo m = FIELD_MEMO.get();
         for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase, m, q);
+        java.util.Arrays.fill(nets, 0, nn, null); // the scratch must not keep networks alive after the LRU drops them
         // last reach drowned by the sea (fjord, estuary): only where the river is at sea level anyway. A deep channel
         // inland keeps its own water (otherwise its middle would drop to sea level between higher river water)
         if (o.h < -1 && o.river != 0 && o.delta == 0 && o.riverWL < 1) {
