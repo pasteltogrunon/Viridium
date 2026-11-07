@@ -58,8 +58,32 @@ public class ErosionStage extends GenStage {
                 double w = Math.exp(-2 * (ppx * ppx + ppy * ppy));
                 wt += w;
                 double m = (ppx * dx + ppy * dy) * TAU;
-                va += Math.cos(m) * w;
-                double sn = -Math.sin(m) * w;
+                // sin and cos of m together: quadrant reduction to |r| <= pi/4, then Taylor polynomials (error < 2e-9,
+                // far below a block; plain arithmetic, so also identical on every JVM unlike Math.sin/cos)
+                double q = Math.rint(m * (2 / Math.PI));
+                double r = m - q * (Math.PI / 2), r2 = r * r;
+                double sr = r * (1 + r2 * (-1.0 / 6 + r2 * (1.0 / 120 + r2 * (-1.0 / 5040 + r2 * (1.0 / 362880)))));
+                double cr = 1 + r2 * (-0.5 + r2 * (1.0 / 24 + r2 * (-1.0 / 720 + r2 * (1.0 / 40320 + r2 * (-1.0 / 3628800)))));
+                double cos, sin;
+                switch ((int) q & 3) {
+                    case 0:
+                        cos = cr;
+                        sin = sr;
+                        break;
+                    case 1:
+                        cos = -sr;
+                        sin = cr;
+                        break;
+                    case 2:
+                        cos = -cr;
+                        sin = -sr;
+                        break;
+                    default:
+                        cos = sr;
+                        sin = -cr;
+                }
+                va += cos * w;
+                double sn = -sin * w;
                 vx += sn * dx;
                 vy += sn * dy;
             }
