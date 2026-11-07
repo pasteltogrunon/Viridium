@@ -61,11 +61,12 @@ Phase 1, for one network:
 2. **Candidate reaches**: the river nodes within `RC = ceil((2·g + 24 + reach)/g)` grid cells, skipping reaches replaced
    by a delta, rejected by bounding box (padded by `VMAX = 2·g` + half-width).
 3. For every one of the 8 segments of each candidate reach: distance `dist` to the segment, position `u` along the
-   reach, interpolated half-width `hw` and water level `z`, **signed distance to the bank** `v = dist − hw`.
+   reach, interpolated half-width `hw` (times the point's **width factor**, see below) and water level `z`, **signed
+   distance to the bank** `v = dist − hw`.
 4. Per segment, a proposed height `hc`:
    - glacial lowering `G = glacial(o, z)·ss(8, 45, FR)` and glacial bed `zc = z − G·glacialDepth`;
-   - **inside the channel** (`v ≤ 0`): a parabolic bed `min(h, zc) − (1.2 + 0.25·hw)·(1 − q²)`, `q = dist/hw`: about
-     1.2 blocks deep at the centre for a small stream, ~13 for the largest rivers;
+   - **inside the channel** (`v ≤ 0`): a parabolic bed `min(h, zc) − (1.2 + 0.25·hw)·depth·(1 − q²)`, `q = dist/hw`: about
+     1.2 blocks deep at the centre for a small stream, ~13 for the largest rivers (times the **depth factor**);
    - **on the banks** (`0 < v < W`): a bank rising from the water level with slope `bankSlope = lerp(1.5, 0.25, ef)`,
      blended into the terrain over `W = min((5 + 2·hw)·lerp(0.45, 2, ef), 2·g)` blocks; only ever lowers the
      terrain;
@@ -75,11 +76,18 @@ Phase 1, for one network:
    [[River Mouths, Deltas and Estuaries#Delta shaping at runtime (RiverStage.deltas)]]) sets the point's water:
    `riverD = v`, `riverHW`, `riverAcc`, `riverZ`, and `riverWL = min(h, water surface)`: water fills the channel up to
    the bank, never above the incoming terrain.
-7. **Bank lip**: if this network owns the nearest channel and the point is less than 3 blocks outside it
-   (`0 < v < 3`), the carved height is raised to at least `water surface + 0.6·(1 − v/3)` (never more than 3 blocks),
+7. **Bank lip**: if this network owns the nearest channel and the point is less than 4 blocks outside it
+   (`0 < v < 4`), the carved height is raised towards `water surface + 0.6·max(0, 1 − v/3)` (never more than 3 blocks),
+   fully up to 2.5 blocks out, then eased out by `1 − ss(2.5, 4, v)` (no crease where it ends),
    so a low bank right next to the water cannot let it spill. It is applied after the carve, the same way as the
    delta distributary banks.
 8. `river = 1` if inside a channel; otherwise `valley = max(valley, 1 − v/W)`.
+
+**Irregularity** (`RiverStage.irregularity`, once per point, the same for every network): rivers are a little less
+smooth than their geometry. Width factor `clamp(1 + 0.18·perlin(p/40) + 0.025·perlin(p/12), 0.75, 1.25)`: the channel
+widens and narrows along the river over a few tens of blocks, with a slight jitter of the bank line (the search pads
+are widened by 1.25 for it, here and in the network's channel index). Depth factor `1 + 0.3·perlin(p/70)`: pools and
+riffles. The water level is unchanged, so every water rule (bank lip, lakes, falls) holds as before.
 
 Column Plans turns `riverWL` into water blocks: water from the bed up to `riverWL`, only if that is above the
 surface.

@@ -448,14 +448,18 @@ public class RiverStage extends GenStage {
         double G = glacial(o, zr) * ss(8, 45, s.FR); // troughs only where the ice was boxed in by mountains
         double str = 0.4 + 0.6 * ss(3.4, 7, hw); // headwaters: faint valley
         double Wv = (70 + 12 * hw) * lerp(0.7, 2.2, ef) * VW, Wu = (80 + 8 * hw) * VW;
-        double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str);
+        FieldMemo m = FIELD_MEMO.get();
+        double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str) * m.wMulV;
         double D0 = lerp(6 + hw + 1.15 * A, 12 + 1.5 * hw, G); // flat floor (floodplain)
         double floor = lerp(zr + 0.6, zr - glacialDepth(zr, hw), G);
-        double t = clamp((D - D0) / W, 0, 1);
+        // the valley's sides are a little irregular (none at the river itself)
+        double Dv = D + m.dOff * ss(0, D0, D);
+        double t = clamp((Dv - D0) / W, 0, 1);
         if (G * (1 - t) > o.glac) o.glac = G * (1 - t);
         if (t >= 1 || h <= floor) return;
         double gam = lerp(lerp(0.6, 1.5, ef), 2.2, G); // <1: gorge; >1: open / U valley
-        double f = Math.pow(t * (2 - t), gam);
+        double tr = valleyT(t); // no crease where the floor meets the sides
+        double f = Math.pow(tr * (2 - tr), gam);
         double fade = ss(8, 70, o.edge) * (1 - ss(700, 899, D));
         o.h = lerp(h, floor + (h - floor) * f, str * fade);
         if ((1 - t) * fade > o.valley) o.valley = (1 - t) * fade;
@@ -522,6 +526,7 @@ public class RiverStage extends GenStage {
         memo.nearestInLake = false;
         memo.shoreZ = Double.NaN;
         if (o.L < -0.5 || s.riversOff) return;
+        irregularity(x, y, memo);
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
         int nNear = basins.nearCells(x, y, RiverNetBuilder.MARGIN, s); // into s.NCK: no allocation per point
         RiverNet[] nets = s.NETS;
@@ -563,9 +568,45 @@ public class RiverStage extends GenStage {
         boolean nearestInLake;
         /** Level of the lake whose shore the current point is on (rim zone, not in the lake), or NaN. */
         double shoreZ = Double.NaN;
+        /** Irregularity at the current point: valley distance offset and width factor, channel width and bed depth. */
+        double dOff, wMulV, widthMul = 1, depthMul = 1;
     }
 
     private static final ThreadLocal<FieldMemo> FIELD_MEMO = ThreadLocal.withInitial(FieldMemo::new);
+
+    /**
+     * Rivers and valleys a little less smooth: the channel half-width varies along the river (about ±18 % over a few tens
+     * of blocks, plus a slight short jitter of the bank line), the bed is deeper in pools and shallower over riffles (±30 %), and
+     * the valley sides are not perfect extrusions of the river (the distance to it is offset by up to ~14 blocks, the
+     * valley width varies by ±12 %). Functions of position only: every network sees the same values at a point.
+     */
+    private void irregularity(double x, double y, FieldMemo m) {
+        m.dOff = 10 * perlin(x / 90, y / 90, SD.rivW + 5) + 4 * perlin(x / 23, y / 23, SD.rivW + 6);
+        m.wMulV = 1 + 0.12 * perlin(x / 400, y / 400, SD.rivW + 7);
+        m.widthMul = clamp(1 + 0.18 * perlin(x / 40, y / 40, SD.rivW + 8) + 0.025 * perlin(x / 12, y / 12, SD.rivW + 9), 0.75,
+            CHANNEL_WIDEN);
+        m.depthMul = 1 + 0.3 * perlin(x / 70, y / 70, SD.rivW + 10);
+    }
+
+    /** Largest widening of a channel by {@link #irregularity} (search pads allow for it). */
+    static final double CHANNEL_WIDEN = 1.25;
+
+    /**
+     * Position across a broad valley, 0 at the edge of its flat floor to 1 at its outer edge, with the corner at the floor
+     * rounded: over the first 12 % a cubic easing in (zero slope at the floor, so even a gorge leaves its floodplain
+     * without a crease; value and slope match the plain profile at 12 %), unchanged beyond.
+     */
+    static double valleyT(double t) {
+        final double e = 0.12;
+        return t < e ? (2 * t * t - t * t * t / e) / e : t;
+    }
+
+    /** Valley distance and width as {@link #broadValley} sees them at (x, y) (for the network builder's lake shores). */
+    double[] valleyIrregularity(double x, double y) {
+        FieldMemo m = new FieldMemo();
+        irregularity(x, y, m);
+        return new double[] { m.dOff, m.wMulV };
+    }
 
     /**
      * For the 2D cave stage right after this stage (karst dolines): the level of the lake whose shore the point this
@@ -612,6 +653,7 @@ public class RiverStage extends GenStage {
                 broadValley(o, ef, s);
                 return;
             }
+            final FieldMemo cm = m != null ? m : FIELD_MEMO.get(); // irregularity of this point
             double qx = x + 3 * perlin(x / 50, y / 50, SD.rivW),
                 qy = y + 3 * perlin(x / 50 + 3.3, y / 50 + 7.7, SD.rivW + 1);
             int g = net.g, gi = floor((qx - net.x0) / g), gj = floor((qy - net.y0) / g);
@@ -646,7 +688,7 @@ public class RiverStage extends GenStage {
                         sl = net.slot[j * net.nx + i];
                     }
                     if (sl < 0 || net.skip[sl] != 0) continue; // skipped: replaced by a delta
-                    double pad = VMAX + Math.max(net.w0[sl], net.w1[sl]);
+                    double pad = VMAX + CHANNEL_WIDEN * Math.max(net.w0[sl], net.w1[sl]);
                     if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad || qy < BB[sl * 4 + 1] - pad
                         || qy > BB[sl * 4 + 3] + pad) continue;
                     if (net.fallIn.length > 0 && net.fallIn[sl] > 0) {
@@ -665,7 +707,7 @@ public class RiverStage extends GenStage {
                         double dx = qx - (ax + vx * t), dy = qy - (ay + vy * t);
                         double dist = Math.sqrt(dx * dx + dy * dy);
                         double u = (k + t) / SEG;
-                        double hw = lerp(net.w0[sl], net.w1[sl], u);
+                        double hw = lerp(net.w0[sl], net.w1[sl], u) * cm.widthMul; // irregular banks
                         double v = dist - hw;
                         if (v >= VMAX) continue;
                         double z = lerp(net.z0[sl], net.z1[sl], u);
@@ -711,7 +753,7 @@ public class RiverStage extends GenStage {
                         double hc;
                         if (v <= 0) {
                             double qq = dist / Math.max(hw, 1e-3), zc = lerp(z, zu, G);
-                            hc = Math.min(h, zc) - (1.2 + hw * 0.25 + pool) * (1 - qq * qq);
+                            hc = Math.min(h, zc) - (1.2 + hw * 0.25 + pool) * cm.depthMul * (1 - qq * qq);
                         } else {
                             double bank = lerp(z, zu, G) + v * bankSlope;
                             hc = h > bank ? lerp(bank, h, ss(0, W, v)) : h;
@@ -734,8 +776,10 @@ public class RiverStage extends GenStage {
                 // a low bank right next to the water would let it spill: keep the first blocks at least at water level
                 // (applied after the carve, and only when this network owns the nearest channel, so it never fills
                 // another network's or a delta's channel)
-                if (best > 0 && best < 3 && best <= o.riverD && !bLake) // (in a river lake the lake holds the water)
-                    o.h = Math.max(o.h, Math.min(o.h + 3, bws + 0.6 * (1 - best / 3)));
+                if (best > 0 && best < 4 && best <= o.riverD && !bLake) { // (in a river lake the lake holds the water)
+                    double lip = Math.min(o.h + 3, bws + 0.6 * Math.max(0, 1 - best / 3));
+                    if (lip > o.h) o.h = lerp(o.h, lip, 1 - ss(2.5, 4, best)); // eased out: no crease where it ends
+                }
                 if (best <= 0) o.river = 1;
                 else o.valley = Math.max(o.valley, 1 - best / bW);
             }

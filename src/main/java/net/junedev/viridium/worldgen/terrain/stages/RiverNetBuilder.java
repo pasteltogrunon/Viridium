@@ -965,13 +965,15 @@ final class RiverNetBuilder {
         double ef = clamp(lerp(0.5, ((cer[r] & 255) / 255.0 - 0.2) / 0.7, P.valleyRock), 0, 1);
         double VW = P.valleyWidth, str = 0.4 + 0.6 * ss(3.4, 7, hwv);
         double Wv = (70 + 12 * hwv) * lerp(0.7, 2.2, ef) * VW, Wu = (80 + 8 * hwv) * VW;
-        double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str);
+        double[] irr = gen.rivers.valleyIrregularity(x0 + (r % nx + 0.5) * g, y0 + (r / nx + 0.5) * g);
+        double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str) * irr[1];
         double D0 = lerp(6 + hwv + 1.15 * A, 12 + 1.5 * hwv, G);
         double floor = lerp(zr + 0.6, zr - RiverStage.glacialDepth(zr, hwv), G);
-        double t = clamp((D - D0) / W, 0, 1);
+        double t = clamp((D + irr[0] * ss(0, D0, D) - D0) / W, 0, 1);
         if (t >= 1 || h <= floor) return h;
         double gam = lerp(lerp(0.6, 1.5, ef), 2.2, G);
-        double f = Math.pow(t * (2 - t), gam);
+        double tr = RiverStage.valleyT(t);
+        double f = Math.pow(tr * (2 - tr), gam);
         return lerp(h, floor + (h - floor) * f, str * (1 - ss(700, 899, D)));
     }
 

@@ -94,7 +94,7 @@ public final class RiverNet {
             int sl = slot[idx];
             if (sl < 0 || skip[sl] != 0) continue;
             int ci = idx % nx, cj = idx / nx;
-            double pad = VMAX + Math.max(w0[sl], w1[sl]);
+            double pad = VMAX + RiverStage.CHANNEL_WIDEN * Math.max(w0[sl], w1[sl]);
             double bx0 = bb[sl * 4] - pad - 1, by0 = bb[sl * 4 + 1] - pad - 1, bx1 = bb[sl * 4 + 2] + pad + 1,
                 by1 = bb[sl * 4 + 3] + pad + 1;
             int b0 = Math.max(0, Math.floorDiv(ci - RC, CB)), b1 = Math.min(nbx - 1, Math.floorDiv(ci + RC, CB));

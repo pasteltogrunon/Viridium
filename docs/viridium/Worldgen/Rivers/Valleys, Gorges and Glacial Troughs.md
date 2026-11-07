@@ -69,12 +69,14 @@ With `D` = distance to the river, `hw`, `A` (meander amplitude), `zr` (river lev
 str   = 0.4 + 0.6·ss(3.4, 7, hw)                              headwaters: faint valley
 Wv    = (70 + 12·hw)·lerp(0.7, 2.2, ef)·valleyWidth            V / river valley width
 Wu    = (80 + 8·hw)·valleyWidth                               U / glacial trough width
-W     = lerp(Wv, Wu, G)·lerp(0.6, 1, str)
+W     = lerp(Wv, Wu, G)·lerp(0.6, 1, str)·wv                   wv = 1 + 0.12·perlin(p/400): width varies
 D0    = lerp(6 + hw + 1.15·A, 12 + 1.5·hw, G)                 flat floor: floodplain wide enough for the meanders
 floor = lerp(zr + 0.6, zr − glacialDepth, G)
-t     = clamp((D − D0)/W, 0, 1)
+Dv    = D + dOff·ss(0, D0, D)                                 dOff = 10·perlin(p/90) + 4·perlin(p/23): irregular sides
+t     = clamp((Dv − D0)/W, 0, 1)
 gam   = lerp(lerp(0.6, 1.5, ef), 2.2, G)                      < 1: gorge, > 1: open / U valley
-f     = (t·(2 − t))^gam
+tr    = t < 0.12 ? (2t² − t³/0.12)/0.12 : t                    rounded corner at the floodplain edge
+f     = (tr·(2 − tr))^gam
 fade  = ss(8, 70, edge) · (1 − ss(700, 899, D))
 h     = lerp(h, floor + (h − floor)·f, str·fade)              only where h > floor
 ```
@@ -82,6 +84,13 @@ h     = lerp(h, floor + (h − floor)·f, str·fade)              only where h >
 So the terrain is pulled down towards the valley floor, fully within `D0` (the floodplain) and less and less up to
 `D0 + W`. The exponent `gam` shapes the walls: below 1 the valley stays narrow and the walls steep (gorge), above 1
 the walls flare out (open valley), and 2.2 gives the flat-bottomed, steep-sided **U profile** of a glacial trough.
+
+The floodplain edge is **rounded**: without `tr` the slope jumped there from 0 to a finite value (to an infinite one
+for gorges, `gam < 1`), a visible crease. Over the first 12 % of `W` the cubic easing starts with zero slope (and
+`tr^gam` keeps it, since `2·gam > 1`) and joins the plain profile with the same value and slope; beyond it nothing
+changes, so gorges stay steep. The outer edge (`t → 1`) and the fades were already smooth. The sides are also a little
+irregular (`dOff`, `wv`; none at the river itself), so a valley is not a perfect extrusion of its river. The network
+builder's lake shores (`carvedShore`) use the same shape.
 
 It also writes `valley` (1 − t, for the map) and `glac` (glaciation share). The field fades out over the last 200
 blocks before 900, near plate boundaries (`edge`), and only applies on land (`L ≥ −0.04`).
