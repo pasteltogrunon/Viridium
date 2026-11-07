@@ -25,6 +25,7 @@ public class CubeFiller {
     private final ThreadLocal<SurfaceRules.Column> surface = ThreadLocal.withInitial(SurfaceRules.Column::new);
     private net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora;
     private net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs;
+    private net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves;
 
     public CubeFiller(boolean hasSky, CrustModel crust, Block[] lithologyBlocks) {
         this.hasSky = hasSky;
@@ -44,6 +45,16 @@ public class CubeFiller {
     /** Planned vegetation drawn into air and surface cubes (null = none). */
     public void setFlora(net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora) {
         this.flora = flora;
+    }
+
+    /** Caves carved while filling (null = none). */
+    public void setCaves(net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves) {
+        this.caves = caves;
+    }
+
+    private static Block caveBlock(byte c) {
+        return c == net.junedev.viridium.worldgen.terrain.caves.CaveCarver.WATER ? Blocks.water
+            : c == net.junedev.viridium.worldgen.terrain.caves.CaveCarver.LAVA ? Blocks.lava : Blocks.air;
     }
 
     /** Notches and talus of cliffs (null = none). */
@@ -88,15 +99,24 @@ public class CubeFiller {
         s.prepare(cubeX << 4, y0, cubeZ << 4);
         CrustPlan cp = plan.crust;
         SurfaceRules.Column sc = surface.get();
+        net.junedev.viridium.worldgen.terrain.caves.CaveCarver.Cube cv = caves == null || kind == Kind.AIR ? null
+            : caves.prepare(plan, cubeX, cubeY, cubeZ);
         for (int lz = 0; lz < 16; lz++) {
             for (int lx = 0; lx < 16; lx++) {
                 int i = ColumnPlan.index(lx, lz);
                 if (kind == Kind.AIR) continue;
                 if (kind == Kind.CRUST) {
-                    for (int ly = 0; ly < 16; ly++)
-                        ebs.func_150818_a(lx, ly, lz, lith[s.at(cp, i, lx, ly, lz).ordinal()]);
+                    for (int ly = 0; ly < 16; ly++) {
+                        net.junedev.viridium.worldgen.terrain.crust.Lithology r = s.at(cp, i, lx, ly, lz);
+                        Block b = lith[r.ordinal()];
+                        if (cv != null) {
+                            byte c = cv.at(lx, ly, lz, r);
+                            if (c != net.junedev.viridium.worldgen.terrain.caves.CaveCarver.SOLID) b = caveBlock(c);
+                        }
+                        ebs.func_150818_a(lx, ly, lz, b);
+                    }
                 } else {
-                    fillColumn(ebs, plan, s, sc, i, (cubeX << 4) + lx, (cubeZ << 4) + lz, lx, lz, y0);
+                    fillColumn(ebs, plan, s, sc, i, (cubeX << 4) + lx, (cubeZ << 4) + lz, lx, lz, y0, cv);
                 }
             }
         }
@@ -146,7 +166,7 @@ public class CubeFiller {
     }
 
     private void fillColumn(ExtendedBlockStorage ebs, ColumnPlan plan, CrustModel.Sampler s, SurfaceRules.Column sc,
-        int i, int x, int z, int lx, int lz, int y0) {
+        int i, int x, int z, int lx, int lz, int y0, net.junedev.viridium.worldgen.terrain.caves.CaveCarver.Cube cv) {
         int sy = plan.surfaceY[i];
         int water = plan.waterY[i], iceTop = plan.iceTop[i], iceBottom = plan.iceBottom[i];
         int fallTop = plan.fallTop[i];
@@ -154,6 +174,9 @@ public class CubeFiller {
         if (y0 > top) return;
         rules.resolve(plan, i, x, z, sc);
         boolean packed = plan.has(i, ColumnPlan.F_SHELF) || plan.has(i, ColumnPlan.F_BERG);
+        // caves never hollow out loose soil (sand, gravel) or the blocks right under it: it would fall
+        boolean loose = sc.top instanceof net.minecraft.block.BlockFalling || sc.under instanceof net.minecraft.block.BlockFalling;
+        int caveTop = loose ? sy - sc.depth - 2 : sy;
         for (int ly = 0; ly < 16; ly++) {
             int y = y0 + ly;
             Block b;
@@ -168,6 +191,13 @@ public class CubeFiller {
                     if (sc.bands) meta = SurfaceRules.bandMeta(y, x, z);
                     else meta = sc.underMeta;
                 } else b = lith[s.at(plan.crust, i, lx, ly, lz).ordinal()];
+                if (cv != null && y <= caveTop) {
+                    byte c = cv.at(lx, ly, lz, s.at(plan.crust, i, lx, ly, lz));
+                    if (c != net.junedev.viridium.worldgen.terrain.caves.CaveCarver.SOLID) {
+                        b = caveBlock(c);
+                        meta = 0;
+                    }
+                }
             } else if (iceTop != NONE && y >= iceBottom && y <= iceTop) {
                 b = packed ? Blocks.packed_ice : Blocks.ice;
             } else if (water != NONE && y <= water) {

@@ -48,6 +48,8 @@ public final class WorldGen {
     public final BiomeStage biomes;
     /** 3D crust (not a per-point stage: evaluated per column and per block). */
     public final CrustModel crust;
+    /** Caves carved into the crust when cubes are filled (noise caves, aquifers, planned shapes). */
+    public final net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves;
 
     private final ThreadLocal<GenScratch> scratch = ThreadLocal.withInitial(GenScratch::new);
 
@@ -70,6 +72,7 @@ public final class WorldGen {
         this.cryo = b.cryo.apply(this);
         this.biomes = b.biomes.apply(this);
         this.crust = b.crust.apply(this);
+        this.caves = new net.junedev.viridium.worldgen.terrain.caves.CaveCarver(this);
     }
 
     public GenScratch scratch() {

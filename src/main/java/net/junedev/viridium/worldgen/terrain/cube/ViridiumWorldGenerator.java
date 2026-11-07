@@ -57,6 +57,8 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(
             plans, params.seed ^ 0xC11FF, params.cliffDetail);
         filler.setCliffs(cliffs);
+        filler.setCaves(gen.caves);
+        flora.setCaves(gen.caves);
         flora.setCliffs(cliffs, gen.crust, LithologyBlocks.get(), params.cliffDetail);
         filler.setFlora(flora);
         BY_WORLD.put(world, this);

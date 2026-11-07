@@ -12,12 +12,15 @@ public final class Seeds {
         // Java-only from here on (crust)
         "crust", "strata", "pluton", "dike", "pipe", "fold", "basin", "basinW",
         // landforms
-        "plat", "rift", "cliff", "fall" };
+        "plat", "rift", "cliff", "fall",
+        // caves
+        "cave", "aquifer", "karst", "chamber" };
 
     public final int warp, plate, vel, cont, contN, hills, mmask, mtn, sea, seaR, temp, prec, wind, rock, rockP, rockW,
         ero, rivJ, rivW, coll, isl, micro, arcN, hot, ice, berg, delta, wind2, lake, cur, estu, mea;
     public final int crust, strata, pluton, dike, pipe, fold, basin, basinW;
     public final int plat, rift, cliff, fall;
+    public final int cave, aquifer, karst, chamber;
 
     public Seeds(int seed) {
         int[] s = new int[NAMES.length];
@@ -67,5 +70,9 @@ public final class Seeds {
         rift = s[k++];
         cliff = s[k++];
         fall = s[k++];
+        cave = s[k++];
+        aquifer = s[k++];
+        karst = s[k++];
+        chamber = s[k++];
     }
 }

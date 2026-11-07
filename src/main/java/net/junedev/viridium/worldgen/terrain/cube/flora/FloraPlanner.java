@@ -43,6 +43,12 @@ public final class FloraPlanner {
     private Block[] lith;
     private ThreadLocal<net.junedev.viridium.worldgen.terrain.crust.CrustModel.Sampler> rockSampler;
     private double boulders;
+    private net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves;
+
+    /** No trees in cave entrance zones (a cave may open under the trunk). */
+    public void setCaves(net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves) {
+        this.caves = caves;
+    }
 
     public FloraPlanner(ColumnPlanCache plans, SurfaceRules rules, long worldSeed, boolean hasSky) {
         this.plans = plans;
@@ -143,6 +149,7 @@ public final class FloraPlanner {
             Block ground = ground(p, lx, lz, sc);
             boolean ok = type == FeatureType.PALM ? ground == Blocks.sand || ground == Blocks.grass
                 : ground == Blocks.grass || ground == Blocks.dirt;
+            if (ok && caves != null && caves.entrance((chunkX << 4) + lx, (chunkZ << 4) + lz)) ok = false;
             if (ok) out.add(new Feature(type, (chunkX << 4) + lx, p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
         }
         int grass = grassCount(b);
