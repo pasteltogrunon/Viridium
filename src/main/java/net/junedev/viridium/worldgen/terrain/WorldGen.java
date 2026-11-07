@@ -113,7 +113,7 @@ public final class WorldGen {
         erosion.apply(x, z, o, bpp, s);
         if (upTo == Stage.EROSION) return o;
         rivers.apply(x, z, o, s);
-        caves.surface(x, z, o);
+        if (!s.riversOff) caves.surface(x, z, o); // collapse pits are planned away from rivers
         if (upTo == Stage.RIVERS) return o;
         cryo.apply(x, z, o, bpp);
         if (upTo == Stage.CRYOSPHERE) return o;

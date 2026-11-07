@@ -109,6 +109,7 @@ public final class CaveCarver {
     private final double amount;
     private final List<CaveFeatures> features = new ArrayList<>();
     public final Karst karst;
+    public final CaveSystems systems;
     private final ThreadLocal<Cube> cubes = ThreadLocal.withInitial(Cube::new);
 
     public CaveCarver(WorldGen gen) {
@@ -125,6 +126,8 @@ public final class CaveCarver {
         amount = P.caves;
         karst = new Karst(gen);
         features.add(karst);
+        systems = new CaveSystems(gen);
+        features.add(systems);
     }
 
     /** Adds planned shapes (karst shafts, chambers, galleries). */
@@ -135,6 +138,7 @@ public final class CaveCarver {
     /** 2D part of the caves, after the rivers: dolines (and the pits of collapsed chambers). */
     public void surface(double x, double z, net.junedev.viridium.worldgen.terrain.pipeline.GenPoint o) {
         karst.surface(x, z, o);
+        systems.surface(x, z, o);
     }
 
     /** True where caves may open at the surface (2D mask, ~15 % of the land per unit of caveEntrances). */
@@ -283,7 +287,7 @@ public final class CaveCarver {
                     if (sh.inside(x, y, z, amount > 0 ? c1 : 0)) {
                         carve = true;
                         own = sh.fluid(y);
-                        break;
+                        if (own != SOLID) break; // a shape with its own fluid (a chamber) wins over the aquifer
                     }
                 }
             }

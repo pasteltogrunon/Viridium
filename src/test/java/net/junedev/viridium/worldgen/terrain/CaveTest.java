@@ -153,6 +153,41 @@ class CaveTest {
         assertTrue(shafts == 0 || open > 0, "shafts not carved");
     }
 
+    /** Planned systems: chambers by depth, collapse pits, galleries; centres really carved. */
+    @Test
+    void plannedSystems() {
+        Sample sm = new Sample();
+        int shallow = 0, mid = 0, deep = 0, pits = 0, segs = 0, carved = 0, checked = 0, lakes = 0;
+        double widest = 0;
+        StringBuilder where = new StringBuilder();
+        for (int rj = -5; rj <= 5; rj++) for (int ri = -5; ri <= 5; ri++) {
+            var r = sm.gen.caves.systems.region(ri, rj);
+            for (var c : r.chambers) {
+                if (c.y > -100) shallow++;
+                else if (c.y > -800) mid++;
+                else deep++;
+                if (c.pitR > 0) {
+                    pits++;
+                    if (where.length() < 200) where.append(String.format(" pit@%.0f,%.0f", c.x, c.z));
+                }
+                if (c.lake == c.lake) lakes++;
+                widest = Math.max(widest, 2 * Math.max(c.rx, c.rz));
+                if (checked < 20) {
+                    checked++;
+                    int x = (int) c.x, y = (int) (c.floor + c.ry * 0.3), z = (int) c.z;
+                    sm.cube(x >> 4, y >> 4, z >> 4);
+                    byte code = sm.code[(((y & 15) * 16) + (z & 15)) * 16 + (x & 15)];
+                    if (code > 0) carved++;
+                    else System.out.printf("  not carved: chamber %.0f,%.0f,%.0f r %.0f/%.0f/%.0f floor %.0f code %d surface %d%n", c.x, c.y, c.z, c.rx, c.ry, c.rz, c.floor, code, sm.plans.get(x >> 4, z >> 4).surfaceY[ColumnPlan.index(x & 15, z & 15)]);
+                }
+            }
+        }
+        System.out.printf("cave systems (121 regions): chambers shallow %d, mid %d, deep %d; %d with a lake; %d collapse pits; widest %.0f blocks; %d/%d chamber centres carved;%s%n",
+            shallow, mid, deep, lakes, pits, widest, carved, checked, where);
+        assertTrue(shallow + mid + deep > 0, "no chambers");
+        assertTrue(carved >= checked * 0.8, "chambers not carved");
+    }
+
     /** Cost per cube: lithology alone vs lithology + caves, same cubes, warm. */
     @Test
     void caveCost() {
