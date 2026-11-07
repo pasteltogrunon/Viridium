@@ -16,8 +16,8 @@ import net.junedev.viridium.worldgen.terrain.crust.Lithology;
  * Caves, block by block, for one cube at a time (pure function of the position, the column plan and the rock: cubes are
  * filled in any order without their neighbours). No Minecraft classes.
  * <p>
- * <b>Noise caves</b>: fields on a 4-block lattice, interpolated trilinearly (so the extremes of a lattice cell are at its
- * corners: cells that cannot hold a cave are skipped without any per-block work):
+ * <b>Noise caves</b>: fields on an 8-block lattice (3 nodes per axis per cube), interpolated trilinearly (so the
+ * extremes of a lattice cell are at its corners: cells that cannot hold a cave are skipped without any per-block work):
  * <ul>
  * <li>caverns {@code C1} (a threshold of 3D noise, flattened vertically);</li>
  * <li>huge deep caverns {@code C2} (lower frequency, more of them with depth: halls of 100+ blocks deep in the crust);</li>
@@ -188,11 +188,37 @@ public final class CaveCarver {
         private boolean deep, nearSurface;
         private ColumnPlan plan;
 
+        /** 2D masks of the last column (cube cx, cz) seen near the surface: entrance zones, lava tube depth. */
+        private final boolean[] maskEntrance = new boolean[256];
+        private final int[] maskTube = new int[256];
+        private boolean maskSet;
+        private int maskCx, maskCz;
+
+        /** Fills the 2D masks of column (cx, cz) unless they are already there (cubes of a column come in a row). */
+        private void masks(int cx, int cz) {
+            if (maskSet && maskCx == cx && maskCz == cz) return;
+            for (int i = 0; i < 256; i++) {
+                int x = (cx << 4) + (i & 15), z = (cz << 4) + (i >> 4);
+                maskEntrance[i] = entrance(x, z);
+                maskTube[i] = 9 + (int) (8 * (Noise.fbm(x / 300.0, z / 300.0, seedT, 2) + 1));
+            }
+            maskCx = cx;
+            maskCz = cz;
+            maskSet = true;
+        }
+
         boolean prepare(ColumnPlan p, int cx, int cy, int cz) {
             plan = p;
             bx = cx << 4;
             by = cy << 4;
             bz = cz << 4;
+            if (++stamp == 0) { // wrapped around: forget every memo entry
+                java.util.Arrays.fill(aqStamp, 0);
+                stamp = 1;
+            }
+            aci0 = Math.floorDiv(bx, AX) - 1;
+            acj0 = Math.floorDiv(by, AY) - 1;
+            ack0 = Math.floorDiv(bz, AX) - 1;
             shapes.clear();
             for (int f = 0; f < features.size(); f++) features.get(f).collect(bx, by, bz, shapes);
             // per column: highest block a cave may reach, and the level of lava tubes
@@ -201,14 +227,14 @@ public final class CaveCarver {
             tubeMax = Integer.MIN_VALUE;
             // the 2D masks (entrances, lava tube level) only matter near the surface: deep cubes skip them
             nearSurface = by + 15 >= p.minSurfaceY - 40;
+            if (nearSurface) masks(cx, cz);
             for (int i = 0; i < 256; i++) {
                 int sy = p.surfaceY[i];
                 boolean wet = p.waterY[i] != ColumnPlan.NONE || p.iceTop[i] != ColumnPlan.NONE;
-                int x = bx + (i & 15), z = bz + (i >> 4);
-                int roof = wet ? sy - WATER_ROOF : nearSurface && entrance(x, z) ? sy : sy - ROOF;
+                int roof = wet ? sy - WATER_ROOF : nearSurface && maskEntrance[i] ? sy : sy - ROOF;
                 roofY[i] = roof;
                 wetRoof[i] = wet ? sy - WATER_ROOF : sy;
-                tubeY[i] = nearSurface ? sy - 9 - (int) (8 * (Noise.fbm(x / 300.0, z / 300.0, seedT, 2) + 1)) : Integer.MIN_VALUE / 2;
+                tubeY[i] = nearSurface ? sy - maskTube[i] : Integer.MIN_VALUE / 2;
                 tubeMin = Math.min(tubeMin, tubeY[i]);
                 tubeMax = Math.max(tubeMax, tubeY[i]);
                 maxRoof = Math.max(maxRoof, shapes.isEmpty() ? roof : wetRoof[i]);
@@ -336,21 +362,35 @@ public final class CaveCarver {
             return false;
         }
 
+        private final long[] aqv = new long[64];
+        private final int[] aqStamp = new int[64];
+        private int stamp, aci0, acj0, ack0;
+
+        /** Aquifer cell memo for this cube (4x4x4 cells around it). */
+        private long aq(int ci, int cj, int ck) {
+            int q = ((ci - aci0) * 4 + cj - acj0) * 4 + ck - ack0;
+            if (aqStamp[q] == stamp) return aqv[q];
+            long v = aquifer(ci, cj, ck);
+            aqv[q] = v;
+            aqStamp[q] = stamp;
+            return v;
+        }
+
         /** Air, water or lava for a carved block, from the aquifer cells (and the lava at the bottom of the world). */
         private byte fluid(int x, int y, int z, int depth) {
             if (y < TerrainLayout.MIN_Y + 48) return LAVA;
             if (P.aquifers <= 0) return AIR;
             int ci = Math.floorDiv(x, AX), cj = Math.floorDiv(y, AY), ck = Math.floorDiv(z, AZ_);
-            long here = aquifer(ci, cj, ck);
+            long here = aq(ci, cj, ck);
             int lvl = level(here);
             // seal the boundary between cells of different levels with 2 blocks of rock
             int mx = Math.floorMod(x, AX), my = Math.floorMod(y, AY), mz = Math.floorMod(z, AZ_);
-            if (mx < 2 && barrier(here, aquifer(ci - 1, cj, ck), y)) return SOLID;
-            if (mx >= AX - 2 && barrier(here, aquifer(ci + 1, cj, ck), y)) return SOLID;
-            if (mz < 2 && barrier(here, aquifer(ci, cj, ck - 1), y)) return SOLID;
-            if (mz >= AZ_ - 2 && barrier(here, aquifer(ci, cj, ck + 1), y)) return SOLID;
-            if (my < 2 && barrier(here, aquifer(ci, cj - 1, ck), y)) return SOLID;
-            if (my >= AY - 2 && barrier(here, aquifer(ci, cj + 1, ck), y)) return SOLID;
+            if (mx < 2 && barrier(here, aq(ci - 1, cj, ck), y)) return SOLID;
+            if (mx >= AX - 2 && barrier(here, aq(ci + 1, cj, ck), y)) return SOLID;
+            if (mz < 2 && barrier(here, aq(ci, cj, ck - 1), y)) return SOLID;
+            if (mz >= AZ_ - 2 && barrier(here, aq(ci, cj, ck + 1), y)) return SOLID;
+            if (my < 2 && barrier(here, aq(ci, cj - 1, ck), y)) return SOLID;
+            if (my >= AY - 2 && barrier(here, aq(ci, cj + 1, ck), y)) return SOLID;
             if (y > lvl) return AIR;
             return kind(here) == 2 ? LAVA : WATER;
         }
