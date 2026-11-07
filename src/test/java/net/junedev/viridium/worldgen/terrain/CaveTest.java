@@ -112,6 +112,47 @@ class CaveTest {
         assertTrue(safety == 0, "caves carved under water bodies");
     }
 
+    /** Karst: dolines in limestone country and shafts that really are open. */
+    @Test
+    void karstDolinesAndShafts() {
+        Sample sm = new Sample();
+        net.junedev.viridium.worldgen.terrain.pipeline.GenPoint o = new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint();
+        int pts = 0, inDoline = 0, shafts = 0, open = 0;
+        double deepest = 0;
+        for (int z = -6000; z < 6000; z += 24) for (int x = -6000; x < 6000; x += 24) {
+            sm.gen.evaluate(x, z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.RIVERS, o);
+            if (o.L < 0.02) continue;
+            pts++;
+            if (o.doline > 0.5) inDoline++;
+            deepest = Math.max(deepest, o.doline);
+        }
+        for (int cj = -125; cj < 125 && shafts < 12; cj++) for (int ci = -125; ci < 125 && shafts < 12; ci++) {
+            double[] s = sm.gen.caves.karst.shaft(ci, cj);
+            if (s.length == 0) continue;
+            shafts++;
+            int x = (int) Math.floor(s[0]), z = (int) Math.floor(s[1]);
+            ColumnPlan p = sm.plans.get(x >> 4, z >> 4);
+            int sy = p.surfaceY[ColumnPlan.index(x & 15, z & 15)], y = sy - 12;
+            if (y < s[4]) continue;
+            sm.cube(x >> 4, y >> 4, z >> 4);
+            byte c = sm.code[(((y & 15) * 16) + (z & 15)) * 16 + (x & 15)];
+            if (c != CaveCarver.SOLID) open++;
+        }
+        int cand = 0, kOk = 0;
+        for (int cj = -125; cj < 125; cj++) for (int ci = -125; ci < 125; ci++) {
+            double[] d = sm.gen.caves.karst.dolineAt(ci, cj);
+            if (d == null || d[4] <= 0) continue;
+            cand++;
+            sm.gen.evaluate(d[0], d[1], net.junedev.viridium.worldgen.terrain.pipeline.Stage.GEOLOGY, o);
+            if (o.L > 0.02 && o.h0 > 3 && net.junedev.viridium.worldgen.terrain.caves.Karst.karstOf(o) > 0.4) kOk++;
+        }
+        System.out.printf("shaft candidates %d, on karst land %d%n", cand, kOk);
+        System.out.printf("karst: %.2f%% of land in dolines (deepest %.1f), %d shafts checked, %d open 12 blocks down%n",
+            100.0 * inDoline / Math.max(1, pts), deepest, shafts, open);
+        assertTrue(inDoline > 0, "no dolines");
+        assertTrue(shafts == 0 || open > 0, "shafts not carved");
+    }
+
     /** Cost per cube: lithology alone vs lithology + caves, same cubes, warm. */
     @Test
     void caveCost() {

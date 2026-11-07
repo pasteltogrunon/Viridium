@@ -85,6 +85,9 @@ public final class GenPoint {
     public int river;
     /** 0 none, 1 lake, 2 salt flat. */
     public int lake;
+    /** Depth (blocks) by which a karst doline lowered the ground here. */
+    public double doline;
+
     /** Waterfall: top of the falling water curtain (-1e9 none), and 1 within a few blocks of a waterfall lip. */
     public double fallTop = -1e9;
     public int fall;

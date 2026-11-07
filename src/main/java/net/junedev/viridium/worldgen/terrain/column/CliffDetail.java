@@ -167,6 +167,15 @@ public final class CliffDetail {
                 int base = wet ? footWater - 1 : foot + tal1 + 1;
                 int hN = (int) GenMath.clamp(Math.round(H * (wet ? 0.12 : 0.1) * strength), 2, wet ? 4 : 3);
                 int D = (int) GenMath.clamp(Math.round(H / (wet ? 8.0 : 12.0) * strength), 1, wet ? 4 : 3);
+                // some stretches go much deeper: sea caves at the water line, cave mouths at the foot of tall dry walls
+                double rc = Noise.rnd(fx >> 3, fz >> 3, seed + 11);
+                if (wet && rc < 0.25 && H >= 14) {
+                    hN = (int) GenMath.clamp(Math.round(H * 0.2), 3, 6);
+                    D = 9;
+                } else if (!wet && rc < 0.06 && H >= 20) {
+                    hN = (int) GenMath.clamp(Math.round(H * 0.3), 5, 10);
+                    D = 8;
+                }
                 // the notch opens where the wall stands solid above it: the outermost column (towards the foot) still at
                 // least 3 blocks above the band; the column in front of it must leave the band open
                 int band = base + hN - 1, e = -1, lips = 0;

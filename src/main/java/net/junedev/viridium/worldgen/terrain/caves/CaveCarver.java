@@ -107,7 +107,8 @@ public final class CaveCarver {
     private final GenParams P;
     private final int seedC1, seedC2, seedA, seedB, seedF, seedE, seedT, seedAq;
     private final double amount;
-    private CaveFeatures features;
+    private final List<CaveFeatures> features = new ArrayList<>();
+    public final Karst karst;
     private final ThreadLocal<Cube> cubes = ThreadLocal.withInitial(Cube::new);
 
     public CaveCarver(WorldGen gen) {
@@ -122,15 +123,18 @@ public final class CaveCarver {
         seedT = s + 6007;
         seedAq = gen.seeds.aquifer;
         amount = P.caves;
+        karst = new Karst(gen);
+        features.add(karst);
     }
 
-    /** Planned shapes (karst shafts, chambers, galleries); null = none. */
-    public void setFeatures(CaveFeatures f) {
-        this.features = f;
+    /** Adds planned shapes (karst shafts, chambers, galleries). */
+    public void addFeatures(CaveFeatures f) {
+        features.add(f);
     }
 
-    public CaveFeatures features() {
-        return features;
+    /** 2D part of the caves, after the rivers: dolines (and the pits of collapsed chambers). */
+    public void surface(double x, double z, net.junedev.viridium.worldgen.terrain.pipeline.GenPoint o) {
+        karst.surface(x, z, o);
     }
 
     /** True where caves may open at the surface (2D mask, ~15 % of the land per unit of caveEntrances). */
@@ -144,7 +148,7 @@ public final class CaveCarver {
      * The result is per thread: use it before preparing another cube on the same thread.
      */
     public Cube prepare(ColumnPlan plan, int cx, int cy, int cz) {
-        if (amount <= 0 && features == null) return null;
+        if (amount <= 0 && features.isEmpty()) return null;
         int y0 = cy << 4;
         if (y0 > plan.maxTopY) return null;
         Cube c = cubes.get();
@@ -172,7 +176,7 @@ public final class CaveCarver {
             by = cy << 4;
             bz = cz << 4;
             shapes.clear();
-            if (features != null) features.collect(bx, by, bz, shapes);
+            for (int f = 0; f < features.size(); f++) features.get(f).collect(bx, by, bz, shapes);
             // per column: highest block a cave may reach, and the level of lava tubes
             int maxRoof = Integer.MIN_VALUE;
             tubeMin = Integer.MAX_VALUE;

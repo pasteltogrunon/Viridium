@@ -150,7 +150,7 @@ public final class MapLayer {
     public static final MapLayer HEIGHT = register(
         new MapLayer("height", "Final height", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> R_HEIGHT.at(o.h)));
 
-    /** Landforms over a grey relief: plateaus (tablelands ochre, basalt traps purple), mesas (red), sea cliffs (white), rifts (red young, brown failed, teal mature). */
+    /** Landforms over a grey relief: plateaus (tablelands ochre, basalt traps purple), mesas (red), sea cliffs (white), rifts (red young, brown failed, teal mature), karst dolines (dark green). */
     public static final MapLayer LANDFORMS = register(
         new MapLayer("landforms", "Landforms", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> {
             if (o.h < 0 && o.river == 0) return rgb(40, 66, 112);
@@ -160,6 +160,7 @@ public final class MapLayer {
             if (o.rift > 0.05 && o.riftD < 1.6) c = lerp(c, o.riftType == 2 ? rgb(40, 150, 170) : o.riftType == 1 ? rgb(150, 120, 90) : rgb(200, 50, 50), clamp(o.rift * (1.6 - o.riftD), 0, 1) * 0.6);
             if (o.volc > 0.2 && o.volcType == 1 && o.rift > 0) c = rgb(90, 20, 20);
             if (o.cliff > 0.05) c = lerp(c, rgb(235, 235, 245), clamp(o.cliff, 0, 1) * 0.85);
+            if (o.doline > 0.5) c = lerp(c, rgb(30, 90, 40), clamp(o.doline / 8, 0.3, 0.9));
             if (o.mesa > 0.05) c = lerp(c, rgb(200, 80, 40), clamp(o.mesa, 0, 1) * 0.8);
             if (o.river != 0 || o.lake == 1) c = rgb(60, 110, 225);
             return c;

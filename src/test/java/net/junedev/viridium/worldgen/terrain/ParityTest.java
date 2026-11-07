@@ -125,6 +125,7 @@ class ParityTest {
         p.waterfalls = 0;
         p.caves = 0;
         p.plannedCaves = 0;
+        p.dolines = 0;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 
