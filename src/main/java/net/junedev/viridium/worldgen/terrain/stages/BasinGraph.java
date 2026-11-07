@@ -101,16 +101,46 @@ public final class BasinGraph {
         return (cj + 0.15 + 0.7 * rnd(ci, cj, SD.basin + 1)) * B;
     }
 
+    /**
+     * Feature points of the 5x5 cells around (ci, cj), and per own cell the divides to the others: consecutive points
+     * almost always fall in the same block, so they are kept per thread instead of hashed again (50 per point).
+     */
+    private static final class Feats {
+
+        int ci = Integer.MIN_VALUE, cj;
+        final double[] fx = new double[25], fy = new double[25];
+        /** Per own index ok: for each k, midpoint (x, y), normal (x, y) and its length; valid when bisOk[ok]. */
+        final double[][] bis = new double[25][25 * 5];
+        final boolean[] bisOk = new boolean[25];
+    }
+
+    private final ThreadLocal<Feats> feats = ThreadLocal.withInitial(Feats::new);
+
+    private Feats feats(int ci, int cj) {
+        Feats f = feats.get();
+        if (f.ci != ci || f.cj != cj) {
+            for (int dj = -2, k = 0; dj <= 2; dj++) for (int di = -2; di <= 2; di++, k++) {
+                f.fx[k] = featX(ci + di, cj + dj);
+                f.fy[k] = featY(ci + di, cj + dj);
+            }
+            java.util.Arrays.fill(f.bisOk, false);
+            f.ci = ci;
+            f.cj = cj;
+        }
+        return f;
+    }
+
     /** Basin cell containing (x, y), packed (ci, cj). Warped so divides are irregular. */
     public long cellAt(double x, double y) {
         double wa = 0.22 * B, ws = 0.6 * B;
         double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3), wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
         int ci = floor(wx / B), cj = floor(wy / B);
+        Feats f = feats(ci, cj);
         double best = Double.POSITIVE_INFINITY;
         long bk = 0;
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
-            int i = ci + di, j = cj + dj;
-            double dx = featX(i, j) - wx, dy = featY(i, j) - wy, d = dx * dx + dy * dy;
+            int i = ci + di, j = cj + dj, k = (dj + 2) * 5 + di + 2;
+            double dx = f.fx[k] - wx, dy = f.fy[k] - wy, d = dx * dx + dy * dy;
             if (d < best) {
                 best = d;
                 bk = key(i, j);
@@ -125,24 +155,24 @@ public final class BasinGraph {
      */
     public long[] nearCells(double x, double y, double margin) {
         long[] out = new long[9];
-        int n = nearCells(x, y, margin, new double[25], new double[25], out);
+        int n = nearCellsInto(x, y, margin, out);
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
     }
 
     /** Same as {@link #nearCells(double, double, double)} into the scratch arrays (no allocation): count in, keys in s.NCK. */
     public int nearCells(double x, double y, double margin, GenScratch s) {
-        return nearCells(x, y, margin, s.NCX, s.NCY, s.NCK);
+        return nearCellsInto(x, y, margin, s.NCK);
     }
 
-    private int nearCells(double x, double y, double margin, double[] fx, double[] fy, long[] out) {
+    private int nearCellsInto(double x, double y, double margin, long[] out) {
         double wa = 0.22 * B, ws = 0.6 * B;
         double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3), wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
         int ci = floor(wx / B), cj = floor(wy / B);
+        Feats f = feats(ci, cj);
+        final double[] fx = f.fx, fy = f.fy;
         int bi = 0, bj = 0;
         double best = Double.POSITIVE_INFINITY;
         for (int dj = -2, k = 0; dj <= 2; dj++) for (int di = -2; di <= 2; di++, k++) {
-            fx[k] = featX(ci + di, cj + dj);
-            fy[k] = featY(ci + di, cj + dj);
             double d = (fx[k] - wx) * (fx[k] - wx) + (fy[k] - wy) * (fy[k] - wy);
             if (d < best) {
                 best = d;
@@ -151,13 +181,27 @@ public final class BasinGraph {
             }
         }
         int ok = (bj + 2) * 5 + bi + 2;
+        double[] bs = f.bis[ok];
+        if (!f.bisOk[ok]) {
+            for (int k = 0; k < 25; k++) {
+                if (k == ok) continue;
+                double nx = fx[k] - fx[ok], ny = fy[k] - fy[ok];
+                bs[k * 5] = (fx[ok] + fx[k]) * 0.5;
+                bs[k * 5 + 1] = (fy[ok] + fy[k]) * 0.5;
+                bs[k * 5 + 2] = nx;
+                bs[k * 5 + 3] = ny;
+                bs[k * 5 + 4] = Math.sqrt(nx * nx + ny * ny);
+            }
+            f.bisOk[ok] = true;
+        }
         int n = 0;
         out[n++] = key(ci + bi, cj + bj);
         for (int k = 0; k < 25; k++) {
             if (k == ok) continue;
-            double nx = fx[k] - fx[ok], ny = fy[k] - fy[ok], len = Math.sqrt(nx * nx + ny * ny);
+            int b = k * 5;
+            double nx = bs[b + 2], ny = bs[b + 3], len = bs[b + 4];
             // distance from the point to the bisector between the own feature and feature k
-            double d = ((fx[ok] + fx[k]) * 0.5 - wx) * nx / len + ((fy[ok] + fy[k]) * 0.5 - wy) * ny / len;
+            double d = (bs[b] - wx) * nx / len + (bs[b + 1] - wy) * ny / len;
             if (d < margin && n < out.length) out[n++] = key(ci + (k % 5) - 2, cj + (k / 5) - 2);
         }
         return n;

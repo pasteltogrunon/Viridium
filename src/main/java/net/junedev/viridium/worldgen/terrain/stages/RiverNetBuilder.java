@@ -494,6 +494,28 @@ final class RiverNetBuilder {
         return (float) Math.min(P.riverMaxHalfWidth, 1.2 + 2.2 * Math.sqrt(flowOverThr) + P.riverWidthGrowth * flowOverThr);
     }
 
+    // ------------------------------------------------------------------ per-build state
+    // The build runs in phases, one method each: a single method holding all of them was over the JIT's huge-method
+    // limit (8000 bytes of bytecode) and ran interpreted. A builder is used for one build only.
+
+    private int ny, n, exitIdx = -1, cnt, count, nm, ne;
+    private long ck;
+    private double thr, reach;
+    private boolean serial;
+    private float[] hgt, run, inflow, rkey, scarpG, filled, acc, hw, wl, fallDrop, fallT, cellA;
+    private boolean[] own, entry, isRiv;
+    private byte[] cer;
+    private int[] recv, order, mainUp, slot, estSeg;
+    private Map<Integer, Double> lakes;
+    // reaches
+    private float[] pts, bb, w0, w1, z0, z1, sacc, am0, am1, fallIn, mouthsOut;
+    private byte[] lipOut, head, skip;
+    private DeltaOut dOut;
+    // valley field
+    private char[] vd;
+    private short[] vz;
+    private byte[] vw, va, vr;
+
     RiverNet build(BasinGraph.Cell cell, BasinGraph graph, GenScratch s) {
         final double B = graph.size();
         g = P.riverGrid;
@@ -503,20 +525,39 @@ final class RiverNetBuilder {
         x0 = (double) gx0 * g;
         y0 = (double) gy0 * g;
         nx = (int) Math.ceil(2 * H / g) + 1;
-        final int ny = nx, n = nx * ny;
-        final long ck = BasinGraph.key(cell.ci, cell.cj);
-        final double thr = P.riverThreshold * 45 * (32.0 / g) * (32.0 / g);
-        float[] hgt = new float[n], run = new float[n];
-        boolean[] own = new boolean[n], entry = new boolean[n];
-        float[] inflow = new float[n];
-        float[] rkey = new float[n]; // routing bias: makes the flow converge on smooth slopes and flats
-        byte[] cer = new byte[n];
-        final float[] scarpG = new float[n]; // nearness to a cliff (plateau scarp, rift fault, sea cliff): waterfall sites
-        final boolean serial = RiverStage.serialBuilds(); // background callers keep to their own thread
-        // this network needs the exits of its upstream basins and the deltas of its lower-coloured coastal neighbours,
-        // which need theirs in turn: build the missing ones side by side instead of one after another (a whole river
-        // system after a teleport)
+        ny = nx;
+        n = nx * ny;
+        ck = BasinGraph.key(cell.ci, cell.cj);
+        thr = P.riverThreshold * 45 * (32.0 / g) * (32.0 / g);
+        serial = RiverStage.serialBuilds(); // background callers keep to their own thread
         long tLap = System.nanoTime();
+        buildDeps(cell, graph);
+        tLap = lap(GenStats.RIVER_DEPS, tLap);
+        reliefGrid(cell, graph);
+        tLap = lap(GenStats.RIVER_GRID, tLap);
+        flood();
+        tLap = lap(GenStats.RIVER_FLOW, tLap);
+        findLakes(s);
+        tLap = lap(GenStats.RIVER_LAKES, tLap);
+        accumulate();
+        tLap = lap(GenStats.RIVER_ACC, tLap);
+        waterLevels(cell, graph);
+        tLap = lap(GenStats.RIVER_LEVELS, tLap);
+        reaches();
+        tLap = lap(GenStats.RIVER_REACHES, tLap);
+        deltas(cell, graph, s);
+        tLap = lap(GenStats.RIVER_DELTAS, tLap);
+        valleyField();
+        lap(GenStats.RIVER_VALLEY, tLap);
+        return assemble(cell);
+    }
+
+    /**
+     * This network needs the exits of its upstream basins and the deltas of its lower-coloured coastal neighbours, which
+     * need theirs in turn: builds the missing ones side by side instead of one after another (a whole river system after
+     * a teleport).
+     */
+    private void buildDeps(BasinGraph.Cell cell, BasinGraph graph) {
         List<BasinGraph.Cell> deps = new ArrayList<>(graph.children(cell));
         if (cell.outlet) for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
             if ((di | dj) == 0) continue;
@@ -527,7 +568,18 @@ final class RiverNetBuilder {
         if (deps.size() > 1 && !serial) deps.parallelStream()
             .forEach(d -> gen.rivers.exit(d.ci, d.cj));
         else for (BasinGraph.Cell d : deps) gen.rivers.exit(d.ci, d.cj);
-        tLap = lap(GenStats.RIVER_DEPS, tLap);
+    }
+
+    /** Coarse relief, runoff, rock and cliffs of every node of the basin (and the entry nodes on its divide). */
+    private void reliefGrid(BasinGraph.Cell cell, BasinGraph graph) {
+        final int nx = this.nx, ny = this.ny, n = this.n;
+        final long ck = this.ck;
+        final float[] hgt = this.hgt = new float[n], run = this.run = new float[n];
+        final boolean[] own = this.own = new boolean[n], entry = this.entry = new boolean[n];
+        final float[] inflow = this.inflow = new float[n];
+        final float[] rkey = this.rkey = new float[n]; // routing bias: makes the flow converge on smooth slopes and flats
+        final byte[] cer = this.cer = new byte[n];
+        final float[] scarpG = this.scarpG = new float[n]; // nearness to a cliff (plateau scarp, rift fault, sea cliff): waterfall sites
         // where the rivers of upstream basins come in, with everything they carry
         for (BasinGraph.Cell ch : graph.children(cell)) {
             int ei = BasinGraph.keyA(ch.exitNode) - gx0, ej = BasinGraph.keyB(ch.exitNode) - gy0;
@@ -540,7 +592,7 @@ final class RiverNetBuilder {
             int xi = BasinGraph.keyA(cell.exitNode) - gx0, xj = BasinGraph.keyB(cell.exitNode) - gy0;
             if (xi >= 0 && xj >= 0 && xi < nx && xj < ny) exit = xj * nx + xi;
         }
-        final int exitIdx = exit;
+        exitIdx = exit;
         // independent per cell: rows run in parallel, each with its own temporaries
         par(java.util.stream.IntStream.range(0, ny), serial).forEach(j -> {
             GenPoint rt = new GenPoint();
@@ -570,11 +622,15 @@ final class RiverNetBuilder {
             }
         });
         if (exitIdx >= 0) own[exitIdx] = true;
+    }
 
-        tLap = lap(GenStats.RIVER_GRID, tLap);
-        // priority-flood from the basin's outlets: the sea inside the cell, or the exit node on the divide
-        float[] filled = new float[n];
-        int[] recv = new int[n], order = new int[n];
+    /** Priority-flood from the basin's outlets (the sea inside the cell, or the exit node on the divide), then receivers. */
+    private void flood() {
+        final int nx = this.nx, ny = this.ny, n = this.n, exitIdx = this.exitIdx;
+        final float[] hgt = this.hgt, rkey = this.rkey;
+        final boolean[] own = this.own;
+        float[] filled = this.filled = new float[n];
+        int[] recv = this.recv = new int[n], order = this.order = new int[n];
         Arrays.fill(recv, -1);
         boolean[] done = new boolean[n];
         Heap heap = new Heap(n);
@@ -609,6 +665,7 @@ final class RiverNetBuilder {
                 heap.push(filled[nb], nb);
             }
         }
+        this.cnt = cnt;
 
         // receivers: steepest descent on the filled surface plus a routing bias, among strictly lower neighbours (so the
         // flood order stays a valid upstream → downstream order). Without the bias, smooth slopes and flats drain in
@@ -632,10 +689,15 @@ final class RiverNetBuilder {
                 recv[idx] = best;
             }
         }
+    }
 
-        tLap = lap(GenStats.RIVER_FLOW, tLap);
-        // lakes: cells the flood had to fill (closed depressions); arid basins only keep a salt flat
-        Map<Integer, Double> lakes = new HashMap<>();
+    /** Lakes: cells the flood had to fill (closed depressions); arid basins only keep a salt flat. */
+    private void findLakes(GenScratch s) {
+        final int nx = this.nx, ny = this.ny, n = this.n;
+        final float[] hgt = this.hgt, run = this.run, filled = this.filled;
+        final boolean[] own = this.own, entry = this.entry;
+        final boolean serial = this.serial;
+        Map<Integer, Double> lakes = this.lakes = new HashMap<>();
         // a lake can never stand above the lowest point of the basin's whole divide: it would spill there first
         double spill = Double.POSITIVE_INFINITY;
         for (int j = 1; j < ny - 1; j++) for (int i = 1; i < nx - 1; i++) {
@@ -643,75 +705,85 @@ final class RiverNetBuilder {
             if (!own[idx] || entry[idx] || hgt[idx] < 0) continue;
             if (!own[idx - 1] || !own[idx + 1] || !own[idx - nx] || !own[idx + nx]) spill = Math.min(spill, hgt[idx]);
         }
-        if (P.lakes > 0) {
-            byte[] inL = new byte[n];
-            int[] stack = new int[n];
-            int[] cells = new int[n];
-            for (int idx = 0; idx < n; idx++)
-                if (own[idx] && hgt[idx] >= 0 && filled[idx] - hgt[idx] > 2 / P.lakes) inL[idx] = 1;
-            // depressions first (cells grouped in `cells`, one range each), then the real floor of every one of them
-            // in parallel: those samples run the pipeline up to erosion and were most of a cold network build
-            List<double[]> comps = new ArrayList<>(); // {start, count, lev, rr, bot}
-            int used = 0;
-            for (int s0 = 0; s0 < n; s0++) {
-                if (inL[s0] != 1) continue;
-                int nc = 0, sp = 0;
-                double lev = 0, rr = 0, bot = 1e9;
-                inL[s0] = 2;
-                stack[sp++] = s0;
-                while (sp > 0) {
-                    int c = stack[--sp];
-                    cells[used + nc++] = c;
-                    if (filled[c] > lev) lev = filled[c];
-                    if (hgt[c] < bot) bot = hgt[c];
-                    rr += run[c];
-                    int ci = c % nx, cj = (c - ci) / nx;
-                    for (int k = 0; k < 4; k++) {
-                        int ii = ci + (k == 0 ? 1 : k == 1 ? -1 : 0), jj = cj + (k == 2 ? 1 : k == 3 ? -1 : 0);
-                        if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
-                        int nb = jj * nx + ii;
-                        if (inL[nb] == 1) {
-                            inL[nb] = 2;
-                            stack[sp++] = nb;
-                        }
+        if (P.lakes <= 0) return;
+        byte[] inL = new byte[n];
+        int[] stack = new int[n];
+        final int[] cells = new int[n];
+        for (int idx = 0; idx < n; idx++)
+            if (own[idx] && hgt[idx] >= 0 && filled[idx] - hgt[idx] > 2 / P.lakes) inL[idx] = 1;
+        // depressions first (cells grouped in `cells`, one range each), then the real floor of every one of them
+        // in parallel: those samples run the pipeline up to erosion and were most of a cold network build
+        final List<double[]> comps = new ArrayList<>(); // {start, count, lev, rr, bot}
+        int used = 0;
+        for (int s0 = 0; s0 < n; s0++) {
+            if (inL[s0] != 1) continue;
+            int nc = 0, sp = 0;
+            double lev = 0, rr = 0, bot = 1e9;
+            inL[s0] = 2;
+            stack[sp++] = s0;
+            while (sp > 0) {
+                int c = stack[--sp];
+                cells[used + nc++] = c;
+                if (filled[c] > lev) lev = filled[c];
+                if (hgt[c] < bot) bot = hgt[c];
+                rr += run[c];
+                int ci = c % nx, cj = (c - ci) / nx;
+                for (int k = 0; k < 4; k++) {
+                    int ii = ci + (k == 0 ? 1 : k == 1 ? -1 : 0), jj = cj + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                    if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                    int nb = jj * nx + ii;
+                    if (inL[nb] == 1) {
+                        inL[nb] = 2;
+                        stack[sp++] = nb;
                     }
                 }
-                if (nc < 2) continue;
-                comps.add(new double[] { used, nc, lev, rr, bot });
-                used += nc;
             }
-            // anchor each lake to the real (eroded) basin floor: the coarse grid only knows the smoothed relief
-            double[] floors = new double[comps.size()];
-            par(java.util.stream.IntStream.range(0, comps.size()), serial).forEach(q0 -> {
-                double[] cp = comps.get(q0);
-                int st = (int) cp[0], nc = (int) cp[1];
-                double botF = 1e9;
-                for (int q = 0, step = Math.max(1, nc / 24); q < nc; q += step) {
-                    int c = cells[st + q], ci = c % nx, cj = (c - ci) / nx;
-                    botF = Math.min(botF, finalHeight(x0 + (ci + 0.5) * g, y0 + (cj + 0.5) * g, s));
-                }
-                floors[q0] = botF;
-            });
-            for (int q0 = 0; q0 < comps.size(); q0++) {
-                double[] cp = comps.get(q0);
-                int st = (int) cp[0], nc = (int) cp[1];
-                double lev = cp[2], rr = cp[3], bot = cp[4], botF = floors[q0];
-                double mm = rr / nc * 1000, frac = ss(250, 700, mm);
-                boolean salt = frac < 0.12;
-                double level = bot + (lev - bot) * (salt ? 0.1 : 0.25 + 0.75 * frac);
-                if (botF < bot) level += botF - bot;
-                level = Math.min(level, spill - 1);
-                if (level <= Math.min(bot, botF)) continue;
-                for (int q = 0; q < nc; q++) {
-                    int c = cells[st + q];
-                    if (hgt[c] < level) lakes.put(c, salt ? -level : level);
-                }
+            if (nc < 2) continue;
+            // the level set below only ends lower than this (the real floor can only lower it), and no cell of the
+            // depression lies below bot: such a depression never holds water, so its floor is not worth sampling
+            double frac0 = ss(250, 700, rr / nc * 1000);
+            if (Math.min(bot + (lev - bot) * (frac0 < 0.12 ? 0.1 : 0.25 + 0.75 * frac0), spill - 1) <= bot) continue;
+            comps.add(new double[] { used, nc, lev, rr, bot });
+            used += nc;
+        }
+        // anchor each lake to the real (eroded) basin floor: the coarse grid only knows the smoothed relief
+        final double[] floors = new double[comps.size()];
+        par(java.util.stream.IntStream.range(0, comps.size()), serial).forEach(q0 -> {
+            double[] cp = comps.get(q0);
+            int st = (int) cp[0], nc = (int) cp[1];
+            double botF = 1e9;
+            for (int q = 0, step = Math.max(1, nc / 24); q < nc; q += step) {
+                int c = cells[st + q], ci = c % nx, cj = (c - ci) / nx;
+                botF = Math.min(botF, finalHeight(x0 + (ci + 0.5) * g, y0 + (cj + 0.5) * g, s));
+            }
+            floors[q0] = botF;
+        });
+        for (int q0 = 0; q0 < comps.size(); q0++) {
+            double[] cp = comps.get(q0);
+            int st = (int) cp[0], nc = (int) cp[1];
+            double lev = cp[2], rr = cp[3], bot = cp[4], botF = floors[q0];
+            double mm = rr / nc * 1000, frac = ss(250, 700, mm);
+            boolean salt = frac < 0.12;
+            double level = bot + (lev - bot) * (salt ? 0.1 : 0.25 + 0.75 * frac);
+            if (botF < bot) level += botF - bot;
+            level = Math.min(level, spill - 1);
+            if (level <= Math.min(bot, botF)) continue;
+            for (int q = 0; q < nc; q++) {
+                int c = cells[st + q];
+                if (hgt[c] < level) lakes.put(c, salt ? -level : level);
             }
         }
+    }
 
-        tLap = lap(GenStats.RIVER_LAKES, tLap);
+    /** Flow accumulation (upstream → downstream), river nodes, their widths and main upstream branch. */
+    private void accumulate() {
+        final int n = this.n, cnt = this.cnt;
+        final float[] hgt = this.hgt;
+        final int[] order = this.order, recv = this.recv;
+        final boolean[] own = this.own;
+        final double thr = this.thr;
         // flow accumulation (upstream → downstream) and maximum basin relief
-        float[] acc = run.clone(), relief = new float[n];
+        float[] acc = this.acc = run.clone(), relief = this.relief = new float[n];
         for (int idx = 0; idx < n; idx++) relief[idx] = Math.max(0, hgt[idx]);
         for (int k = cnt - 1; k >= 0; k--) {
             int idx = order[k], r = recv[idx];
@@ -720,9 +792,9 @@ final class RiverNetBuilder {
                 if (relief[idx] > relief[r]) relief[r] = relief[idx];
             }
         }
-        boolean[] isRiv = new boolean[n];
-        float[] hw = new float[n];
-        int[] mainUp = new int[n];
+        boolean[] isRiv = this.isRiv = new boolean[n];
+        float[] hw = this.hw = new float[n];
+        int[] mainUp = this.mainUp = new int[n];
         Arrays.fill(mainUp, -1);
         int count = 0;
         for (int idx = 0; idx < n; idx++) {
@@ -732,19 +804,30 @@ final class RiverNetBuilder {
                 hw[idx] = halfWidth(acc[idx] / thr);
             }
         }
+        this.count = count;
         for (int idx = 0; idx < n; idx++) {
             if (!isRiv[idx]) continue;
             int r = recv[idx], m = mainUp[r];
             if (m < 0 || acc[idx] > acc[m]) mainUp[r] = idx;
         }
+    }
 
-        tLap = lap(GenStats.RIVER_ACC, tLap);
-        // water profile projected onto the final terrain: each river node takes the floor of the eroded valley
-        // around it (cross-section samples), then the profile is made monotone downstream (water never climbs).
-        // The coarse "filled" profile only knows the smoothed relief and sits above the real valley floor.
+    private float[] relief;
+
+    /**
+     * Water profile projected onto the final terrain: each river node takes the floor of the eroded valley around it
+     * (cross-section samples), then the profile is made monotone downstream (water never climbs). The coarse "filled"
+     * profile only knows the smoothed relief and sits above the real valley floor.
+     */
+    private void waterLevels(BasinGraph.Cell cell, BasinGraph graph) {
+        final int nx = this.nx, ny = this.ny, n = this.n, cnt = this.cnt, exitIdx = this.exitIdx;
+        final float[] hgt = this.hgt, acc = this.acc, hw = this.hw, inflow = this.inflow;
+        final int[] order = this.order, recv = this.recv, mainUp = this.mainUp;
+        final boolean[] isRiv = this.isRiv, entry = this.entry;
+        final double thr = this.thr;
         // the upstream basins already know the level their water leaves at: start from it, so the river never climbs
         // when it crosses a divide (builds them if needed; no cycles, a basin only depends on those draining into it)
-        float[] entryLevel = new float[n];
+        final float[] entryLevel = new float[n];
         Arrays.fill(entryLevel, Float.NaN);
         for (BasinGraph.Cell ch : graph.children(cell)) {
             int ei = BasinGraph.keyA(ch.exitNode) - gx0, ej = BasinGraph.keyB(ch.exitNode) - gy0;
@@ -752,13 +835,12 @@ final class RiverNetBuilder {
             float lv = gen.rivers.exit(ch.ci, ch.cj).level;
             if (lv == lv) entryLevel[ej * nx + ei] = lv;
         }
-        float[] wl = filled.clone();
-        final float[] wlf = wl;
+        final float[] wl = this.wl = filled.clone();
         par(java.util.stream.IntStream.range(0, n), serial).forEach(idx -> { // independent per river node
             if (entry[idx]) // divide node shared with the upstream basin: its exit level, or the same floor sample
-                wlf[idx] = entryLevel[idx] == entryLevel[idx] ? entryLevel[idx]
+                wl[idx] = entryLevel[idx] == entryLevel[idx] ? entryLevel[idx]
                     : (float) Math.max(0, valleyFloor(idx, idx, halfWidth(inflow[idx] / thr), null));
-            else if (isRiv[idx]) wlf[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
+            else if (isRiv[idx]) wl[idx] = (float) Math.max(0, valleyFloor(idx, recv[idx], hw[idx], null));
         });
         if (exitIdx >= 0) wl[exitIdx] = (float) Math.max(0, valleyFloor(exitIdx, exitIdx, halfWidth(acc[exitIdx] / thr), null));
         for (int k = cnt - 1; k >= 0; k--) { // upstream before downstream (reverse flood order)
@@ -792,7 +874,7 @@ final class RiverNetBuilder {
         }
         // waterfalls: where the main stem crosses a cliff (plateau scarp, rift fault, sea cliff) it keeps its level up to
         // the lip and drops there, instead of being lowered upstream into a gorge
-        final float[] fallDrop = new float[n], fallT = new float[n];
+        final float[] fallDrop = this.fallDrop = new float[n], fallT = this.fallT = new float[n];
         findFalls(wl, recv, isRiv, mainUp, hgt, scarpG, n, fallDrop, fallT, serial);
         // ...and no other reach drops more than MAX_DROP per grid cell into its receiver: tributaries descend to the level
         // of the river they join instead of hanging above its deeper valley (downstream first, so it chains upstream)
@@ -802,8 +884,16 @@ final class RiverNetBuilder {
             if (fallDrop[idx] > 0) continue;
             if (isRiv[idx] && r >= 0 && hgt[r] >= 0 && wl[idx] > wl[r] + MAX_DROP) wl[idx] = (float) (wl[r] + MAX_DROP);
         }
+    }
 
-        tLap = lap(GenStats.RIVER_LEVELS, tLap);
+    /** River reaches as quadratic Béziers with meanders on gentle reaches, river mouths and estuary reaches. */
+    private void reaches() {
+        final int nx = this.nx, n = this.n, cnt = this.cnt, count = this.count;
+        final float[] hgt = this.hgt, acc = this.acc, hw = this.hw, wl = this.wl, filled = this.filled,
+            fallDrop = this.fallDrop, fallT = this.fallT, relief = this.relief;
+        final int[] order = this.order, recv = this.recv, mainUp = this.mainUp;
+        final boolean[] isRiv = this.isRiv, entry = this.entry;
+        final double thr = this.thr;
         // meanders: only on gentle, well-fed reaches and never on a sharp bend
         final double AMAX = 1.3 * g, MA = P.meanders;
         float[] straight = new float[n];
@@ -816,16 +906,17 @@ final class RiverNetBuilder {
             straight[idx] = (float) ss(1.5, 0.45, ang);
         }
 
-        int[] slot = new int[n];
+        int[] slot = this.slot = new int[n];
         Arrays.fill(slot, -1);
-        float[] pts = new float[count * NPT * 2], bb = new float[count * 4];
-        float[] w0 = new float[count], w1 = new float[count], z0 = new float[count], z1 = new float[count],
-            sacc = new float[count];
-        float[] ph0 = new float[count], ph1 = new float[count], am0 = new float[count], am1 = new float[count];
-        float[] fallIn = new float[count];
-        byte[] lipOut = new byte[count];
-        float[] aUp = new float[count], cellA = new float[n];
-        byte[] head = new byte[count];
+        float[] pts = this.pts = new float[count * NPT * 2], bb = this.bb = new float[count * 4];
+        float[] w0 = this.w0 = new float[count], w1 = this.w1 = new float[count], z0 = this.z0 = new float[count],
+            z1 = this.z1 = new float[count], sacc = this.sacc = new float[count];
+        float[] ph0 = new float[count], ph1 = new float[count], am0 = this.am0 = new float[count],
+            am1 = this.am1 = new float[count];
+        float[] fallIn = this.fallIn = new float[count];
+        byte[] lipOut = this.lipOut = new byte[count];
+        float[] aUp = new float[count], cellA = this.cellA = new float[n];
+        byte[] head = this.head = new byte[count];
         double[] BX = new double[NPT], BY = new double[NPT], TX = new double[NPT], TY = new double[NPT],
             LA = new double[NPT];
         double[] mouths = new double[12 * 64];
@@ -957,12 +1048,14 @@ final class RiverNetBuilder {
                 }
             }
         }
+        this.reach = reach;
+        this.nm = nm;
         // estuary reaches: the main stem upstream of each mouth, up to Lest
-        int[] estSeg = new int[64 * Math.max(1, nm)];
+        int[] estSeg = this.estSeg = new int[64 * Math.max(1, nm)];
         int ne = 0;
         float[] M = new float[nm * 12];
         for (int q = 0; q < nm * 12; q++) M[q] = (float) mouths[q];
-        float[] mouthsOut = new float[nm * RiverNet.MS];
+        float[] mouthsOut = this.mouthsOut = new float[nm * RiverNet.MS];
         for (int q = 0; q < nm; q++) {
             System.arraycopy(M, q * 12, mouthsOut, q * RiverNet.MS, 12);
             int start = ne;
@@ -979,13 +1072,17 @@ final class RiverNetBuilder {
             mouthsOut[q * RiverNet.MS + 12] = start;
             mouthsOut[q * RiverNet.MS + 13] = ne - start;
         }
+        this.ne = ne;
+    }
 
-        byte[] skip = new byte[count];
-        DeltaOut dOut = new DeltaOut();
-        tLap = lap(GenStats.RIVER_REACHES, tLap);
-        // shared deltas: branches join those of deltas traced before them where they meet. First the deltas of the
-        // lower-coloured neighbouring coastal cells (built first if needed: colours strictly decrease, no cycles), then
-        // this network's own, largest river first
+    /**
+     * Shared deltas: branches join those of deltas traced before them where they meet. First the deltas of the
+     * lower-coloured neighbouring coastal cells (built first if needed: colours strictly decrease, no cycles), then this
+     * network's own, largest river first.
+     */
+    private void deltas(BasinGraph.Cell cell, BasinGraph graph, GenScratch s) {
+        skip = new byte[count];
+        dOut = new DeltaOut();
         Foreign fs = new Foreign();
         if (cell.outlet) for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
             if ((di | dj) == 0) continue;
@@ -1004,40 +1101,44 @@ final class RiverNetBuilder {
                 ck);
             fs.addChannels(dOut.v, dOut.ch, c0, dOut.nc);
         }
+    }
 
-        tLap = lap(GenStats.RIVER_DELTAS, tLap);
-        // broad valley field: chamfer distance from every land cell to the nearest river cell
+    /** Broad valley field: chamfer distance from every land cell to the nearest river cell, and what that river is. */
+    private void valleyField() {
+        final int nx = this.nx, ny = this.ny, n = this.n;
+        final float[] hgt = this.hgt, hw = this.hw, wl = this.wl, fallDrop = this.fallDrop, fallT = this.fallT,
+            cellA = this.cellA;
+        final int[] recv = this.recv, slot = this.slot;
+        final boolean[] isRiv = this.isRiv;
+        final byte[] skip = this.skip;
         final double VLIM = 900;
         float[] dd = new float[n];
         Arrays.fill(dd, 1e9f);
         int[] src = new int[n];
         Arrays.fill(src, -1);
-        for (int idx = 0; idx < n; idx++) if (isRiv[idx] && skip[slot[idx]] == 0) { // not the stretch a delta replaced
-            dd[idx] = 0;
-            src[idx] = idx;
+        final int CHAMFER_PAD = 32;
+        int ri0 = nx, rj0 = ny, ri1 = -1, rj1 = -1; // box of all river cells
+        boolean skippedFall = false;
+        for (int idx = 0; idx < n; idx++) {
+            if (!isRiv[idx]) continue;
+            int i = idx % nx, j = idx / nx;
+            ri0 = Math.min(ri0, i);
+            ri1 = Math.max(ri1, i);
+            rj0 = Math.min(rj0, j);
+            rj1 = Math.max(rj1, j);
+            if (skip[slot[idx]] == 0) { // not the stretch a delta replaced
+                dd[idx] = 0;
+                src[idx] = idx;
+            } else if (fallDrop[idx] > 0) skippedFall = true;
         }
-        final double DG = g * Math.sqrt(2);
-        for (int pass = 0; pass < 2; pass++) {
-            for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
-                int idx = j * nx + i;
-                // the distance to the rivers spreads over the margin too: the valley fades out before the grid ends
-                if (i > 0) relax(dd, src, idx, idx - 1, g);
-                if (j > 0) {
-                    relax(dd, src, idx, idx - nx, g);
-                    if (i > 0) relax(dd, src, idx, idx - nx - 1, DG);
-                    if (i < nx - 1) relax(dd, src, idx, idx - nx + 1, DG);
-                }
-            }
-            for (int j = ny - 1; j >= 0; j--) for (int i = nx - 1; i >= 0; i--) {
-                int idx = j * nx + i;
-                if (i < nx - 1) relax(dd, src, idx, idx + 1, g);
-                if (j < ny - 1) {
-                    relax(dd, src, idx, idx + nx, g);
-                    if (i < nx - 1) relax(dd, src, idx, idx + nx + 1, DG);
-                    if (i > 0) relax(dd, src, idx, idx + nx - 1, DG);
-                }
-            }
-        }
+        // Only the river box plus CHAMFER_PAD cells is swept. Outside it every cell is at least (CHAMFER_PAD + 1) * g =
+        // 1056 blocks from any river, so it is dropped anyway (VLIM), and nothing it relays back inside can beat a cell's
+        // distance below that. Everything that reads the field (below VLIM, and the pool re-assignment below, whose
+        // Euclidean distance under VLIM means a chamfer distance under 1.083 * VLIM) is unchanged. A fall inside a
+        // stretch replaced by a delta is not a source, so then the whole grid is swept as before.
+        if (skippedFall || ri1 < 0) chamfer(dd, src, nx, 0, nx - 1, 0, ny - 1, g);
+        else chamfer(dd, src, nx, Math.max(0, ri0 - CHAMFER_PAD), Math.min(nx - 1, ri1 + CHAMFER_PAD),
+            Math.max(0, rj0 - CHAMFER_PAD), Math.min(ny - 1, rj1 + CHAMFER_PAD), g);
         // below a waterfall the valley belongs to the pool only on low ground: cells up at the level of the lip take the
         // river above the fall (otherwise the valley of the pool would cut a ramp into the cliff behind the lip)
         int[] poolTop = null; // river nodes just below a fall → the node at its lip
@@ -1068,10 +1169,10 @@ final class RiverNetBuilder {
             }
             lrel[idx] = (float) Math.max(0, mxh - wl[idx]);
         }
-        char[] vd = new char[n];
+        char[] vd = this.vd = new char[n];
         Arrays.fill(vd, (char) 65535);
-        short[] vz = new short[n];
-        byte[] vw = new byte[n], va = new byte[n], vr = new byte[n];
+        short[] vz = this.vz = new short[n];
+        byte[] vw = this.vw = new byte[n], va = this.va = new byte[n], vr = this.vr = new byte[n];
         for (int idx = 0; idx < n; idx++) {
             int sI = src[idx];
             if (sI < 0 || dd[idx] >= VLIM) continue;
@@ -1096,8 +1197,39 @@ final class RiverNetBuilder {
                 if (hypot(jx(c) - lx, jy(c) - ly) < 1.6 * g) vd[c] = (char) 65535;
             }
         }
+    }
 
-        lap(GenStats.RIVER_VALLEY, tLap);
+    /**
+     * Two-pass 8-neighbour chamfer distance (forward and backward raster sweeps, twice: the second pairs settle the
+     * float rounding of the first and do change values, so both stay). The distance spreads over the margin too: the
+     * valley fades out before the grid ends. Sweeps the cells [i0, i1] x [j0, j1] of a grid nx wide; cells outside
+     * stay untouched.
+     */
+    private static void chamfer(float[] dd, int[] src, int nx, int i0, int i1, int j0, int j1, double g) {
+        final double DG = g * Math.sqrt(2);
+        for (int pass = 0; pass < 2; pass++) {
+            for (int j = j0; j <= j1; j++) for (int i = i0; i <= i1; i++) {
+                int idx = j * nx + i;
+                if (i > i0) relax(dd, src, idx, idx - 1, g);
+                if (j > j0) {
+                    relax(dd, src, idx, idx - nx, g);
+                    if (i > i0) relax(dd, src, idx, idx - nx - 1, DG);
+                    if (i < i1) relax(dd, src, idx, idx - nx + 1, DG);
+                }
+            }
+            for (int j = j1; j >= j0; j--) for (int i = i1; i >= i0; i--) {
+                int idx = j * nx + i;
+                if (i < i1) relax(dd, src, idx, idx + 1, g);
+                if (j < j1) {
+                    relax(dd, src, idx, idx + nx, g);
+                    if (i < i1) relax(dd, src, idx, idx + nx + 1, DG);
+                    if (i > i0) relax(dd, src, idx, idx + nx - 1, DG);
+                }
+            }
+        }
+    }
+
+    private RiverNet assemble(BasinGraph.Cell cell) {
         RiverNet net = new RiverNet();
         net.exitLevel = exitIdx >= 0 ? wl[exitIdx] : Float.NaN;
         net.exitFlow = exitIdx >= 0 ? acc[exitIdx] : 0;
