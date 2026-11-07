@@ -483,7 +483,8 @@ public class RiverStage extends GenStage {
         }
         // in phases across networks: all valleys first, then all channels (so each channel measures its water against
         // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
-        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase);
+        FieldMemo m = FIELD_MEMO.get();
+        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase, m, q);
         // last reach drowned by the sea (fjord, estuary): only where the river is at sea level anyway. A deep channel
         // inland keeps its own water (otherwise its middle would drop to sea level between higher river water)
         if (o.h < -1 && o.river != 0 && o.delta == 0 && o.riverWL < 1) {
@@ -492,8 +493,25 @@ public class RiverStage extends GenStage {
         }
     }
 
+    /**
+     * What the channel phase reads of the valley field of each network at the current point, kept from the valley phase
+     * (the field depends only on the point and the network: sampling it once per network instead of twice).
+     */
+    private static final class FieldMemo {
+
+        final boolean[] ok = new boolean[9];
+        final double[] fe = new double[9], few = new double[9], fr = new double[9];
+    }
+
+    private static final ThreadLocal<FieldMemo> FIELD_MEMO = ThreadLocal.withInitial(FieldMemo::new);
+
     /** Applies one phase of one basin network: 0 delta + broad valley, 1 channel, 2 estuary + lakes. */
     protected void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase) {
+        applyNet(x, y, o, s, net, phase, null, 0);
+    }
+
+    /** As above; m (when not null) carries the valley field of network mq from phase 0 to phase 1 of the same point. */
+    private void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase, FieldMemo m, int mq) {
         if (phase == 2) {
             if (net.nMouth > 0) deltas(x, y, o, net, true); // distributaries, after the river channels
             if (net.estSeg.length > 0) estuaries(x, y, o, net);
@@ -503,7 +521,20 @@ public class RiverStage extends GenStage {
         if (net.count == 0) return;
         if (phase == 0 && net.nMouth > 0) deltas(x, y, o, net, false);
         // valley shape from the rock (interpolated from the network grid so it changes smoothly between patches)
-        netField(x, y, net, s);
+        if (m == null || phase == 0) {
+            netField(x, y, net, s);
+            if (m != null) {
+                m.ok[mq] = s.FOK;
+                m.fe[mq] = s.FE;
+                m.few[mq] = s.FEW;
+                m.fr[mq] = s.FR;
+            }
+        } else { // phase 1 reads only these
+            s.FOK = m.ok[mq];
+            s.FE = m.fe[mq];
+            s.FEW = m.few[mq];
+            s.FR = m.fr[mq];
+        }
         double ef = clamp(lerp(0.5, (lerp(o.erod, s.FE, s.FEW) - 0.2) / 0.7, P.valleyRock), 0, 1);
         o.gorge = 1 - ef;
         if (o.L >= -0.04) {
