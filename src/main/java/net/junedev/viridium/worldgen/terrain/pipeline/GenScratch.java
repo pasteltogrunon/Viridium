@@ -27,6 +27,19 @@ public final class GenScratch {
     public boolean riversOff;
     /** Blocks per pixel of the current evaluation (1 in game): coarse caches step aside when it outgrows them. */
     public double bpp = 1;
+    /**
+     * Map previews: use only river networks already built (never build one, or anything that would build one); the
+     * river stage sets {@link #riversIncomplete} when it skipped a network that shapes the point. Reset by the caller.
+     */
+    public boolean riversCachedOnly, riversIncomplete;
+    /**
+     * Map previews: coarse height lattice of the tile being drawn ({@code heightAt(x, z, false)} on a square grid of
+     * {@code latticeN}² nodes from (latticeX0, latticeZ0), spacing latticeStep), from which the erosion gradient is taken
+     * instead of 4 heightAt calls per pixel. Null in game; set and cleared (in a finally) by the map renderer.
+     */
+    public float[] reliefLattice;
+    public double latticeX0, latticeZ0, latticeStep;
+    public int latticeN;
     /** Plate stage: distance to each neighbour's bisector, segment distances. */
     public final double[] LD = new double[25], SEGD = new double[25];
     /**
