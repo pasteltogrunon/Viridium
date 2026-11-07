@@ -106,8 +106,9 @@ public class CubeFiller {
                 int i = ColumnPlan.index(lx, lz);
                 if (kind == Kind.AIR) continue;
                 if (kind == Kind.CRUST) {
+                    s.column(cp, i, lx, lz); // per-column state (constant zones, strata memo) for the 16 blocks
                     for (int ly = 0; ly < 16; ly++) {
-                        net.junedev.viridium.worldgen.terrain.crust.Lithology r = s.at(cp, i, lx, ly, lz);
+                        net.junedev.viridium.worldgen.terrain.crust.Lithology r = s.at(ly);
                         Block b = lith[r.ordinal()];
                         if (cv != null) {
                             byte c = cv.at(lx, ly, lz, r);
@@ -183,6 +184,8 @@ public class CubeFiller {
             int meta = 0;
             if (y <= sy) {
                 int depth = sy - y;
+                // the rock is sampled once, and only where it shows or a cave needs it
+                net.junedev.viridium.worldgen.terrain.crust.Lithology rock = null;
                 if (depth == 0 && sc.top != null) {
                     b = sc.top;
                     meta = sc.topMeta;
@@ -190,9 +193,13 @@ public class CubeFiller {
                     b = sc.under;
                     if (sc.bands) meta = SurfaceRules.bandMeta(y, x, z);
                     else meta = sc.underMeta;
-                } else b = lith[s.at(plan.crust, i, lx, ly, lz).ordinal()];
+                } else {
+                    rock = s.at(plan.crust, i, lx, ly, lz);
+                    b = lith[rock.ordinal()];
+                }
                 if (cv != null && y <= caveTop) {
-                    byte c = cv.at(lx, ly, lz, s.at(plan.crust, i, lx, ly, lz));
+                    if (rock == null) rock = s.at(plan.crust, i, lx, ly, lz);
+                    byte c = cv.at(lx, ly, lz, rock);
                     if (c != net.junedev.viridium.worldgen.terrain.caves.CaveCarver.SOLID) {
                         b = caveBlock(c);
                         meta = 0;

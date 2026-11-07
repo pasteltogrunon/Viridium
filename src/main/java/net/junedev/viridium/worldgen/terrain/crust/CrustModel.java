@@ -59,6 +59,11 @@ public class CrustModel {
 
         final Lithology[] lith;
         final double[] w;
+        /**
+         * Per surface rock ({@code Rock} ordinal): which entries it favours. Precomputed because a pick runs for
+         * every cover block; the weights it yields are the same values as matching against the favoured list.
+         */
+        final boolean[][] favoured = new boolean[Rock.VALUES.length][];
 
         Palette(Object... pairs) {
             int n = pairs.length / 2;
@@ -68,23 +73,25 @@ public class CrustModel {
                 lith[i] = (Lithology) pairs[2 * i];
                 w[i] = ((Number) pairs[2 * i + 1]).doubleValue();
             }
+            for (Rock r : Rock.VALUES) {
+                Lithology[] f = computeFavoured(r);
+                boolean[] m = new boolean[n];
+                if (f != null) for (int i = 0; i < n; i++) for (Lithology x : f) if (x == lith[i]) m[i] = true;
+                favoured[r.ordinal()] = m;
+            }
         }
 
-        /** Weighted pick; {@code bias} multiplies the weight of the lithologies matching the surface rock. */
-        Lithology pick(double r, Lithology[] favoured, double biasW) {
+        /** Weighted pick; {@code biasW} multiplies the weight of the lithologies matching the surface rock. */
+        Lithology pick(double r, int rock, double biasW) {
+            boolean[] fav = favoured[rock];
             double total = 0;
-            for (int i = 0; i < lith.length; i++) total += weight(i, favoured, biasW);
+            for (int i = 0; i < lith.length; i++) total += fav[i] ? w[i] * biasW : w[i];
             double t = r * total;
             for (int i = 0; i < lith.length; i++) {
-                t -= weight(i, favoured, biasW);
+                t -= fav[i] ? w[i] * biasW : w[i];
                 if (t < 0) return lith[i];
             }
             return lith[lith.length - 1];
-        }
-
-        private double weight(int i, Lithology[] favoured, double biasW) {
-            if (favoured != null) for (Lithology f : favoured) if (f == lith[i]) return w[i] * biasW;
-            return w[i];
         }
     }
 
@@ -101,16 +108,6 @@ public class CrustModel {
     private static final Palette LIP_COVER = new Palette(BASALT, 6, SCORIA, 1, TUFF, 0.6);
     private static final Palette PELAGIC = new Palette(CHERT, 2, MUDSTONE, 2, CHALK, 1, LIMESTONE, 0.5);
     private static final Palette ISLAND = new Palette(BASALT, 5, SCORIA, 1.5, TUFF, 1);
-
-    private static final Lithology[][] FAVOURED = new Lithology[Rock.VALUES.length][];
-
-    static {
-        for (Rock r : Rock.VALUES) FAVOURED[r.ordinal()] = computeFavoured(r);
-    }
-
-    private static Lithology[] favouredBy(int rock) {
-        return FAVOURED[rock];
-    }
 
     private static Lithology[] computeFavoured(Rock r) {
         return switch (r) {
@@ -285,6 +282,7 @@ public class CrustModel {
 
     // ------------------------------------------------------------------ per-block lithology
 
+
     /**
      * Lithology at absolute (x, y, z) of column i.
      *
@@ -292,6 +290,14 @@ public class CrustModel {
      * @param blob smooth 3D noise in [0, 1) (plutons, pods)
      */
     public Lithology lithology(CrustPlan cp, int i, int x, int y, int z, double disp, double blob) {
+        return lithology(cp, i, y, disp, blob, null);
+    }
+
+    /**
+     * The lithology itself. With a sampler {@code s}, {@code blob} is ignored and read from {@code s} only in the
+     * branches that use it (chromitite pods, plutons), and the strata of the cover are memoised in {@code s}.
+     */
+    private Lithology lithology(CrustPlan cp, int i, int y, double disp, double blob, Sampler s) {
         int flags = cp.flags[i];
         int surface = cp.surface[i];
         double yd = y + (disp - 0.5) * 2 * DISPLACEMENT;
@@ -308,13 +314,13 @@ public class CrustModel {
         // mantle
         if (yd < moho) {
             if ((flags & CrustPlan.FLAG_RIDGE) != 0 && yd > moho - 40) return SERPENTINITE;
-            if (yd > moho - 260 && blob > 0.91) return CHROMITITE;
+            if (yd > moho - 260 && (s != null ? s.blob() : blob) > 0.91) return CHROMITITE;
             return PERIDOTITE;
         }
         if ((flags & CrustPlan.FLAG_DIKE) != 0 && y < surface - 6) return DOLERITE;
 
         double basement = cp.basementTop[i];
-        if (yd >= basement) return cover(cp, i, prov, flags, y, yd, surface);
+        if (yd >= basement) return cover(cp, i, prov, flags, y, yd, surface, s);
 
         boolean oceanic = prov == Province.OCEANIC || prov == Province.VOLCANIC_ISLAND;
         double midTop = cp.midTop[i], lowerTop = cp.lowerTop[i];
@@ -325,8 +331,9 @@ public class CrustModel {
         }
         // plutons in the upper and middle crust
         if ((flags & CrustPlan.FLAG_PLUTONS) != 0 && yd >= lowerTop && yd < basement - 20) {
-            if (blob > 0.70) return Lithology.VALUES[cp.pluton[i]];
-            if (blob > 0.685) return PEGMATITE;
+            double b = s != null ? s.blob() : blob;
+            if (b > 0.70) return Lithology.VALUES[cp.pluton[i]];
+            if (b > 0.685) return PEGMATITE;
         }
         if (yd >= midTop) return Lithology.VALUES[cp.upper[i]];
         if (yd >= lowerTop) {
@@ -346,7 +353,7 @@ public class CrustModel {
         return f < 0.45 ? AMPHIBOLITE : GABBRO;
     }
 
-    private Lithology cover(CrustPlan cp, int i, Province prov, int flags, int y, double yd, int surface) {
+    private Lithology cover(CrustPlan cp, int i, Province prov, int flags, int y, double yd, int surface, Sampler s) {
         if ((flags & CrustPlan.FLAG_ATOLL) != 0 && y > TerrainLayout.SEA_LEVEL - 40)
             return y > TerrainLayout.SEA_LEVEL - 12 ? LIMESTONE : DOLOSTONE;
         Palette pal = switch (prov) {
@@ -364,20 +371,64 @@ public class CrustModel {
         int T = cp.strataT[i];
         double ys = y + cp.fold[i] + (yd - y) * 0.3;
         int idx = floor(ys / T);
-        double r = rnd(idx, cp.region[i], SD.strata + 1);
+        // 60+ blocks under the surface the bias weight below is exactly 1, so the unit's rock depends on idx alone and a
+        // unit (5..13 blocks) is picked once per column of the cube instead of once per block
+        boolean unbiased = surface - y >= 60;
+        double r;
+        if (s == null) r = rnd(idx, cp.region[i], SD.strata + 1);
+        else {
+            if (unbiased && idx == s.unitIdx) return s.unitLith;
+            if (idx != s.rIdx) {
+                s.rIdx = idx;
+                s.r = rnd(idx, cp.region[i], SD.strata + 1);
+            }
+            r = s.r;
+        }
         // the unit just under the surface tends to be the 2D geology's rock, deeper ones less so
         double biasW = 1 + 5 * clamp(1 - (surface - y) / 60.0, 0, 1);
-        Lithology l = pal.pick(r, favouredBy(cp.bias[i]), biasW);
+        Lithology l = pal.pick(r, cp.bias[i], biasW);
         if (l == EVAPORITE && (flags & CrustPlan.FLAG_ARID) == 0) l = MUDSTONE;
         if (l == CHALK && (flags & CrustPlan.FLAG_WARM) == 0) l = LIMESTONE;
+        if (s != null && unbiased) {
+            s.unitIdx = idx;
+            s.unitLith = l;
+        }
         return l;
+    }
+
+    /**
+     * The lithology of every block of column i in the cube starting at {@code y0}, when it cannot vary there; null when
+     * the blocks must be evaluated one by one. The displaced depth yd stays within {@link #DISPLACEMENT} of y, so if
+     * that whole range (plus a block of margin for rounding) lies inside one zone whose rock depends neither on yd nor
+     * on the blob noise, the noise need not be sampled at all: deep mantle, the oceanic layers, dike columns and the
+     * pluton-free upper crust under the cover. Covers most deep cubes and many under the sea floor.
+     */
+    private Lithology constantZone(CrustPlan cp, int i, int y0) {
+        double lo = y0 - DISPLACEMENT - 1, hi = y0 + 15 + DISPLACEMENT + 1;
+        double moho = cp.moho[i];
+        int flags = cp.flags[i];
+        float pd = cp.pipeDist[i];
+        if (pd == pd && y0 + 15 > moho - 200) return null; // a kimberlite pipe may cross the cube
+        if (hi < moho - 260) return PERIDOTITE; // below serpentinite and chromitite
+        if ((flags & CrustPlan.FLAG_DIKE) != 0) return lo >= moho && y0 + 15 < cp.surface[i] - 6 ? DOLERITE : null;
+        double basement = cp.basementTop[i], midTop = cp.midTop[i], lowerTop = cp.lowerTop[i];
+        if (lo < moho || hi >= basement) return null; // mantle or cover within reach
+        Province prov = Province.VALUES[cp.province[i]];
+        if (prov == Province.OCEANIC || prov == Province.VOLCANIC_ISLAND) {
+            if (lo >= midTop) return BASALT;
+            if (lo >= lowerTop && hi < midTop) return DOLERITE;
+            if (hi < lowerTop) return GABBRO;
+            return null;
+        }
+        if ((flags & CrustPlan.FLAG_PLUTONS) == 0 && lo >= midTop) return Lithology.VALUES[cp.upper[i]];
+        return null;
     }
 
     // ------------------------------------------------------------------ sampling helpers
 
-    /** Lithology with directly evaluated noise (map cross-sections, tools). */
+    /** Lithology with directly evaluated noise (map cross-sections, tools, single samples). */
     public Lithology lithologyAt(CrustPlan cp, int i, int x, int y, int z) {
-        return lithology(cp, i, x, y, z, dispNoise.at(x, y, z), blobNoise.at(x, y, z));
+        return lithology(cp, i, y, dispNoise.at(x, y, z), blobNoise.at(x, y, z), null);
     }
 
     /** Per-thread sampler with the 3D noise cached for one cube. */
@@ -385,21 +436,58 @@ public class CrustModel {
         return samplers.get();
     }
 
+    /**
+     * Samples the lithology of one cube: {@link #prepare} once, then either {@link #at(CrustPlan, int, int, int, int)}
+     * per block or, faster, {@link #column} per block column followed by {@link #at(int)} for its 16 blocks. Keeps per
+     * column state (a constant zone, the last strata unit), so sampling a column's blocks together is what pays off;
+     * any order gives the same values. Not thread-safe: one per thread ({@link #sampler()}).
+     */
     public final class Sampler {
 
-        private final LatticeNoise3.Cached disp = dispNoise.new Cached(), blob = blobNoise.new Cached();
-        private int bx, by, bz;
+        private final LatticeNoise3.Cached dispC = dispNoise.new Cached(), blobC = blobNoise.new Cached();
+        private int by;
+        /** The selected column: plan, index, local x/z; the block being sampled (for {@link #blob}). */
+        private CrustPlan cp;
+        private int i, lx, lz, ly;
+        /** Whole-column lithology when {@link #constantZone} found one. */
+        private Lithology constant;
+        /** Cover memo of the column: last strata unit's random value, and last unbiased unit's lithology. */
+        int rIdx, unitIdx;
+        double r;
+        Lithology unitLith;
 
         public void prepare(int blockX, int blockY, int blockZ) {
-            bx = blockX;
             by = blockY;
-            bz = blockZ;
-            disp.prepare(blockX, blockY, blockZ);
-            blob.prepare(blockX, blockY, blockZ);
+            dispC.prepare(blockX, blockY, blockZ);
+            blobC.prepare(blockX, blockY, blockZ);
+            cp = null;
+        }
+
+        /** Selects column i (at local lx, lz) of the prepared cube for {@link #at(int)}. */
+        public void column(CrustPlan cp, int i, int lx, int lz) {
+            if (cp == this.cp && i == this.i) return;
+            this.cp = cp;
+            this.i = i;
+            this.lx = lx;
+            this.lz = lz;
+            rIdx = unitIdx = Integer.MIN_VALUE;
+            constant = constantZone(cp, i, by);
+        }
+
+        /** Lithology at local height ly of the selected column. */
+        public Lithology at(int ly) {
+            if (constant != null) return constant;
+            this.ly = ly;
+            return lithology(cp, i, by + ly, dispC.at(lx, ly, lz), 0, this);
         }
 
         public Lithology at(CrustPlan cp, int i, int lx, int ly, int lz) {
-            return lithology(cp, i, bx + lx, by + ly, bz + lz, disp.at(lx, ly, lz), blob.at(lx, ly, lz));
+            column(cp, i, lx, lz);
+            return at(ly);
+        }
+
+        double blob() {
+            return blobC.at(lx, ly, lz);
         }
     }
 }
