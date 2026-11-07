@@ -739,6 +739,10 @@ final class RiverNetBuilder {
                 }
             }
             if (nc < 2) continue;
+            // the level set below only ends lower than this (the real floor can only lower it), and no cell of the
+            // depression lies below bot: such a depression never holds water, so its floor is not worth sampling
+            double frac0 = ss(250, 700, rr / nc * 1000);
+            if (Math.min(bot + (lev - bot) * (frac0 < 0.12 ? 0.1 : 0.25 + 0.75 * frac0), spill - 1) <= bot) continue;
             comps.add(new double[] { used, nc, lev, rr, bot });
             used += nc;
         }
