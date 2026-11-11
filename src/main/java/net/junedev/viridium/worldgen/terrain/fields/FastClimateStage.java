@@ -17,7 +17,8 @@ public class FastClimateStage extends ClimateStage {
 
     public FastClimateStage(WorldGen gen) {
         super(gen);
-        // 1024-block tiles: the ocean-current probes reach 6000 and 10800 blocks away (plateSize 12000) and use a few nodes
+        // 1024-block tiles: the ocean-current probes reach 6000 and 10800 blocks away (plateSize 12000) and use a few
+        // nodes
         // there; 2048-block tiles built 2.3-2.8x more nodes for a new area. Same 8 MB bound, same values.
         this.grid = new HeightGrid(gen, 32, 32, 1024);
     }

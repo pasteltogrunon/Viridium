@@ -31,7 +31,9 @@ public final class BasinGraph {
 
         public final int ci, cj;
         public final double fx, fy;
-        /** Continentality at the feature point, and the drainage potential (continentality plus large-scale valleys). */
+        /**
+         * Continentality at the feature point, and the drainage potential (continentality plus large-scale valleys).
+         */
         public final double L, potential;
         public final boolean ocean;
         /** Drains straight to the sea (true) or has no lower neighbour (terminal = endorheic). */
@@ -124,7 +126,8 @@ public final class BasinGraph {
                 int p = 0;
                 while (p < np && pal[p] != c) p++;
                 if (p == np) {
-                    if (np == 256) return null; // never in practice (a tile spans ~1 basin cell): no tile, cellAt per node
+                    if (np == 256) return null; // never in practice (a tile spans ~1 basin cell): no tile, cellAt per
+                                                // node
                     if (np == pal.length) pal = java.util.Arrays.copyOf(pal, np * 2);
                     pal[np++] = c;
                 }
@@ -191,7 +194,8 @@ public final class BasinGraph {
     /** Basin cell containing (x, y), packed (ci, cj). Warped so divides are irregular. */
     public long cellAt(double x, double y) {
         double wa = 0.22 * B, ws = 0.6 * B;
-        double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3), wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
+        double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3),
+            wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
         int ci = floor(wx / B), cj = floor(wy / B);
         Feats f = feats(ci, cj);
         double best = Double.POSITIVE_INFINITY;
@@ -217,14 +221,18 @@ public final class BasinGraph {
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
     }
 
-    /** Same as {@link #nearCells(double, double, double)} into the scratch arrays (no allocation): count in, keys in s.NCK. */
+    /**
+     * Same as {@link #nearCells(double, double, double)} into the scratch arrays (no allocation): count in, keys in
+     * s.NCK.
+     */
     public int nearCells(double x, double y, double margin, GenScratch s) {
         return nearCellsInto(x, y, margin, s.NCK);
     }
 
     private int nearCellsInto(double x, double y, double margin, long[] out) {
         double wa = 0.22 * B, ws = 0.6 * B;
-        double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3), wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
+        double wx = x + wa * fbm(x / ws, y / ws, SD.basinW, 3),
+            wy = y + wa * fbm(x / ws + 7.3, y / ws - 2.1, SD.basinW + 5, 3);
         int ci = floor(wx / B), cj = floor(wy / B);
         Feats f = feats(ci, cj);
         final double[] fx = f.fx, fy = f.fy;
@@ -308,7 +316,8 @@ public final class BasinGraph {
         if (c.linked) return;
         if (!c.ocean) {
             // a cell with its own stretch of coast drains there: its network sends most of its water to that sea, so it
-            // must not hand its whole flow on to a neighbour (which would get a huge river out of nowhere, e.g. on an islet)
+            // must not hand its whole flow on to a neighbour (which would get a huge river out of nowhere, e.g. on an
+            // islet)
             if (c.L < COAST_L || seaFraction(c) > 0.1) c.outlet = true;
             else {
                 // candidates: the neighbours closer to the sea (so it always reaches the coast), the one deepest in a
@@ -319,8 +328,9 @@ public final class BasinGraph {
                     Cell n = raw(c.ci + di, c.cj + dj);
                     if (n.L < c.L) cand.add(n);
                 }
-                cand.sort((a, b) -> a.potential != b.potential ? Double.compare(a.potential, b.potential)
-                    : Long.compare(key(a.ci, a.cj), key(b.ci, b.cj)));
+                cand.sort(
+                    (a, b) -> a.potential != b.potential ? Double.compare(a.potential, b.potential)
+                        : Long.compare(key(a.ci, a.cj), key(b.ci, b.cj)));
                 c.terminal = true;
                 for (Cell n : cand) {
                     long exit = findExit(c, n);
@@ -358,8 +368,8 @@ public final class BasinGraph {
         int gi0 = floor((mx - H) / g), gj0 = floor((my - H) / g), n = (int) Math.ceil(2 * H / g) + 1;
         long ck = key(c.ci, c.cj), rk = key(r.ci, r.cj);
         long[] member = new long[n * n];
-        for (int j = 0; j < n; j++) for (int i = 0; i < n; i++)
-            member[j * n + i] = cellAt((gi0 + i + 0.5) * g, (gj0 + j + 0.5) * g);
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) member[j * n + i] = cellAt((gi0 + i + 0.5) * g, (gj0 + j + 0.5) * g);
         GenPoint p = pt.get();
         GenScratch s = sc.get();
         double best = Double.POSITIVE_INFINITY;
@@ -367,8 +377,8 @@ public final class BasinGraph {
         for (int j = 1; j < n - 1; j++) for (int i = 1; i < n - 1; i++) {
             if (member[j * n + i] != ck) continue;
             boolean border = false;
-            for (int dj = -1; dj <= 1 && !border; dj++) for (int di = -1; di <= 1; di++)
-                if (member[(j + dj) * n + i + di] == rk) {
+            for (int dj = -1; dj <= 1 && !border; dj++)
+                for (int di = -1; di <= 1; di++) if (member[(j + dj) * n + i + di] == rk) {
                     border = true;
                     break;
                 }

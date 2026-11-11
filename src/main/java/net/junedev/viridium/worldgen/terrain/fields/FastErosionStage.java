@@ -29,13 +29,21 @@ public class FastErosionStage extends ErosionStage {
             if (s.reliefLattice == null || !latticeGradient(x, y, o, s)) super.reliefGradient(x, y, o, bpp, s);
             return;
         }
+        if (P.erosionClimate > 0) { // the climate erosion scales with the slope: its gradient must be smooth
+            double[] g = s.GRAD;
+            grid.gradient(x, y, g);
+            o.gx = g[0];
+            o.gy = g[1];
+            return;
+        }
         final double E = 12;
         o.gx = (grid.sample(x + E, y, null) - grid.sample(x - E, y, null)) / (2 * E);
         o.gy = (grid.sample(x, y + E, null) - grid.sample(x, y - E, null)) / (2 * E);
     }
 
     /**
-     * Gradient from the map tile's relief lattice ({@link GenScratch#reliefLattice}): central difference one lattice step
+     * Gradient from the map tile's relief lattice ({@link GenScratch#reliefLattice}): central difference one lattice
+     * step
      * either side (bilinear between nodes; map pixels sit on nodes). False when (x, y) is not inside the lattice.
      */
     private static boolean latticeGradient(double x, double y, GenPoint o, GenScratch s) {

@@ -147,9 +147,12 @@ public final class FloraPlanner {
             Block ground = ground(p, lx, lz, sc);
             boolean ok = type == FeatureType.PALM ? ground == Blocks.sand || ground == Blocks.grass
                 : ground == Blocks.grass || ground == Blocks.dirt;
-            if (ok && caves != null && (caves.entrance((chunkX << 4) + lx, (chunkZ << 4) + lz)
-                || caves.nearOpening((chunkX << 4) + lx, (chunkZ << 4) + lz))) ok = false;
-            if (ok) out.add(new Feature(type, (chunkX << 4) + lx, p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
+            if (ok && caves != null
+                && (caves.entrance((chunkX << 4) + lx, (chunkZ << 4) + lz)
+                    || caves.nearOpening((chunkX << 4) + lx, (chunkZ << 4) + lz)))
+                ok = false;
+            if (ok) out.add(
+                new Feature(type, (chunkX << 4) + lx, p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
         }
         int grass = grassCount(b);
         boolean ferns = b == Biome.TAIGA || b == Biome.SNOWY_TAIGA || b == Biome.TEMPERATE_RAINFOREST;
@@ -157,16 +160,25 @@ public final class FloraPlanner {
             int lx = r.nextInt(16), lz = r.nextInt(16);
             boolean fern = ferns && r.nextInt(3) == 0;
             long s = r.nextLong();
-            if (ground(p, lx, lz, sc) == Blocks.grass && !sc.snow)
-                out.add(new Feature(fern ? FeatureType.FERN : FeatureType.TALL_GRASS, (chunkX << 4) + lx,
-                    p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
+            if (ground(p, lx, lz, sc) == Blocks.grass && !sc.snow) out.add(
+                new Feature(
+                    fern ? FeatureType.FERN : FeatureType.TALL_GRASS,
+                    (chunkX << 4) + lx,
+                    p.surfaceY[ColumnPlan.index(lx, lz)] + 1,
+                    (chunkZ << 4) + lz,
+                    s));
         }
         if (b == Biome.GRASSLAND || b == Biome.TEMPERATE_FOREST || b == Biome.ALPINE_MEADOW) {
             for (int k = 0; k < 2; k++) {
                 int lx = r.nextInt(16), lz = r.nextInt(16);
                 long s = r.nextLong();
-                if (ground(p, lx, lz, sc) == Blocks.grass && !sc.snow) out.add(new Feature(FeatureType.FLOWER,
-                    (chunkX << 4) + lx, p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
+                if (ground(p, lx, lz, sc) == Blocks.grass && !sc.snow) out.add(
+                    new Feature(
+                        FeatureType.FLOWER,
+                        (chunkX << 4) + lx,
+                        p.surfaceY[ColumnPlan.index(lx, lz)] + 1,
+                        (chunkZ << 4) + lz,
+                        s));
             }
         }
         if (b == Biome.DESERT || b == Biome.BADLANDS) {
@@ -175,9 +187,13 @@ public final class FloraPlanner {
                 int lx = r.nextInt(8) * 2, lz = r.nextInt(8) * 2;
                 boolean cactus = b == Biome.DESERT && r.nextBoolean();
                 long s = r.nextLong();
-                if (ground(p, lx, lz, sc) == Blocks.sand) out.add(new Feature(
-                    cactus ? FeatureType.CACTUS : FeatureType.DEAD_BUSH, (chunkX << 4) + lx,
-                    p.surfaceY[ColumnPlan.index(lx, lz)] + 1, (chunkZ << 4) + lz, s));
+                if (ground(p, lx, lz, sc) == Blocks.sand) out.add(
+                    new Feature(
+                        cactus ? FeatureType.CACTUS : FeatureType.DEAD_BUSH,
+                        (chunkX << 4) + lx,
+                        p.surfaceY[ColumnPlan.index(lx, lz)] + 1,
+                        (chunkZ << 4) + lz,
+                        s));
             }
         }
         if (cliffs != null) {
@@ -189,7 +205,8 @@ public final class FloraPlanner {
     }
 
     /**
-     * Fallen blocks: more of them close to the foot of tall walls, fewer further out (up to 10 blocks), on dry ground or
+     * Fallen blocks: more of them close to the foot of tall walls, fewer further out (up to 10 blocks), on dry ground
+     * or
      * on the sea floor below a sea cliff. Each is made of the rock found under its own column.
      */
     private void boulders(ColumnPlan p, net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc, Random r,
@@ -209,7 +226,8 @@ public final class FloraPlanner {
 
     /** One sample: evaluating the noise directly is cheaper than preparing a cube sampler for it. */
     private Block rockAt(ColumnPlan p, int i, int y) {
-        return lith[crust.lithologyAt(p.crust, i, (p.chunkX << 4) + (i & 15), y, (p.chunkZ << 4) + (i >> 4)).ordinal()];
+        return lith[crust.lithologyAt(p.crust, i, (p.chunkX << 4) + (i & 15), y, (p.chunkZ << 4) + (i >> 4))
+            .ordinal()];
     }
 
     /** Top block of a dry column (null when water/ice covers it or the rock is bare); fills {@code sc}. */

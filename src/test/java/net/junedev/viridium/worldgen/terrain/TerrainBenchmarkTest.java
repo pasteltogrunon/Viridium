@@ -39,8 +39,10 @@ class TerrainBenchmarkTest {
         File f = new File("build/reports/worldgen-walk.txt");
         f.getParentFile()
             .mkdirs();
-        Files.write(f.toPath(), b.report()
-            .getBytes(StandardCharsets.UTF_8));
+        Files.write(
+            f.toPath(),
+            b.report()
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     @Test

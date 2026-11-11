@@ -33,7 +33,8 @@ public final class LithologyBlocks {
             }
             b[l.ordinal()] = block;
         }
-        if (missing.length() > 0) Viridium.LOGGER.warn("Crust lithologies without a rock block (using stone):{}", missing);
+        if (missing.length() > 0)
+            Viridium.LOGGER.warn("Crust lithologies without a rock block (using stone):{}", missing);
         blocks = b;
         return b;
     }

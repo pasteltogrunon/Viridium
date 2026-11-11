@@ -44,13 +44,20 @@ public class ViridiumCommand extends CommandBase {
     /** Cache occupancy and the JVM heap (approximate sizes from the memory audit, MemoryAuditTest). */
     private static String cacheReport(ViridiumWorldGenerator vg) {
         WorldGen g = vg.gen();
-        long plans = vg.plans().size(), nets = g.rivers.cachedCount();
+        long plans = vg.plans()
+            .size(), nets = g.rivers.cachedCount();
         Runtime rt = Runtime.getRuntime();
         return String.format(
             "caches: %d column plans (~%.0f MiB), %d river networks (~%.0f MiB), %d river exits%n"
                 + "heap: %.0f MiB used of %.0f MiB reserved (max %.0f MiB)%n",
-            plans, plans * 17.8 / 1024, nets, nets * 1.05, g.rivers.exitCount(),
-            (rt.totalMemory() - rt.freeMemory()) / 1048576.0, rt.totalMemory() / 1048576.0, rt.maxMemory() / 1048576.0);
+            plans,
+            plans * 17.8 / 1024,
+            nets,
+            nets * 1.05,
+            g.rivers.exitCount(),
+            (rt.totalMemory() - rt.freeMemory()) / 1048576.0,
+            rt.totalMemory() / 1048576.0,
+            rt.maxMemory() / 1048576.0);
     }
 
     @Override
@@ -107,17 +114,32 @@ public class ViridiumCommand extends CommandBase {
         double netMs = (planner.gen().rivers.buildNanos() - netNs0) / 1e6;
         int cubes = columns * (down + up + 1);
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Viridium bench: %d columns, %d cubes (Y %d..%d)%n", columns, cubes,
-            (pcy - down) << 4, ((pcy + up) << 4) + 15));
-        sb.append(String.format("  column plan: %.3f ms each (incl. %d river network builds, %.0f ms)%n",
-            planNs / 1e6 / columns, nets, netMs));
+        sb.append(
+            String.format(
+                "Viridium bench: %d columns, %d cubes (Y %d..%d)%n",
+                columns,
+                cubes,
+                (pcy - down) << 4,
+                ((pcy + up) << 4) + 15));
+        sb.append(
+            String.format(
+                "  column plan: %.3f ms each (incl. %d river network builds, %.0f ms)%n",
+                planNs / 1e6 / columns,
+                nets,
+                netMs));
         sb.append(String.format("  cube fill: %.3f ms each on average%n", fillNs / 1e6 / cubes));
         for (CubeFiller.Kind k : CubeFiller.Kind.values()) {
             int n = kinds[k.ordinal()];
-            if (n > 0) sb.append(String.format("    %-7s %5d cubes, %.3f ms each%n", k, n, kindNs[k.ordinal()] / 1e6 / n));
+            if (n > 0)
+                sb.append(String.format("    %-7s %5d cubes, %.3f ms each%n", k, n, kindNs[k.ordinal()] / 1e6 / n));
         }
-        sb.append(String.format("  ≈ %.1f ms per column of %d cubes (sea level %d, world floor %d)",
-            (planNs + fillNs) / 1e6 / columns, down + up + 1, TerrainLayout.SEA_LEVEL, TerrainLayout.MIN_Y));
+        sb.append(
+            String.format(
+                "  ≈ %.1f ms per column of %d cubes (sea level %d, world floor %d)",
+                (planNs + fillNs) / 1e6 / columns,
+                down + up + 1,
+                TerrainLayout.SEA_LEVEL,
+                TerrainLayout.MIN_Y));
         Viridium.LOGGER.info(sb.toString());
         for (String l : sb.toString()
             .split("\n")) say(sender, l);

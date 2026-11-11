@@ -31,7 +31,12 @@ public final class MapTileCache {
 
     private static final ExecutorService POOL;
     // few, low-priority threads: the map loads a bit slower but leaves the game and the server their cores
-    private static final int THREADS = Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() / 4));
+    private static final int THREADS = Math.max(
+        1,
+        Math.min(
+            2,
+            Runtime.getRuntime()
+                .availableProcessors() / 4));
 
     static {
         AtomicInteger n = new AtomicInteger();

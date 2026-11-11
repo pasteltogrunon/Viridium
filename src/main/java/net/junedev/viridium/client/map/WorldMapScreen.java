@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.junedev.viridium.worldgen.terrain.WorldGen;
-
 import net.junedev.viridium.worldgen.terrain.column.TerrainLayout;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.crust.Lithology;
@@ -22,7 +21,6 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
-
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -207,14 +205,23 @@ public class WorldMapScreen extends GuiScreen {
         int h = 14 + entries.length * MENU_ROW + 2;
         drawRect(menuGX - 1, menuGY - 1, menuGX + MENU_W + 1, menuGY + h + 1, 0xff808080);
         drawRect(menuGX, menuGY, menuGX + MENU_W, menuGY + h, 0xf0101010);
-        drawString(fontRendererObj, String.format("X %d  Z %d", (int) Math.floor(menuX), (int) Math.floor(menuZ)),
-            menuGX + 4, menuGY + 3, 0xa0a0a0);
+        drawString(
+            fontRendererObj,
+            String.format("X %d  Z %d", (int) Math.floor(menuX), (int) Math.floor(menuZ)),
+            menuGX + 4,
+            menuGY + 3,
+            0xa0a0a0);
         int hover = menuEntryAt(mx, my);
         for (int i = 0; i < entries.length; i++) {
             int y = menuGY + 14 + i * MENU_ROW;
             boolean enabled = i != 0 || tp;
             if (hover == i && enabled) drawRect(menuGX + 1, y - 1, menuGX + MENU_W - 1, y + MENU_ROW - 1, 0x80508050);
-            drawString(fontRendererObj, entries[i], menuGX + 6, y + 1, !enabled ? 0x707070 : hover == i ? 0xffff80 : 0xe0e0e0);
+            drawString(
+                fontRendererObj,
+                entries[i],
+                menuGX + 6,
+                y + 1,
+                !enabled ? 0x707070 : hover == i ? 0xffff80 : 0xe0e0e0);
         }
         // marker on the chosen point
         int px = (int) (width / 2.0 + (menuX - centerX) / bpu()), pz = (int) (height / 2.0 + (menuZ - centerZ) / bpu());
@@ -311,8 +318,8 @@ public class WorldMapScreen extends GuiScreen {
         int tz0 = (int) Math.floor(z0 / tileBlocks), tz1 = (int) Math.floor(z1 / tileBlocks);
         double ctx = centerX / tileBlocks, ctz = centerZ / tileBlocks;
         List<MapTileCache.Key> keys = new ArrayList<>();
-        for (int tz = tz0; tz <= tz1; tz++) for (int tx = tx0; tx <= tx1; tx++)
-            keys.add(new MapTileCache.Key(layer.id, borders, level, tx, tz));
+        for (int tz = tz0; tz <= tz1; tz++)
+            for (int tx = tx0; tx <= tx1; tx++) keys.add(new MapTileCache.Key(layer.id, borders, level, tx, tz));
         keys.sort(
             (a, b) -> Double.compare(
                 sq(a.tx() + 0.5 - ctx) + sq(a.tz() + 0.5 - ctz),
@@ -434,16 +441,31 @@ public class WorldMapScreen extends GuiScreen {
             t.addVertexWithUV(left, panelTop, 0, 0, 0);
             t.draw();
         }
-        drawString(fontRendererObj, String.format("Crust section · Z %d · Y %d to %d", (int) z, SECTION_TOP,
-            SECTION_BOTTOM), left + 4, panelTop + 3, 0xffffff);
+        drawString(
+            fontRendererObj,
+            String.format("Crust section · Z %d · Y %d to %d", (int) z, SECTION_TOP, SECTION_BOTTOM),
+            left + 4,
+            panelTop + 3,
+            0xffffff);
         // lithology under the cursor in the panel
         int mx = Mouse.getX() * width / mc.displayWidth, my = height - Mouse.getY() * height / mc.displayHeight - 1;
         if (mx >= left && my >= panelTop) {
             double wx = worldX(mx);
-            int y = (int) Math.round(SECTION_TOP - (double) (my - panelTop) / (height - panelTop) * (SECTION_TOP - SECTION_BOTTOM));
+            int y = (int) Math
+                .round(SECTION_TOP - (double) (my - panelTop) / (height - panelTop) * (SECTION_TOP - SECTION_BOTTOM));
             Lithology l = sectionRenderer.lithologyAt(wx, y, z);
-            drawString(fontRendererObj, String.format("Y %d: %s", y, l == null ? "air / water"
-                : l.name().toLowerCase().replace('_', ' ')), mx + 8, my - 10, 0xffff80);
+            drawString(
+                fontRendererObj,
+                String.format(
+                    "Y %d: %s",
+                    y,
+                    l == null ? "air / water"
+                        : l.name()
+                            .toLowerCase()
+                            .replace('_', ' ')),
+                mx + 8,
+                my - 10,
+                0xffff80);
         }
     }
 
@@ -466,13 +488,22 @@ public class WorldMapScreen extends GuiScreen {
         boolean full = o.L < -0.5 || gen.rivers.isReadyAt(x, z);
         if (full) gen.evaluate(x, z, Stage.BIOMES, o);
         else gen.evaluate(x, z, Stage.EROSION, o);
-        String water = o.lake == 1 ? "lake" : o.lake == 2 ? "salt flat" : o.river != 0 ? "river" : o.h < 0 ? "sea" : "-";
-        String[] lines = { String.format("X %d  Z %d   Y %d (h %.1f)", (int) Math.floor(x), (int) Math.floor(z),
-            TerrainLayout.surfaceY(o.h), o.h),
+        String water = o.lake == 1 ? "lake"
+            : o.lake == 2 ? "salt flat" : o.river != 0 ? "river" : o.h < 0 ? "sea" : "-";
+        String[] lines = {
+            String.format(
+                "X %d  Z %d   Y %d (h %.1f)",
+                (int) Math.floor(x),
+                (int) Math.floor(z),
+                TerrainLayout.surfaceY(o.h),
+                o.h),
             String.format("T %.1f °C   P %.0f mm   lat %.0f°", o.T, o.P, Math.toDegrees(o.lat)),
             String.format("Plate %d,%d   L %.2f   slope %.2f", o.pi, o.pj, o.L, o.slope),
-            String.format("Rock %s   erod %.2f", Rock.VALUES[o.rockT >= 0.5 ? o.rock : o.rock2].name()
-                .toLowerCase(), o.erod),
+            String.format(
+                "Rock %s   erod %.2f",
+                Rock.VALUES[o.rockT >= 0.5 ? o.rock : o.rock2].name()
+                    .toLowerCase(),
+                o.erod),
             full ? String.format("Biome %s   water %s", Biome.VALUES[o.biome].displayName, water)
                 : "Biome: river network not built yet",
             "Click or right-click: menu" };

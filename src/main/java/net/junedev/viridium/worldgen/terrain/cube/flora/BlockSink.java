@@ -58,7 +58,10 @@ public final class BlockSink implements FloraSink {
         if (ebs == null) ebs = new ExtendedBlockStorage(y0, hasSky);
         Block cur = ebs.getBlockByExtId(lx, ly, lz);
         Material m = cur.getMaterial();
-        if (cur != Blocks.air && cur != Blocks.snow_layer && m != Material.water && m != Material.leaves && m != Material.plants
+        if (cur != Blocks.air && cur != Blocks.snow_layer
+            && m != Material.water
+            && m != Material.leaves
+            && m != Material.plants
             && m != Material.vine) return;
         ebs.func_150818_a(lx, ly, lz, b);
         ebs.setExtBlockMetadata(lx, ly, lz, meta);

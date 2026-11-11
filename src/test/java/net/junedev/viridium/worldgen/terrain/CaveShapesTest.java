@@ -38,7 +38,10 @@ class CaveShapesTest {
                     gen.evaluate(Math.floor(c.x) + dx + 0.5, Math.floor(c.z) + dz + 0.5, Stage.RIVERS, o);
                     h[k] = o.h;
                     // the cenote only (a river lake nearby keeps its own shores)
-                    lake[k] = o.lake == 1 && c.lake == c.lake && Math.abs(o.lakeZ - (c.lake - net.junedev.viridium.worldgen.terrain.column.TerrainLayout.SEA_LEVEL)) < 1e-6;
+                    lake[k] = o.lake == 1 && c.lake == c.lake
+                        && Math.abs(
+                            o.lakeZ - (c.lake - net.junedev.viridium.worldgen.terrain.column.TerrainLayout.SEA_LEVEL))
+                            < 1e-6;
                     lz[k] = o.lakeZ;
                     pit[k] = o.doline > 3;
                     if (pit[k]) {
@@ -58,14 +61,30 @@ class CaveShapesTest {
                 for (int z = 1; z < n - 1; z++) for (int x = 1; x < n - 1; x++) {
                     int q = z * n + x;
                     if (!lake[q]) continue;
-                    for (int nb : new int[] { q - 1, q + 1, q - n, q + n })
-                        if (!lake[nb] && h[nb] < lz[q] - 0.5) { if (waterWalls++ < 12) System.out.printf("  wall at %d,%d: lake %.1f ground %.2f here %.2f nbPit %b chamberLake %.1f%n", (int) Math.floor(c.x) + (nb % n) - r, (int) Math.floor(c.z) + (nb / n) - r, lz[q], h[nb], h[q], pit[nb], c.lake - 63); }
+                    for (int nb : new int[] { q - 1, q + 1, q - n, q + n }) if (!lake[nb] && h[nb] < lz[q] - 0.5) {
+                        if (waterWalls++ < 12) System.out.printf(
+                            "  wall at %d,%d: lake %.1f ground %.2f here %.2f nbPit %b chamberLake %.1f%n",
+                            (int) Math.floor(c.x) + (nb % n) - r,
+                            (int) Math.floor(c.z) + (nb / n) - r,
+                            lz[q],
+                            h[nb],
+                            h[q],
+                            pit[nb],
+                            c.lake - 63);
+                    }
                 }
                 sb.append(String.format(" %.0f,%.0f(%.1f%s)", c.x, c.z, aspect, c.lake == c.lake ? " lake" : ""));
             }
         }
-        System.out.printf("collapse pits: %d, %d pit columns, %d cenote columns, aspect %.2f-%.2f, water walls %d;%s%n", pits,
-            cols, lakeCols, minAspect, maxAspect, waterWalls, sb);
+        System.out.printf(
+            "collapse pits: %d, %d pit columns, %d cenote columns, aspect %.2f-%.2f, water walls %d;%s%n",
+            pits,
+            cols,
+            lakeCols,
+            minAspect,
+            maxAspect,
+            waterWalls,
+            sb);
         assertTrue(pits > 0, "no pits");
         assertTrue(waterWalls == 0, "cenote water next to lower dry ground");
     }
@@ -95,11 +114,21 @@ class CaveShapesTest {
             minLen = Math.min(minLen, f.length);
             maxLen = Math.max(maxLen, f.length);
             if (f.slot > 0) slots++;
-            if (sb.length() < 300) sb.append(String.format(" %d,%d", (f.minX() + f.maxX()) / 2, (f.minZ() + f.maxZ()) / 2));
+            if (sb.length() < 300)
+                sb.append(String.format(" %d,%d", (f.minX() + f.maxX()) / 2, (f.minZ() + f.maxZ()) / 2));
         }
         double landKm2 = landCells * 0.768 * 0.768;
-        System.out.printf("fissures: %d on ~%.0f km² of land (1 per %.1f km²), length %.0f-%.0f (mean %.0f), %d with a slot;"
-            + " at%s%n", n, landKm2, landKm2 / Math.max(1, n), minLen, maxLen, len / Math.max(1, n), slots, sb);
+        System.out.printf(
+            "fissures: %d on ~%.0f km² of land (1 per %.1f km²), length %.0f-%.0f (mean %.0f), %d with a slot;"
+                + " at%s%n",
+            n,
+            landKm2,
+            landKm2 / Math.max(1, n),
+            minLen,
+            maxLen,
+            len / Math.max(1, n),
+            slots,
+            sb);
         // cut into the terrain: the 2D stage lowers columns along the first few
         int cut = 0, wet = 0, checked = 0;
         double deepest = 0;

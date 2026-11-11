@@ -45,6 +45,15 @@ plan time) and `/viridium stats`.
   - `VIRIDIUM_LAKES=<half size>`: biggest lakes and the river reaches inside them;
   - confluences, `VIRIDIUM_REACHES="x,z,r"` (reaches of every basin net near a point), a water picture, and map tile
     timings.
+- **`RiverArtifactScanTest`** (diagnostic): `VIRIDIUM_ARTIFACTS="x0,z0,x1,z1"` walks every reach of every network of
+  the area, samples a cross-section at each of its points block by block, and lists the worst places of each kind:
+  **buried** (no water on the centre line: the river is cut by the terrain), **step** (neighbouring water columns 3+
+  blocks apart away from a waterfall), **wall** (water 2+ blocks above the dry column next to it), **bar** (dry ground
+  inside a channel 3+ blocks above the water), **crossing** (two reaches whose centre lines cross). About 20 s for a
+  15 000 × 17 000 area.
+- **`VIRIDIUM_PARAMS="seed=<world seed>,name=value,..."`** applies to every diagnostic test: `seed` takes the 64-bit
+  Minecraft seed (folded as the game does), so a world can be reproduced headless. `TerrainViewTest`
+  (`VIRIDIUM_VIEW="x,z,half"`) renders a place.
 - **In-game map layers**: "Rivers, lakes, deltas" and "Valleys and glaciation" (`MapLayer`), plus "Final height".
 
 ## Common symptoms and where to look
@@ -54,6 +63,11 @@ plan time) and `/viridium stats`.
 | Wall of water above the bank | water level higher than the terrain next to the channel: [[River Water Levels]], channel bank shaping in [[River Stage Evaluation#Channels]] |
 | River floating above its valley | valley floor sampling, floodplain clamp: [[River Water Levels]] |
 | Staircase at a confluence | floodplain clamp and `MAX_DROP`: [[River Water Levels#4. Tributaries]] |
+| Wall of water where a tributary runs alongside the river it joins | river capture and meander room ([[River Network Build#River capture]], [[River Geometry and Meanders#Where]]), side-by-side levels ([[River Water Levels#4. Tributaries]]), water cap ([[River Stage Evaluation#Channels]]) |
+| River cut in the middle of the land, estuary beyond | `LAND_L` ([[River Stage Evaluation#Phases]]) |
+| Gravel bars or ground far above the water of a braided / glacial river | glacial water surface, bars ([[River Stage Evaluation#Channels]]) |
+| Cliff along a straight line between two basins, river hanging over the next basin's valley | valley blend across networks ([[River Stage Evaluation#Phases]]) |
+| Water sunk or bed twice as deep where a river crosses a divide | channels cut into the same ground; entry levels ([[River Stage Evaluation#Phases]], [[River Water Levels#4. Tributaries]]) |
 | River cut at a basin divide | exit / entry nodes, phases, `MARGIN`: [[Drainage Basins#Exit nodes]], [[River Stage Evaluation#Phases]] |
 | Many parallel small rivers | routing noise: [[River Network Build#Receivers with routing bias]] |
 | Huge river on a small island | outlet rule: [[Drainage Basins#Linking - who drains into whom]] |

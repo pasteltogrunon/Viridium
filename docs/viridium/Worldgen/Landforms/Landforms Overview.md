@@ -2,7 +2,7 @@
 
 Back to [[Worldgen Overview]] · built into [[Worldgen Stages]] (continents, relief, erosion) and [[Rivers Overview]] (waterfalls) · drawn by [[Blocks and Chunks]] (notches, talus, boulders, curtains).
 
-This section documents the landforms added on top of the base relief: **plateaus and mesas, sea cliffs, continental rifts and waterfalls**, plus the block-level detail every cliff gets (notch, talus, fallen boulders). Each page starts from how the landform forms in reality and maps that onto the model.
+This section documents the landforms added on top of the base relief: **plateaus and mesas, sea cliffs, continental rifts, waterfalls, and the landforms of the shallow sea in front of the coast (sea stacks, barrier islands, reefs)**, plus the block-level detail every cliff gets (notch, talus, fallen boulders). Each page starts from how the landform forms in reality and maps that onto the model.
 
 | Page | Covers | Where in the code |
 |---|---|---|
@@ -11,6 +11,7 @@ This section documents the landforms added on top of the base relief: **plateaus
 | [[Continental Rifts]] | graben, shoulders, rift lakes, volcanoes, narrow seas | `ContinentStage.rift`, `ReliefStage.rift` |
 | [[Cliff Detail]] | notch at the foot of a cliff, talus, fallen boulders, falling water at river lips | `column/CliffDetail`, `CubeFiller`, `FloraPlanner` |
 | [[Waterfalls]] | rivers that keep their level to a cliff and fall over it | `RiverNetBuilder.findFalls`, `RiverStage` |
+| [[Coast Landforms]] | sea stacks, barrier islands and lagoons, spits, coral reefs, submarine canyons | `ReliefStage.coastLandforms`, `ErosionStage.seaCanyons` |
 
 ## How they fit together
 
@@ -44,6 +45,10 @@ All in `GenParams`, Java-only; `0` turns a landform off. `ParityTest` turns them
 | `rifts` | 1 | share of continents with a rift (0.35 per unit) |
 | `riftDepth` | 1 | depth of the graben and height of the shoulders |
 | `waterfalls` | 1 | waterfalls on (higher also allows lower falls) |
+| `stacks` | 1 | sea stacks in front of sea cliffs |
+| `barriers` | 1 | barrier islands, lagoons and spits on low coasts |
+| `reefs` | 1 | fringing and barrier coral reefs in warm seas |
+| `seaCanyons` | 1 | canyons on the continental slope |
 
 ## Debugging
 

@@ -7,8 +7,8 @@ import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.junedev.viridium.Viridium;
-import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.GenStats;
+import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
@@ -53,9 +53,14 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
         net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora = new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(
-            plans, filler.rules(), world.getSeed(), filler.hasSky());
+            plans,
+            filler.rules(),
+            world.getSeed(),
+            filler.hasSky());
         net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(
-            plans, params.seed ^ 0xC11FF, params.cliffDetail);
+            plans,
+            params.seed ^ 0xC11FF,
+            params.cliffDetail);
         filler.setCliffs(cliffs);
         filler.setCaves(gen.caves);
         flora.setCaves(gen.caves);

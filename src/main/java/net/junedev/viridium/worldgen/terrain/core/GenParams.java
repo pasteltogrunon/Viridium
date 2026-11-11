@@ -35,6 +35,13 @@ public final class GenParams implements Cloneable {
     public double lapse = 0.07;
     public double erosionStrength = 1.0;
     public double erosionScale = 96;
+    /**
+     * Climate-dependent erosion (Java-only): gully depth scales with the relief, crests and valley floors follow the
+     * climate and the rock. 0 = the prototype filter (fixed depth).
+     */
+    public double erosionClimate = 1.0;
+    /** Climate erosion only: spacing of the main gullies (× erosionScale) and how strongly finer gullies branch off. */
+    public double erosionWidth = 1.6, erosionBranch = 1.8, erosionGain = 0.6, erosionDepth = 0.75;
     public double riverThreshold = 1.0;
     public int riverGrid = 32;
     /** Size (blocks) of the drainage basin cells that divide the continents. */
@@ -55,7 +62,9 @@ public final class GenParams implements Cloneable {
      * prototype's infinite bisector lines, which cut straight ocean wedges past triple junctions.
      */
     public boolean exactPlateEdges = true;
-    /** Flow (in threshold units) at which a river starts: higher = fewer, longer tributaries (width does not change). */
+    /**
+     * Flow (in threshold units) at which a river starts: higher = fewer, longer tributaries (width does not change).
+     */
     public double riverStart = 1.6;
     public double biomeSharpness = 3;
     public double monsoon = 1.0;
@@ -68,7 +77,8 @@ public final class GenParams implements Cloneable {
     public double lakes = 1.0;
     public double valleyRock = 1.0;
     /**
-     * Landforms (Java-only, 0 turns each off). Plateaus: frequency of uplifted tablelands with an escarpment around them
+     * Landforms (Java-only, 0 turns each off). Plateaus: frequency of uplifted tablelands with an escarpment around
+     * them
      * (scales the threshold of their mask), their height multiplier, and the terraced mesas of arid sedimentary land.
      */
     public double plateaus = 1.0, plateauHeight = 1.0, mesas = 1.0;
@@ -82,8 +92,21 @@ public final class GenParams implements Cloneable {
     /** Waterfalls where rivers cross cliffs (0 off; higher also allows lower falls). */
     public double waterfalls = 1.0;
     /**
-     * Caves (Java-only, 0 off): amount of noise caves (&gt; 1 more void), entrances to the surface, aquifers (flooded and
-     * lava cells), karst dolines and shafts, planned systems (giant chambers and galleries), ground fissures (long narrow
+     * River landforms (Java-only, 0 turns each off): terraces along incised valleys, oxbow lakes on meandering
+     * floodplains, alluvial fans at mountain fronts, braided channels, incised meanders and slot canyons.
+     */
+    public double terraces = 1.0, oxbows = 1.0, fans = 1.0, braids = 1.0, incision = 1.0;
+    /**
+     * Coast landforms (Java-only, 0 turns each off): sea stacks off rocky cliffs, barrier islands with lagoons and
+     * spits,
+     * rias (drowned river valleys), coral reefs, submarine canyons on the continental slope.
+     */
+    public double stacks = 1.0, barriers = 1.0, rias = 1.0, reefs = 1.0, seaCanyons = 1.0;
+    /**
+     * Caves (Java-only, 0 off): amount of noise caves (&gt; 1 more void), entrances to the surface, aquifers (flooded
+     * and
+     * lava cells), karst dolines and shafts, planned systems (giant chambers and galleries), ground fissures (long
+     * narrow
      * cracks in the land, ~1 per 3 km² of land per unit).
      */
     public double caves = 1.0, caveEntrances = 1.0, aquifers = 1.0, dolines = 1.0, plannedCaves = 1.0, fissures = 1.0;

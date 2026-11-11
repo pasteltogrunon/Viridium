@@ -11,12 +11,14 @@ import com.google.common.cache.CacheBuilder;
 /**
  * Block-level detail of cliffs, found from the planned heights of a column and its neighbours (no Minecraft classes):
  * <ul>
- * <li><b>notch</b>: the foot of a cliff cut back into the wall. At the sea (or a lake) the waves dig it at the water line
+ * <li><b>notch</b>: the foot of a cliff cut back into the wall. At the sea (or a lake) the waves dig it at the water
+ * line
  * and it stays flooded; on land it is a shallow overhang above the talus, where softer rock weathers faster;</li>
  * <li><b>talus</b>: the debris cone at the foot of a dry cliff (blocks above the planned surface);</li>
  * <li>for boulders: how far a column is from the foot of a wall and how tall the wall is.</li>
  * </ul>
- * A cliff face is a column whose ground drops by at least 9 blocks within the next 3 in some direction, with at least 10
+ * A cliff face is a column whose ground drops by at least 9 blocks within the next 3 in some direction, with at least
+ * 10
  * blocks of wall in total. Every value depends only on the plans (deterministic, any order); results are cached.
  */
 public final class CliffDetail {
@@ -78,7 +80,8 @@ public final class CliffDetail {
     }
 
     /**
-     * Falling water at waterfall lips: a column next to river water of a waterfall zone (F_FALL) standing 3+ blocks above
+     * Falling water at waterfall lips: a column next to river water of a waterfall zone (F_FALL) standing 3+ blocks
+     * above
      * it gets a curtain up to that level. This covers oblique lips (a cliff crossing the river at an angle). Only in
      * waterfall zones: elsewhere a river above a lower neighbour (a lake or the sea beside it) would raise a long
      * curtain along its bank.
@@ -109,7 +112,8 @@ public final class CliffDetail {
         // surfaces, water and flags of the 36×36 blocks around (from the 3×3 plans)
         int bx0 = (cx << 4) - M, bz0 = (cz << 4) - M;
         ColumnPlan[] ps = new ColumnPlan[9];
-        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) ps[(dz + 1) * 3 + dx + 1] = plans.get(cx + dx, cz + dz);
+        for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++) ps[(dz + 1) * 3 + dx + 1] = plans.get(cx + dx, cz + dz);
         int lowest = Integer.MAX_VALUE, highest = Integer.MIN_VALUE;
         for (int j = 0; j < W; j++) for (int i = 0; i < W; i++) {
             int bx = bx0 + i, bz = bz0 + j;
@@ -176,7 +180,8 @@ public final class CliffDetail {
                     hN = (int) GenMath.clamp(Math.round(H * 0.3), 5, 10);
                     D = 8;
                 }
-                // the notch opens where the wall stands solid above it: the outermost column (towards the foot) still at
+                // the notch opens where the wall stands solid above it: the outermost column (towards the foot) still
+                // at
                 // least 3 blocks above the band; the column in front of it must leave the band open
                 int band = base + hN - 1, e = -1, lips = 0;
                 for (int s = 0; s <= 6; s++) {
@@ -188,7 +193,8 @@ public final class CliffDetail {
                 int fi = i + (e + 1) * DX[d], fj = j + (e + 1) * DZ[d];
                 boolean open = e >= 0 && fi >= 0 && fj >= 0 && fi < W && fj < W && S[fj * W + fi] < band;
                 if (wet && e >= 0 && !open) {
-                    // at the sea the waves cut through the low ledges in front of the wall too (roof of at least one block)
+                    // at the sea the waves cut through the low ledges in front of the wall too (roof of at least one
+                    // block)
                     for (int s = e + 1; s <= e + 3; s++) {
                         int ii = i + s * DX[d], jj = j + s * DZ[d];
                         if (ii < 0 || jj < 0 || ii >= W || jj >= W) break;
@@ -211,7 +217,7 @@ public final class CliffDetail {
                     // the cube filler lowers it further under loose soil
                     int top = s >= 0 ? Math.min(base + hj - 1, S[c] - 3)
                         : S[c] <= band + 1 ? S[c] // a low ledge at the water line: cut away entirely
-                        : Math.min(band, S[c] - 1);
+                            : Math.min(band, S[c] - 1);
                     if (top < base || (F[c] & skipF) != 0) continue;
                     int ci = ColumnPlan.index(lx, lz);
                     if (out.notchHi[ci] != NONE && out.notchHi[ci] - out.notchLo[ci] >= top - base) continue;
@@ -234,7 +240,8 @@ public final class CliffDetail {
                     out.wallDist[ci] = (byte) s;
                     out.wallH[ci] = (short) Math.min(H, Short.MAX_VALUE);
                 }
-                if (s < -1 || s > T || footWater != NONE || (F[c] & skipF) != 0 || (Wt[c] != NONE && Wt[c] > S[c])) continue;
+                if (s < -1 || s > T || footWater != NONE || (F[c] & skipF) != 0 || (Wt[c] != NONE && Wt[c] > S[c]))
+                    continue;
                 int top = foot + (int) Math.round(Math.min(6, H * 0.25 * strength) - (Math.max(s, 1) - 1) * 0.9);
                 if (top <= S[c] || top >= S[f]) continue;
                 if (out.talusTop[ci] == NONE || top > out.talusTop[ci]) {

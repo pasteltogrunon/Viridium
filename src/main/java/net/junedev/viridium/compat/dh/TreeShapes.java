@@ -57,7 +57,11 @@ final class TreeShapes {
                 top += hi;
             }
         }
-        return new Shape((int) Math.round((double) bottom / SAMPLES), (int) Math.round((double) top / SAMPLES),
-            (double) columns / SAMPLES, leaves, meta);
+        return new Shape(
+            (int) Math.round((double) bottom / SAMPLES),
+            (int) Math.round((double) top / SAMPLES),
+            (double) columns / SAMPLES,
+            leaves,
+            meta);
     }
 }

@@ -43,10 +43,16 @@ class WaterfallTest {
                     // the lip: start of the reach below, or end of a reach falling into the sea
                     int q = net.fallIn[sl] > 0 ? (sl * RiverNet.NPT) * 2 : (sl * RiverNet.NPT + RiverNet.NPT - 1) * 2;
                     int x0 = (int) Math.floor(net.pts[q]), z0 = (int) Math.floor(net.pts[q + 1]);
-                    if (falls <= 6) System.out.printf("  fall at %d,%d drop %.0f%s%n", x0, z0, net.fallIn[sl] > 0 ? net.fallIn[sl] : net.z1[sl], net.lipOut[sl] == 2 ? " (sea)" : "");
+                    if (falls <= 6) System.out.printf(
+                        "  fall at %d,%d drop %.0f%s%n",
+                        x0,
+                        z0,
+                        net.fallIn[sl] > 0 ? net.fallIn[sl] : net.z1[sl],
+                        net.lipOut[sl] == 2 ? " (sea)" : "");
                     for (int dz = -6; dz <= 6; dz++) for (int dx = -6; dx <= 6; dx++) {
                         int bx = x0 + dx, bz = z0 + dz;
-                        ColumnPlan p = plans.computeIfAbsent(((long) (bx >> 4) << 32) | ((bz >> 4) & 0xffffffffL),
+                        ColumnPlan p = plans.computeIfAbsent(
+                            ((long) (bx >> 4) << 32) | ((bz >> 4) & 0xffffffffL),
                             k -> planner.plan(bx >> 4, bz >> 4));
                         int i = ColumnPlan.index(bx & 15, bz & 15);
                         if (cd.get(bx >> 4, bz >> 4).curtainTop[i] != ColumnPlan.NONE) spills++;
@@ -58,8 +64,13 @@ class WaterfallTest {
                 }
             }
         }
-        System.out.printf("waterfalls: %d (%d into the sea), tallest %d blocks, %d curtain columns, %d lip spills%n", falls, seaFalls,
-            maxDrop, curtains, spills);
+        System.out.printf(
+            "waterfalls: %d (%d into the sea), tallest %d blocks, %d curtain columns, %d lip spills%n",
+            falls,
+            seaFalls,
+            maxDrop,
+            curtains,
+            spills);
         assertTrue(falls > 0, "no waterfall where rivers cross cliffs");
         assertTrue(curtains > 0, "waterfalls without curtains");
         assertTrue(spills > 0, "no falling water at the lips");

@@ -74,6 +74,15 @@ A tributary therefore **descends gradually to the level of the river it joins**,
 river's deeper valley and falling into it at the confluence. The terrain upstream is higher than this lowered profile,
 so the channel is carved into it: small rivers cut short gorges where they enter large valleys.
 
+**Side by side before a confluence.** Two rivers about to join often run next to each other for their last nodes, each
+on its own valley floor. Within 4 nodes of the confluence, any node of the tributary and any node of the main river
+(above or below the confluence) whose channels come within `0.75·g` of each other (`distance ≤ hw + hw + 0.75·g`) keep
+within one block: the higher one is lowered. (Rivers that run in neighbouring grid nodes for longer than that are
+joined outright, see [[River Network Build#River capture]].)
+
+**Entry nodes are never lowered** by the floodplain clamp, this rule or `MAX_DROP`: the basin above ends its river at
+the level it gave them, and lowering it here made the water step down at the divide.
+
 ## How levels are used by reaches
 
 Each reach stores levels at its two ends (see River Geometry and Meanders):

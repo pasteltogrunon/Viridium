@@ -22,7 +22,10 @@ public abstract class MixinBlockLiquid_FarWaterTint {
 
     @Inject(method = "colorMultiplier", at = @At("RETURN"), cancellable = true)
     private void viridium$farWaterTint(IBlockAccess world, int x, int y, int z, CallbackInfoReturnable<Integer> cir) {
-        if (world == null || !DH_FAKE_WORLD.equals(world.getClass().getName())) return;
+        if (world == null || !DH_FAKE_WORLD.equals(
+            world.getClass()
+                .getName()))
+            return;
         if (((BlockLiquid) (Object) this).getMaterial() != Material.water) return;
         cir.setReturnValue(WaterTint.applyFar(cir.getReturnValue(), world, x, y, z));
     }

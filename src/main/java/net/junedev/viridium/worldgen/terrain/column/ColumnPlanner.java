@@ -36,8 +36,26 @@ public final class ColumnPlanner {
                 fillColumn(plan, ColumnPlan.index(lx, lz), x0 + lx, z0 + lz, p);
             }
         }
+        terrainSlope(plan);
         plan.finish();
         return plan;
+    }
+
+    /**
+     * The slope the surface rules see: the gradient of the final terrain of the column (central differences, one-sided
+     * on the chunk's border). The pipeline's slope is that of the smoothed base
+     * relief: it misses the gullies, valley sides and channel banks, which is where bare rock shows.
+     */
+    private static void terrainSlope(ColumnPlan plan) {
+        float[] h = plan.height;
+        for (int lz = 0; lz < 16; lz++) for (int lx = 0; lx < 16; lx++) {
+            int il = Math.max(lx - 1, 0), ir = Math.min(lx + 1, 15), jl = Math.max(lz - 1, 0),
+                jr = Math.min(lz + 1, 15);
+            double gx = (h[ColumnPlan.index(ir, lz)] - h[ColumnPlan.index(il, lz)]) / (ir - il);
+            double gz = (h[ColumnPlan.index(lx, jr)] - h[ColumnPlan.index(lx, jl)]) / (jr - jl);
+            int i = ColumnPlan.index(lx, lz);
+            plan.slope[i] = (float) Math.sqrt(gx * gx + gz * gz);
+        }
     }
 
     /** A plan used as scratch by {@link #planPoint}; only the slots written there are meaningful. */
@@ -101,6 +119,7 @@ public final class ColumnPlanner {
         plan.iceTop[i] = iceTop;
         plan.iceBottom[i] = iceBottom;
         plan.flags[i] = (byte) flags;
+        plan.surf[i] = (byte) p.surf;
         if (p.fallTop > -1e8 && water != NONE) {
             int ft = TerrainLayout.surfaceY(p.fallTop);
             if (ft > water) fallTop = ft;

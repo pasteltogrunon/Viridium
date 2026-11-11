@@ -65,8 +65,13 @@ public final class TerrainBenchmark {
     }
 
     public String run() {
-        line("Viridium terrain benchmark · seed %d · %d land + %d ocean points · %d threads available", base.seed,
-            points, points, Runtime.getRuntime().availableProcessors());
+        line(
+            "Viridium terrain benchmark · seed %d · %d land + %d ocean points · %d threads available",
+            base.seed,
+            points,
+            points,
+            Runtime.getRuntime()
+                .availableProcessors());
         WorldGen exact = gen(false), fast = gen(true);
         double[][] pts = samplePoints(exact);
         // warm-up: JIT, hotspots, river networks and coarse fields (everything the real game keeps cached)
@@ -75,14 +80,20 @@ public final class TerrainBenchmark {
             stageCosts(fast, pts, false, null);
         }
         line("");
-        line("Per-point cost with river networks cached (µs). Exact = 1:1 port of the JS; fast = cached coarse fields.");
+        line(
+            "Per-point cost with river networks cached (µs). Exact = 1:1 port of the JS; fast = cached coarse fields.");
         double[] ex = stageCosts(exact, pts, true, "exact");
         double[] fa = stageCosts(fast, pts, true, "fast");
         line("");
         line("%-34s %9s %9s      %9s %9s", "", "exact L", "exact O", "fast L", "fast O");
         line("%-34s %9.2f %9.2f   →  %9.2f %9.2f", "TOTAL per point (µs)", ex[0], ex[1], fa[0], fa[1]);
-        line("%-34s %9.2f %9.2f   →  %9.2f %9.2f", "≈ per 16x16 column (ms, 1 thread)", ex[0] * 0.256, ex[1] * 0.256,
-            fa[0] * 0.256, fa[1] * 0.256);
+        line(
+            "%-34s %9.2f %9.2f   →  %9.2f %9.2f",
+            "≈ per 16x16 column (ms, 1 thread)",
+            ex[0] * 0.256,
+            ex[1] * 0.256,
+            fa[0] * 0.256,
+            fa[1] * 0.256);
         accuracy(exact, fast, pts[0]);
         primitives(exact);
         riverNets();
@@ -97,7 +108,8 @@ public final class TerrainBenchmark {
 
     /**
      * Land and ocean points (x, z interleaved) inside the sample area, in 8x8 patches 2 blocks apart around random
-     * centres: generation walks contiguous columns, so the cached fields (lattices of 128 to 2048 blocks) are warm. Fully
+     * centres: generation walks contiguous columns, so the cached fields (lattices of 128 to 2048 blocks) are warm.
+     * Fully
      * random points would build a new erosion lattice tile per point (~800 µs) and measure only that.
      */
     private double[][] samplePoints(WorldGen gen) {
@@ -173,9 +185,17 @@ public final class TerrainBenchmark {
         }
         line("");
         line("Fast vs exact on %d land points:", n);
-        line("  |ΔT| mean %.3f max %.2f °C · |ΔP| mean %.2f%% max %.1f%% · |Δh| mean %.3f max %.2f blocks", dT / n, mT,
-            100 * dP / n, 100 * mP, dh / n, mh);
-        line("  dominant biome differs %.2f%% · river flag differs %.2f%%", 100.0 * biomeDiff / n,
+        line(
+            "  |ΔT| mean %.3f max %.2f °C · |ΔP| mean %.2f%% max %.1f%% · |Δh| mean %.3f max %.2f blocks",
+            dT / n,
+            mT,
+            100 * dP / n,
+            100 * mP,
+            dh / n,
+            mh);
+        line(
+            "  dominant biome differs %.2f%% · river flag differs %.2f%%",
+            100.0 * biomeDiff / n,
             100.0 * riverDiff / n);
     }
 
@@ -208,16 +228,23 @@ public final class TerrainBenchmark {
         for (int k = 0; k < 6; k++) {
             long ck = g.rivers.basins.cellAt(2000 + k * 3100, 1500);
             long t = System.nanoTime();
-            RiverNet net = g.rivers.net(BasinGraph.keyA(ck),
-                BasinGraph.keyB(ck));
+            RiverNet net = g.rivers.net(BasinGraph.keyA(ck), BasinGraph.keyB(ck));
             totalBytes += net.bytes;
             built++;
-            if (built <= 3) line("  %6.0f ms  %d cells, %d reaches, %d mouths, %d lake cells, ~%d KiB",
-                (System.nanoTime() - t) / 1e6, net.nx * net.ny, net.count, net.nMouth, net.lakes.size(),
+            if (built <= 3) line(
+                "  %6.0f ms  %d cells, %d reaches, %d mouths, %d lake cells, ~%d KiB",
+                (System.nanoTime() - t) / 1e6,
+                net.nx * net.ny,
+                net.count,
+                net.nMouth,
+                net.lakes.size(),
                 net.bytes >> 10);
         }
-        line("  %d networks: %.0f ms each, ~%.1f MiB each (cache keeps 64)", built,
-            (System.nanoTime() - t0) / 1e6 / built, totalBytes / (double) built / (1 << 20));
+        line(
+            "  %d networks: %.0f ms each, ~%.1f MiB each (cache keeps 64)",
+            built,
+            (System.nanoTime() - t0) / 1e6 / built,
+            totalBytes / (double) built / (1 << 20));
     }
 
     /** The real case: contiguous columns, like a player exploring. */
@@ -234,7 +261,10 @@ public final class TerrainBenchmark {
         double single = (System.nanoTime() - t0) / 1e6 / (side * side);
         line("  1 thread: %.3f ms/column (%d columns)", single, side * side);
 
-        int threads = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        int threads = Math.max(
+            1,
+            Runtime.getRuntime()
+                .availableProcessors() - 1);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         try {
             for (int dz = 0; dz < side; dz++) for (int dx = 0; dx < side; dx++) planner.plan(cx0 + side + dx, cz0 + dz);
@@ -246,7 +276,10 @@ public final class TerrainBenchmark {
             }
             for (Future<ColumnPlan> f : fs) f.get();
             double wall = (System.nanoTime() - t0) / 1e6;
-            line("  %d threads: %.3f ms/column wall (%.0f columns/s)", threads, wall / fs.size(),
+            line(
+                "  %d threads: %.3f ms/column wall (%.0f columns/s)",
+                threads,
+                wall / fs.size(),
                 fs.size() / (wall / 1000));
         } catch (Exception e) {
             line("  multithreaded run failed: %s", e);
@@ -266,9 +299,15 @@ public final class TerrainBenchmark {
             }
         }
         long total = (long) plans.size() * cubesPerColumn;
-        line("  cubes per column in [%d, %d): %d → air %.1f%%, crust only %.1f%%, surface-crossing %.1f%% (%.2f/column)",
-            TerrainLayout.MIN_Y, TerrainLayout.MAX_Y, cubesPerColumn, 100.0 * air / total, 100.0 * solid / total,
-            100.0 * mixed / total, (double) mixed / plans.size());
+        line(
+            "  cubes per column in [%d, %d): %d → air %.1f%%, crust only %.1f%%, surface-crossing %.1f%% (%.2f/column)",
+            TerrainLayout.MIN_Y,
+            TerrainLayout.MAX_Y,
+            cubesPerColumn,
+            100.0 * air / total,
+            100.0 * solid / total,
+            100.0 * mixed / total,
+            (double) mixed / plans.size());
         lastPlans = plans;
     }
 
@@ -280,20 +319,19 @@ public final class TerrainBenchmark {
         int cubes = 0;
         for (int rep = 0; rep < 2; rep++) for (int cy = -60; cy < 0; cy++) { // warm
             s.prepare(p.chunkX << 4, cy << 4, p.chunkZ << 4);
-            for (int i = 0; i < 256; i++) for (int ly = 0; ly < 16; ly++)
-                sink += s.at(p.crust, i, i & 15, ly, i >> 4)
-                    .ordinal();
+            for (int i = 0; i < 256; i++) for (int ly = 0; ly < 16; ly++) sink += s.at(p.crust, i, i & 15, ly, i >> 4)
+                .ordinal();
         }
         long t0 = System.nanoTime();
         for (int cy = -120; cy < 0; cy++) {
             s.prepare(p.chunkX << 4, cy << 4, p.chunkZ << 4);
-            for (int i = 0; i < 256; i++) for (int ly = 0; ly < 16; ly++)
-                sink += s.at(p.crust, i, i & 15, ly, i >> 4)
-                    .ordinal();
+            for (int i = 0; i < 256; i++) for (int ly = 0; ly < 16; ly++) sink += s.at(p.crust, i, i & 15, ly, i >> 4)
+                .ordinal();
             cubes++;
         }
         line("");
-        line("Crust: %.3f ms per deep 16³ cube (lithology only, no block storage)",
+        line(
+            "Crust: %.3f ms per deep 16³ cube (lithology only, no block storage)",
             (System.nanoTime() - t0) / 1e6 / cubes);
     }
 
@@ -337,8 +375,15 @@ public final class TerrainBenchmark {
                 int[] b = r.render(MapLayer.HEIGHT, 4, tx, tz, 128, false);
                 double warm = (System.nanoTime() - t0) / 1e6;
                 sink += a[0] + b[0];
-                return String.format("  cold tile (%d,%d), fresh pipeline: %s %6.0f ms (%d nets built) · then %s %5.0f ms",
-                    tx, tz, MapLayer.COMPOSITE.name, cold, nets, MapLayer.HEIGHT.name, warm);
+                return String.format(
+                    "  cold tile (%d,%d), fresh pipeline: %s %6.0f ms (%d nets built) · then %s %5.0f ms",
+                    tx,
+                    tz,
+                    MapLayer.COMPOSITE.name,
+                    cold,
+                    nets,
+                    MapLayer.HEIGHT.name,
+                    warm);
             })
                 .get();
             line("%s", s);
@@ -376,12 +421,24 @@ public final class TerrainBenchmark {
         WorldGen g = gen(true);
         double[] p0 = landNear(g, 52000, 31000);
         ColumnPlanCache plans = new ColumnPlanCache(new ColumnPlanner(g, BiomeMapper.FROM_STAGE));
-        line("Walk: seed %d from (%.0f, %.0f), %.0f blocks/s for %.0f s, view %d chunks, cubes ±%d around the surface",
-            base.seed, p0[0], p0[1], WALK_SPEED, WALK_SECONDS, WALK_VIEW, WALK_CUBES);
+        line(
+            "Walk: seed %d from (%.0f, %.0f), %.0f blocks/s for %.0f s, view %d chunks, cubes ±%d around the surface",
+            base.seed,
+            p0[0],
+            p0[1],
+            WALK_SPEED,
+            WALK_SECONDS,
+            WALK_VIEW,
+            WALK_CUBES);
         GenStats.reset();
 
         // teleport: the whole window, nearest first, on prefetch-like threads (river builds parallel, as in the game)
-        int threads = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() / 3));
+        int threads = Math.max(
+            1,
+            Math.min(
+                8,
+                Runtime.getRuntime()
+                    .availableProcessors() / 3));
         int pcx = (int) Math.floor(p0[0]) >> 4, pcz = (int) Math.floor(p0[1]) >> 4;
         Set<Long> done = new HashSet<>();
         List<int[]> window = window(pcx, pcz, done);
@@ -404,8 +461,15 @@ public final class TerrainBenchmark {
         } finally {
             pool.shutdownNow();
         }
-        line("  teleport (%d threads, cold): centre %.0f ms · 9x9 %.0f ms · %dx%d %.0f ms · %d nets · %d cubes", threads,
-            centre, inner, 2 * WALK_VIEW + 1, 2 * WALK_VIEW + 1, (System.nanoTime() - t0) / 1e6, g.rivers.buildCount(),
+        line(
+            "  teleport (%d threads, cold): centre %.0f ms · 9x9 %.0f ms · %dx%d %.0f ms · %d nets · %d cubes",
+            threads,
+            centre,
+            inner,
+            2 * WALK_VIEW + 1,
+            2 * WALK_VIEW + 1,
+            (System.nanoTime() - t0) / 1e6,
+            g.rivers.buildCount(),
             cubes);
 
         // flight: one thread, flat out, exact attribution
@@ -461,12 +525,25 @@ public final class TerrainBenchmark {
         }
         Arrays.sort(per);
         double k = 1e6 * n;
-        line("  walk (1 thread, serial river builds, flat out): %d new columns · %d cubes (%.1f/column) · %d nets built", n,
-            cubes, (double) cubes / n, g.rivers.buildCount() - nets0);
-        line("  CPU per new column: plan %.2f + cubes %.2f + nets %.2f + cave regions %.2f = %.2f ms", plan / k,
-            cubeNs / k, nets / k, caves / k, (plan + cubeNs + nets + caves) / k);
-        line("    per column: p50 %.1f ms · p90 %.1f ms · p99 %.1f ms · max %.0f ms", per[n / 2], per[(int) (n * 0.9)],
-            per[Math.min(n - 1, (int) (n * 0.99))], per[n - 1]);
+        line(
+            "  walk (1 thread, serial river builds, flat out): %d new columns · %d cubes (%.1f/column) · %d nets built",
+            n,
+            cubes,
+            (double) cubes / n,
+            g.rivers.buildCount() - nets0);
+        line(
+            "  CPU per new column: plan %.2f + cubes %.2f + nets %.2f + cave regions %.2f = %.2f ms",
+            plan / k,
+            cubeNs / k,
+            nets / k,
+            caves / k,
+            (plan + cubeNs + nets + caves) / k);
+        line(
+            "    per column: p50 %.1f ms · p90 %.1f ms · p99 %.1f ms · max %.0f ms",
+            per[n / 2],
+            per[(int) (n * 0.9)],
+            per[Math.min(n - 1, (int) (n * 0.99))],
+            per[n - 1]);
         line("  %.0f s of flight took %.1f s on one thread (%.2fx real time)", WALK_SECONDS, wall, wall / WALK_SECONDS);
         line("  where the time went (flight only):");
         for (String l : GenStats.report()
@@ -539,11 +616,17 @@ public final class TerrainBenchmark {
     /**
      * Teleport: a cold pipeline (nothing cached), columns around a far point planned nearest first by as many threads
      * as the prefetcher uses. Reports when the centre, the inner 9x9 and the whole view are ready, and how many river
-     * networks it took (a network needs the exit flow of every upstream basin and the deltas of its coastal neighbours).
+     * networks it took (a network needs the exit flow of every upstream basin and the deltas of its coastal
+     * neighbours).
      */
     public void teleport() {
         line("");
-        int threads = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() / 3));
+        int threads = Math.max(
+            1,
+            Math.min(
+                8,
+                Runtime.getRuntime()
+                    .availableProcessors() / 3));
         line("Teleport to a far point (cold caches, %d prefetch threads, view 10 + 3):", threads);
         net.junedev.viridium.worldgen.terrain.GenStats.reset();
         double[][] targets = { { 52000, 31000 }, { -47000, 66000 }, { 88000, -41000 }, { -23000, -97000 } };
@@ -571,7 +654,8 @@ public final class TerrainBenchmark {
             double centre = -1, inner = -1, all;
             try {
                 for (int i = 0; i < fs.size(); i++) {
-                    fs.get(i).get();
+                    fs.get(i)
+                        .get();
                     double ms = (System.nanoTime() - t0) / 1e6;
                     if (i == 0) centre = ms;
                     if (ring.get(i) == 4 && (i + 1 == fs.size() || ring.get(i + 1) > 4)) inner = ms;
@@ -582,11 +666,20 @@ public final class TerrainBenchmark {
             all = (System.nanoTime() - t0) / 1e6;
             pool.shutdownNow();
             net.junedev.viridium.worldgen.terrain.GenStats.Timer rn = net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET;
-            line("  %7.0f,%7.0f  centre %6.0f ms · 9x9 %6.0f ms · 27x27 %6.0f ms · %3d nets built (so far %.0f ms each, max %.0f)",
-                p[0], p[1], centre, inner, all, g.rivers.buildCount(), rn.meanMs(), rn.maxMs());
+            line(
+                "  %7.0f,%7.0f  centre %6.0f ms · 9x9 %6.0f ms · 27x27 %6.0f ms · %3d nets built (so far %.0f ms each, max %.0f)",
+                p[0],
+                p[1],
+                centre,
+                inner,
+                all,
+                g.rivers.buildCount(),
+                rn.meanMs(),
+                rn.maxMs());
         }
         line("  where the time went (all four, summed over threads):");
-        for (String l : net.junedev.viridium.worldgen.terrain.GenStats.report().split("\n")) line("    %s", l);
+        for (String l : net.junedev.viridium.worldgen.terrain.GenStats.report()
+            .split("\n")) line("    %s", l);
     }
 
     private static double[] landNear(WorldGen g, double x, double z) {

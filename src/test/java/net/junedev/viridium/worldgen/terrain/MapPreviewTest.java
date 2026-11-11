@@ -24,7 +24,9 @@ class MapPreviewTest {
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_MAP", matches = "1")
     void writePreviews() throws IOException {
         MapTileRenderer r = new MapTileRenderer(new WorldGen(new GenParams()));
-        int level = Integer.parseInt(System.getenv().getOrDefault("VIRIDIUM_MAP_LEVEL", "6"));
+        int level = Integer.parseInt(
+            System.getenv()
+                .getOrDefault("VIRIDIUM_MAP_LEVEL", "6"));
         String only = System.getenv("VIRIDIUM_MAP_LAYERS");
         int tiles = 4, size = 128, px = tiles * size;
         // optional centre (blocks) "x,z": tiles are aligned to the tile grid around it
@@ -49,7 +51,8 @@ class MapPreviewTest {
             }
             File f = new File(dir, layer.id + "_L" + level + tag + ".png");
             ImageIO.write(img, "png", f);
-            System.out.printf("%-16s %6.0f ms/tile → %s%n", layer.id, (System.nanoTime() - t0) / 1e6 / (tiles * tiles), f);
+            System.out
+                .printf("%-16s %6.0f ms/tile → %s%n", layer.id, (System.nanoTime() - t0) / 1e6 / (tiles * tiles), f);
         }
         // crust cross-sections through the middle of the previewed area
         CrustSectionRenderer sec = new CrustSectionRenderer(r.gen());

@@ -79,6 +79,39 @@ public class Viridium {
             cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // cold (JIT, caches)
             cmd.processCommand(server, new String[] { "bench", "6", "14", "6" }); // warm
         }
+        // dev aid: VIRIDIUM_GENBENCH="radius,cyMin,cyMax[;...]" pregenerates boxes through CC (any CC world type,
+        // Viridium or VanillaCubic), appends the report to genbench_result.txt and stops the server
+        String gb = System.getenv("VIRIDIUM_GENBENCH");
+        if (gb != null && !gb.isEmpty()) {
+            net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+            net.minecraft.world.WorldServer w = server.worldServerForDimension(0);
+            StringBuilder all = new StringBuilder();
+            int n = 0;
+            for (String spec : gb.split(";")) {
+                String[] a = spec.trim()
+                    .split(",");
+                int r = Integer.parseInt(a[0]), lo = Integer.parseInt(a[1]), hi = Integer.parseInt(a[2]);
+                // warm-up (JIT, class loading) far from the measured box, then the measured box on fresh ground
+                net.junedev.viridium.worldgen.terrain.cube.GenBenchmark.run(w, 3, lo, hi, -40000 - 5000 * n, -40000);
+                String rep = net.junedev.viridium.worldgen.terrain.cube.GenBenchmark
+                    .run(w, r, lo, hi, 40000 + 5000 * n, 40000);
+                LOGGER.info("Generation benchmark:\n{}", rep);
+                all.append(rep)
+                    .append('\n');
+                n++;
+            }
+            try {
+                java.nio.file.Files.write(
+                    new java.io.File("genbench_result.txt").toPath(),
+                    all.toString()
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+            } catch (java.io.IOException e) {
+                LOGGER.warn("could not write genbench_result.txt", e);
+            }
+            server.initiateShutdown();
+        }
     }
 
     @Mod.EventHandler

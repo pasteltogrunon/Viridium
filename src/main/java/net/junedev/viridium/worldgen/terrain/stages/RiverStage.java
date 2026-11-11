@@ -102,7 +102,9 @@ public class RiverStage extends GenStage {
         long key = key(ci, cj);
         FutureTask<RiverNet> created = new FutureTask<>(() -> {
             long t0 = System.nanoTime();
-            RiverNet n = new RiverNetBuilder(gen).build(basins.cell(ci, cj), basins, new GenScratch()); // builder holds per-build state
+            RiverNet n = new RiverNetBuilder(gen).build(basins.cell(ci, cj), basins, new GenScratch()); // builder holds
+                                                                                                        // per-build
+                                                                                                        // state
             buildNanos.addAndGet(System.nanoTime() - t0);
             net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET.add(System.nanoTime() - t0);
             builds.incrementAndGet();
@@ -200,7 +202,8 @@ public class RiverStage extends GenStage {
     /** True when every network that shapes (x, y) is already built (evaluating there will not build one). */
     public boolean isReadyAt(double x, double y) {
         for (long k : basins.nearCells(x, y, RiverNetBuilder.MARGIN))
-            if (!cache.containsKey(net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(k)) && !basins.cell(k).ocean) return false;
+            if (!cache.containsKey(net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey(k))
+                && !basins.cell(k).ocean) return false;
         return true;
     }
 
@@ -333,8 +336,9 @@ public class RiverStage extends GenStage {
             for (int e = 0; e < ne; e++) {
                 int s = ES[st + e], B = s * 4;
                 double pad = 1.7 * Wm + 30;
-                if (x < net.bb[B] - pad || x > net.bb[B + 2] + pad || y < net.bb[B + 1] - pad || y > net.bb[B + 3] + pad)
-                    continue;
+                if (x < net.bb[B] - pad || x > net.bb[B + 2] + pad
+                    || y < net.bb[B + 1] - pad
+                    || y > net.bb[B + 3] + pad) continue;
                 for (int k = 0; k < SEG; k++) {
                     int qq = (s * NPT + k) * 2;
                     double ax = pts[qq], ay = pts[qq + 1], vx = pts[qq + 2] - ax, vy = pts[qq + 3] - ay;
@@ -370,6 +374,11 @@ public class RiverStage extends GenStage {
                 }
             }
         }
+        // a river crossing the funnel (a tributary coming down to the estuary, still blocks above it) has its bed and
+        // its
+        // banks lowered to the tidal flats: its water comes down with them, instead of standing over the flats as a
+        // wall
+        if (o.river != 0 && hmin < h0) o.riverWL -= h0 - hmin;
         o.h = hmin;
         o.estu = flm;
     }
@@ -399,13 +408,15 @@ public class RiverStage extends GenStage {
     protected void netField(double x, double y, RiverNet net, GenScratch s) {
         s.FOK = false;
         s.FEW = 0;
+        s.FQ = 0;
+        s.FS = 1;
         int g = net.g;
         double fx = (x - net.x0) / g - 0.5, fy = (y - net.y0) / g - 0.5;
         int i0 = floor(fx) - 1, j0 = floor(fy) - 1;
         if (i0 < 0 || j0 < 0 || i0 + 3 >= net.nx || j0 + 3 >= net.ny) return;
         bspl(fx - i0 - 1, s.BWX);
         bspl(fy - j0 - 1, s.BWY);
-        double D = 0, z = 0, w = 0, a = 0, rl = 0, wv = 0, e = 0, we = 0;
+        double D = 0, z = 0, w = 0, a = 0, rl = 0, wv = 0, e = 0, we = 0, rq = 0, sx = 0;
         for (int j = 0; j < 4; j++) {
             int row = (j0 + j) * net.nx + i0;
             for (int i = 0; i < 4; i++) {
@@ -419,6 +430,8 @@ public class RiverStage extends GenStage {
                     w += wt * (net.vw[k] & 255);
                     a += wt * (net.va[k] & 255);
                     rl += wt * (net.vr[k] & 255);
+                    if (net.vq != null) rq += wt * (net.vq[k] & 255);
+                    sx += wt * (net.vx[k] & 255);
                     wv += wt;
                 }
                 int c = net.cer[k] & 255;
@@ -439,6 +452,32 @@ public class RiverStage extends GenStage {
         s.FW = w / wv / 4; // half-width stored ×4 (rivers up to ~64 blocks)
         s.FA = a / wv / 4;
         s.FR = rl / wv * 2;
+        s.FQ = rq / wv / 255;
+        s.FS = sx / wv / 255;
+    }
+
+    /**
+     * Incised landscape (0..1): dry plateaus and the sedimentary uplands of dry climates (the Colorado Plateau,
+     * Canyonlands), where rivers graded to the low ground beyond the scarp have cut canyons far back into the upland,
+     * following their own bends (goosenecks of the San Juan). There the river network lowers its water gently all the
+     * way up (no waterfalls at the scarp) and the channel cuts steep walls instead of a broad valley. Uses only fields
+     * known before the rivers (plateau share, rock, base precipitation, base height), so the network builder sees the
+     * same mask.
+     */
+    public double incision(GenPoint o) {
+        if (P.incision <= 0) return 0;
+        double plateau = ss(0.35, 0.75, o.plat) * ss(1000, 550, o.Pb);
+        double sed = rockShare(o, Rock.SANDSTONE) + 0.8 * rockShare(o, Rock.LIMESTONE)
+            + 0.5 * rockShare(o, Rock.SHALE)
+            + 0.4 * rockShare(o, Rock.TUFF);
+        double canyon = ss(650, 350, o.Pb) * sed * ss(35, 90, o.h0);
+        return Math.min(1, P.incision * Math.max(plateau, canyon));
+    }
+
+    /** Share of a rock family at a point (the two nearest patches, blended). */
+    static double rockShare(GenPoint o, Rock r) {
+        int k = r.ordinal();
+        return (o.rock == k ? o.rockT : 0) + (o.rock2 == k ? 1 - o.rockT : 0);
     }
 
     /** Broad valley: compresses the relief towards the nearest river; shape depends on rock and glaciation. */
@@ -447,22 +486,75 @@ public class RiverStage extends GenStage {
         double h = o.h, D = s.FD, zr = s.FZ, hw = s.FW, A = s.FA, VW = P.valleyWidth;
         double G = glacial(o, zr) * ss(8, 45, s.FR); // troughs only where the ice was boxed in by mountains
         double str = 0.4 + 0.6 * ss(3.4, 7, hw); // headwaters: faint valley
+        str *= 1 - 0.85 * incision(o) * (1 - G); // incised: the channel cuts its own canyon (below), no broad valley
+        str *= s.FS; // none around a waterfall lip (the field still knows the river is there)
         double Wv = (70 + 12 * hw) * lerp(0.7, 2.2, ef) * VW, Wu = (80 + 8 * hw) * VW;
         FieldMemo m = FIELD_MEMO.get();
         double W = lerp(Wv, Wu, G) * lerp(0.6, 1, str) * m.wMulV;
         double D0 = lerp(6 + hw + 1.15 * A, 12 + 1.5 * hw, G); // flat floor (floodplain)
         double floor = lerp(zr + 0.6, zr - glacialDepth(zr, hw), G);
+        double Q = s.FQ * (1 - G);
+        if (Q > 0.01) { // a ria: the lower valley drowned by the sea, deepest at the mouth, V-shaped
+            floor -= Q * (4 + 0.5 * hw + 8 * Q);
+            D0 *= 1 - 0.5 * Q;
+            W *= 1 - 0.45 * Q; // narrow and winding: only the lower valley is flooded, not the plain around it
+            str = Math.max(str, Q);
+        }
         // the valley's sides are a little irregular (none at the river itself)
         double Dv = D + m.dOff * ss(0, D0, D);
         double t = clamp((Dv - D0) / W, 0, 1);
         if (G * (1 - t) > o.glac) o.glac = G * (1 - t);
-        if (t >= 1 || h <= floor) return;
-        double gam = lerp(lerp(0.6, 1.5, ef), 2.2, G); // <1: gorge; >1: open / U valley
+        if (t >= 1) return;
+        if (h <= floor) {
+            // a gully cut below the valley floor ends at it: the floor is filled with sediment. Deep gullies at the
+            // foot of
+            // steep sides would otherwise leave pits below the river's water (walls of water). Only what the erosion
+            // dug
+            // is filled: lake basins and other hollows of the relief stay.
+            double fill = str * ss(8, 70, o.edge) * (1 - ss(700, 899, D)) * ss(1, 0.6, t);
+            if (fill > 0 && o.eroDelta < 0) o.h = lerp(h, Math.min(floor, h - o.eroDelta), fill);
+            return;
+        }
+        double gam = lerp(lerp(lerp(0.6, 1.5, ef), 0.85, Q), 2.2, G); // <1: gorge; >1: open / U valley
         double tr = valleyT(t); // no crease where the floor meets the sides
         double f = Math.pow(tr * (2 - tr), gam);
         double fade = ss(8, 70, o.edge) * (1 - ss(700, 899, D));
         o.h = lerp(h, floor + (h - floor) * f, str * fade);
-        if ((1 - t) * fade > o.valley) o.valley = (1 - t) * fade;
+        if ((1 - t) * fade * s.FS > o.valley) o.valley = (1 - t) * fade * s.FS;
+        if (P.terraces > 0 && G < 0.5) terraces(o, ef, zr, hw, t, D, D0, fade * (1 - 2 * G));
+    }
+
+    /**
+     * River terraces: flights of flat benches separated by short steep risers along the valley sides, each one an old
+     * floodplain left behind when the river cut down (Rhine, Thames, Snake River). They need loose valley fill (soft
+     * rock,
+     * a wide valley) and a river that incised in pulses: uplift (convergent margins, plateaus, collision belts) or the
+     * glacial cycles of the mid and high latitudes (cold, sediment-laden glacial periods aggrade the floor, warm
+     * periods
+     * cut into it). None near the sea (deltas and estuaries build up instead), in gorges or in glacial troughs. The
+     * height above the floodplain is quantised into benches of 3-5 blocks (2-4 of them); risers show the alluvium.
+     */
+    private void terraces(GenPoint o, double ef, double zr, double hw, double t, double D, double D0, double fade) {
+        double paleo = ss(3, -5, o.Tb - P.glacialCooling); // periglacial at the last glacial maximum
+        double uplift = clamp(0.4 + 1.1 * o.orog + 0.8 * o.plat + 0.8 * o.collR + 0.7 * paleo, 0, 1);
+        double w = P.terraces * fade
+            * uplift
+            * ss(2.5, 6, hw)
+            * ss(0.3, 0.6, ef)
+            * ss(2, 10, zr)
+            * (1 - ss(0.55, 0.95, t))
+            * ss(-0.15, 0.2, fbm(o.x / 3000, o.z / 3000, SD.rivW + 20, 2));
+        if (w <= 0.01 || D <= D0) return;
+        double floor = zr + 0.6, hr = o.h - floor;
+        double S = 3 + 2 * clamp(0.5 + 0.8 * fbm(o.x / 1500, o.z / 1500, SD.rivW + 21, 2), 0, 1); // bench height
+        double n = 2 + Math.floor(3 * rnd(floor(o.x / 2048), floor(o.z / 2048), SD.rivW + 22)); // benches in the flight
+        if (hr <= 0 || hr > (n + 1) * S) return;
+        double q = hr / S, lv = Math.floor(q), fr = q - lv;
+        double stepped = (lv + ss(0.62, 0.9, fr)) * S;
+        double k = w * (1 - ss(n * S, (n + 1) * S, hr));
+        o.h = floor + lerp(hr, stepped, k);
+        if (k > o.terrace) o.terrace = k;
+        if (k > 0.3) o.surf = GenPoint.SURF_ALLUVIUM;
     }
 
     // ------------------------------------------------------------------ 10. main entry
@@ -470,7 +562,8 @@ public class RiverStage extends GenStage {
     /**
      * The scratch of the evaluation on this thread that asked for cached networks only (map previews), from its river
      * stage until the cave stage right after it takes it ({@link #takeCachedOnlyCaller}); null otherwise. The cave
-     * planners reached from there (collapse pits) use their own scratches, so this is how they learn the flag and report
+     * planners reached from there (collapse pits) use their own scratches, so this is how they learn the flag and
+     * report
      * what they skipped.
      */
     private static final class Caller {
@@ -481,7 +574,8 @@ public class RiverStage extends GenStage {
     private static final ThreadLocal<Caller> CALLER = ThreadLocal.withInitial(Caller::new);
 
     /**
-     * For the 2D cave stage that runs right after this stage in an evaluation: the scratch of that evaluation if it asked
+     * For the 2D cave stage that runs right after this stage in an evaluation: the scratch of that evaluation if it
+     * asked
      * for cached networks only (then the cave stage must not build any, and reports a skipped one by setting its
      * {@code riversIncomplete}), else null. Clears it: a later call on this thread without a river stage in between
      * sees null.
@@ -494,7 +588,8 @@ public class RiverStage extends GenStage {
     }
 
     /**
-     * Rivers at (x, y). With {@code s.riversCachedOnly} no network is ever built: a basin that shapes the point but whose
+     * Rivers at (x, y). With {@code s.riversCachedOnly} no network is ever built: a basin that shapes the point but
+     * whose
      * network is not cached is left out and {@code s.riversIncomplete} is set.
      */
     public void apply(double x, double y, GenPoint o, GenScratch s) {
@@ -525,6 +620,7 @@ public class RiverStage extends GenStage {
         FieldMemo memo = FIELD_MEMO.get();
         memo.nearestInLake = false;
         memo.shoreZ = Double.NaN;
+        memo.wcap = Double.POSITIVE_INFINITY;
         if (o.L < -0.5 || s.riversOff) return;
         irregularity(x, y, memo);
         // every basin whose network reaches this point shapes it (valleys and channels stay continuous across divides)
@@ -544,16 +640,96 @@ public class RiverStage extends GenStage {
             } else net = net(c.ci, c.cj);
             if (net.count > 0 || !net.lakes.isEmpty()) nets[nn++] = net;
         }
-        // in phases across networks: all valleys first, then all channels (so each channel measures its water against
-        // the final terrain, not one a neighbouring basin will still lower), then estuaries and lakes
-        for (int phase = 0; phase < 3; phase++) for (int q = 0; q < nn; q++) applyNet(x, y, o, s, nets[q], phase, memo, q);
+        // in phases across networks: all valleys first, then the alluvial fans on them, then all channels (so each
+        // channel
+        // measures its water against the final terrain, not one a neighbouring basin will still change), then estuaries
+        // and lakes
+        valleys(x, y, o, s, nets, nn, memo);
+        for (int phase = 1; phase < 4; phase++) {
+            // every network cuts its channels into the same ground (the valleys and fans, before any channel): where a
+            // river crosses a divide the last reach of one network and the first of the next overlap, and cut one after
+            // the other they dug the bed twice as deep and took the other's bed for their bank (water sunk to it)
+            if (phase == 2) memo.hch = o.h;
+            for (int q = 0; q < nn; q++) {
+                if (phase == 1) {
+                    if (nets[q].nFan > 0) fans(x, y, o, nets[q]);
+                } else applyNet(x, y, o, s, nets[q], phase - 1, memo, q);
+            }
+        }
         java.util.Arrays.fill(nets, 0, nn, null); // the scratch must not keep networks alive after the LRU drops them
+        // two channels side by side at different levels (a tributary coming in at a tangent, a hanging valley): the
+        // water of
+        // the higher one slopes down to the lower one over the blocks next to it, and its bed with it, instead of
+        // standing
+        // beside it as a wall of water
+        // (less than a block of difference is left alone: the reaches of one river differ by that much along its
+        // course)
+        double cap = memo.wcap + 0.75;
+        if (o.river != 0 && cap < o.riverWL) {
+            boolean bar = o.h > o.riverWL; // a gravel bar: stays just above the water
+            o.riverWL = cap;
+            double top = bar ? cap + 0.5 : cap - 1;
+            if (o.h > top) o.h = top;
+        }
         // last reach drowned by the sea (fjord, estuary): only where the river is at sea level anyway. A deep channel
         // inland keeps its own water (otherwise its middle would drop to sea level between higher river water)
         if (o.h < -1 && o.river != 0 && o.delta == 0 && o.riverWL < 1) {
             o.river = 0;
             o.riverD = 1e9;
         }
+    }
+
+    /** How fast the valley of a river farther away gives way to that of the nearest one (blocks of distance). */
+    static final double VALLEY_BLEND = 30;
+
+    /**
+     * Phase 0 across the networks: the delta plains, then the broad valleys. Each network shapes the same terrain with
+     * the
+     * valley of its nearest river, and the results are blended by the distance to that river: the nearest river of any
+     * network decides, as it does inside one network (whose valley field only knows the nearest river of each point).
+     * Applied one after another instead, the valleys stacked: the wide valley of a large river in the next basin cut
+     * the
+     * ground from under a river on its flank (its water left hanging, clamped to the slope column by column), and the
+     * result depended on the order of the networks, which changes at the divide between two basins (a cliff along it).
+     */
+    private void valleys(double x, double y, GenPoint o, GenScratch s, RiverNet[] nets, int nn, FieldMemo m) {
+        for (int q = 0; q < nn; q++) if (nets[q].count > 0 && nets[q].nMouth > 0) deltas(x, y, o, nets[q], false);
+        final double hin = o.h, terr0 = o.terrace;
+        final int surf0 = o.surf;
+        double dmin = 1e9;
+        int qd = -1;
+        for (int q = 0; q < nn; q++) {
+            o.h = hin;
+            o.surf = surf0;
+            o.terrace = terr0;
+            s.FOK = false;
+            applyNet(x, y, o, s, nets[q], 0, m, q);
+            double d = nets[q].count > 0 && s.FOK && s.FD < 899 ? s.FD : 1e9;
+            m.vh[q] = o.h;
+            m.vdist[q] = d;
+            m.vsurf[q] = o.surf;
+            m.vterr[q] = o.terrace;
+            if (d < dmin) {
+                dmin = d;
+                qd = q;
+            }
+        }
+        if (qd < 0) { // no valley here
+            o.h = hin;
+            o.surf = surf0;
+            o.terrace = terr0;
+            return;
+        }
+        double sw = 0, sh = 0;
+        for (int q = 0; q < nn; q++) {
+            if (m.vdist[q] >= 1e9) continue;
+            double w = Math.exp(-(m.vdist[q] - dmin) / VALLEY_BLEND);
+            sw += w;
+            sh += w * m.vh[q];
+        }
+        o.h = sh / sw;
+        o.surf = m.vsurf[qd]; // terraces: those of the nearest river
+        o.terrace = m.vterr[qd];
     }
 
     /**
@@ -564,10 +740,19 @@ public class RiverStage extends GenStage {
 
         final boolean[] ok = new boolean[9];
         final double[] fe = new double[9], few = new double[9], fr = new double[9];
+        /**
+         * Per network, its valley at the current point: the height it leaves, the distance to its river, its terraces.
+         */
+        final double[] vh = new double[9], vdist = new double[9], vterr = new double[9];
+        final int[] vsurf = new int[9];
         /** The nearest channel at the current point lies in a river lake (its water is the lake's). */
         boolean nearestInLake;
         /** Level of the lake whose shore the current point is on (rim zone, not in the lake), or NaN. */
         double shoreZ = Double.NaN;
+        /** The ground at the current point before the channels were cut (all networks cut into it). */
+        double hch;
+        /** Lowest water any channel beside the current point allows there (see {@link #WATER_SLOPE}). */
+        double wcap = Double.POSITIVE_INFINITY;
         /** Irregularity at the current point: valley distance offset and width factor, channel width and bed depth. */
         double dOff, wMulV, widthMul = 1, depthMul = 1;
     }
@@ -575,24 +760,42 @@ public class RiverStage extends GenStage {
     private static final ThreadLocal<FieldMemo> FIELD_MEMO = ThreadLocal.withInitial(FieldMemo::new);
 
     /**
-     * Rivers and valleys a little less smooth: the channel half-width varies along the river (about ±18 % over a few tens
-     * of blocks, plus a slight short jitter of the bank line), the bed is deeper in pools and shallower over riffles (±30 %), and
+     * Rivers and valleys a little less smooth: the channel half-width varies along the river (about ±18 % over a few
+     * tens
+     * of blocks, plus a slight short jitter of the bank line), the bed is deeper in pools and shallower over riffles
+     * (±30 %), and
      * the valley sides are not perfect extrusions of the river (the distance to it is offset by up to ~14 blocks, the
      * valley width varies by ±12 %). Functions of position only: every network sees the same values at a point.
      */
     private void irregularity(double x, double y, FieldMemo m) {
         m.dOff = 10 * perlin(x / 90, y / 90, SD.rivW + 5) + 4 * perlin(x / 23, y / 23, SD.rivW + 6);
         m.wMulV = 1 + 0.12 * perlin(x / 400, y / 400, SD.rivW + 7);
-        m.widthMul = clamp(1 + 0.18 * perlin(x / 40, y / 40, SD.rivW + 8) + 0.025 * perlin(x / 12, y / 12, SD.rivW + 9), 0.75,
+        m.widthMul = clamp(
+            1 + 0.18 * perlin(x / 40, y / 40, SD.rivW + 8) + 0.025 * perlin(x / 12, y / 12, SD.rivW + 9),
+            0.75,
             CHANNEL_WIDEN);
         m.depthMul = 1 + 0.3 * perlin(x / 70, y / 70, SD.rivW + 10);
     }
+
+    /**
+     * Steepest water surface across channels: beside a channel, the water of any other channel stands at most this many
+     * blocks higher per block of distance from its bank.
+     */
+    static final double WATER_SLOPE = 0.5;
+
+    /**
+     * How far from a channel's bank (blocks) it holds the water of its neighbours down: beyond it the limit rises
+     * steeply
+     * (a river on a bench above another one, tens of blocks away, keeps its level).
+     */
+    static final double WATER_REACH = 12;
 
     /** Largest widening of a channel by {@link #irregularity} (search pads allow for it). */
     static final double CHANNEL_WIDEN = 1.25;
 
     /**
-     * Position across a broad valley, 0 at the edge of its flat floor to 1 at its outer edge, with the corner at the floor
+     * Position across a broad valley, 0 at the edge of its flat floor to 1 at its outer edge, with the corner at the
+     * floor
      * rounded: over the first 12 % a cubic easing in (zero slope at the floor, so even a gorge leaves its floodplain
      * without a crease; value and slope match the plain profile at 12 %), unchanged beyond.
      */
@@ -601,7 +804,9 @@ public class RiverStage extends GenStage {
         return t < e ? (2 * t * t - t * t * t / e) / e : t;
     }
 
-    /** Valley distance and width as {@link #broadValley} sees them at (x, y) (for the network builder's lake shores). */
+    /**
+     * Valley distance and width as {@link #broadValley} sees them at (x, y) (for the network builder's lake shores).
+     */
     double[] valleyIrregularity(double x, double y) {
         FieldMemo m = new FieldMemo();
         irregularity(x, y, m);
@@ -616,6 +821,17 @@ public class RiverStage extends GenStage {
         return FIELD_MEMO.get().shoreZ;
     }
 
+    /**
+     * Lowest continentality that can still be land: below it the network builder takes a node for sea whatever its
+     * relief.
+     * Above it the relief decides (a pocket of slightly negative continentality whose relief stands above the sea is
+     * land,
+     * with rivers), so the stage shapes valleys and channels down to the same limit: a higher one here left the rivers
+     * of
+     * such pockets uncarved, cut off in the middle of the land.
+     */
+    static final double LAND_L = -0.2;
+
     /** Applies one phase of one basin network: 0 delta + broad valley, 1 channel, 2 estuary + lakes. */
     protected void applyNet(double x, double y, GenPoint o, GenScratch s, RiverNet net, int phase) {
         applyNet(x, y, o, s, net, phase, null, 0);
@@ -627,10 +843,11 @@ public class RiverStage extends GenStage {
             if (net.nMouth > 0) deltas(x, y, o, net, true); // distributaries, after the river channels
             if (net.estSeg.length > 0) estuaries(x, y, o, net);
             if (!net.lakes.isEmpty()) lakes(x, y, o, net, s);
+            if (net.nOx > 0) oxbowLakes(x, y, o, net);
             return;
         }
         if (net.count == 0) return;
-        if (phase == 0 && net.nMouth > 0) deltas(x, y, o, net, false);
+        if (phase == 0 && net.nMouth > 0 && m == null) deltas(x, y, o, net, false); // (with m: done by valleys())
         // valley shape from the rock (interpolated from the network grid so it changes smoothly between patches)
         if (m == null || phase == 0) {
             netField(x, y, net, s);
@@ -648,7 +865,7 @@ public class RiverStage extends GenStage {
         }
         double ef = clamp(lerp(0.5, (lerp(o.erod, s.FE, s.FEW) - 0.2) / 0.7, P.valleyRock), 0, 1);
         o.gorge = 1 - ef;
-        if (o.L >= -0.04) {
+        if (o.L >= LAND_L) {
             if (phase == 0) {
                 broadValley(o, ef, s);
                 return;
@@ -660,9 +877,15 @@ public class RiverStage extends GenStage {
             float[] pts = net.pts, BB = net.bb;
             double best = 1e9, bhw = 0, bz = 0, bacc = 0, bW = 1, bwl = 0, bws = 0;
             boolean bLake = false; // the nearest reach lies in a river lake
-            double h = o.h, VMAX = 2 * g;
+            double h = m != null ? m.hch : o.h, VMAX = 2 * g; // the ground before any channel
             int RC = (int) Math.ceil((VMAX + 24 + net.reach) / g);
             double wMul = lerp(0.45, 2.0, ef), bankSlope = lerp(1.5, 0.25, ef);
+            // incised landscape: the channel cuts a canyon that follows its own bends (goosenecks), and in dry
+            // sandstone the
+            // small streams cut slots with vertical walls
+            double inc = incision(o) * (1 - glacial(o, 0)), slot = 0;
+            if (inc > 0) slot = ss(650, 350, o.Pb) * rockShare(o, Rock.SANDSTONE);
+            double bBrd = 0, bAlong = 0, bAcross = 0;
             double hmin = h;
             // the reaches in the window of RC cells around the point's cell, in grid order: from the network's index
             // (the bucket of the cell lists those that can matter there), or by scanning the window
@@ -689,7 +912,8 @@ public class RiverStage extends GenStage {
                     }
                     if (sl < 0 || net.skip[sl] != 0) continue; // skipped: replaced by a delta
                     double pad = VMAX + CHANNEL_WIDEN * Math.max(net.w0[sl], net.w1[sl]);
-                    if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad || qy < BB[sl * 4 + 1] - pad
+                    if (qx < BB[sl * 4] - pad || qx > BB[sl * 4 + 2] + pad
+                        || qy < BB[sl * 4 + 1] - pad
                         || qy > BB[sl * 4 + 3] + pad) continue;
                     if (net.fallIn.length > 0 && net.fallIn[sl] > 0) {
                         // below a waterfall: nothing behind the lip belongs to this reach (its banks would cut a ramp
@@ -698,6 +922,9 @@ public class RiverStage extends GenStage {
                         double vx0 = pts[q0 + 2] - pts[q0], vy0 = pts[q0 + 3] - pts[q0 + 1];
                         if ((qx - pts[q0]) * vx0 + (qy - pts[q0 + 1]) * vy0 < 0) continue;
                     }
+                    // the point of the reach nearest to this one (for the water cap below)
+                    double nd = 1e18, nv = 0, nu = 0, nhw = 0;
+                    boolean nEnd = true;
                     for (int k = 0; k < SEG; k++) {
                         int q = (sl * NPT + k) * 2;
                         double ax = pts[q], ay = pts[q + 1], vx = pts[q + 2] - ax, vy = pts[q + 3] - ay;
@@ -709,6 +936,15 @@ public class RiverStage extends GenStage {
                         double u = (k + t) / SEG;
                         double hw = lerp(net.w0[sl], net.w1[sl], u) * cm.widthMul; // irregular banks
                         double v = dist - hw;
+                        if (dist < nd) {
+                            nd = dist;
+                            nv = v;
+                            nu = u;
+                            nhw = hw;
+                            // beyond one of the reach's two ends (well off the perpendicular there)?
+                            double over = k == 0 && tr < 0 ? -tr : k == SEG - 1 && tr > 1 ? tr - 1 : 0;
+                            nEnd = over * Math.sqrt(l2) > 0.35 * dist;
+                        }
                         if (v >= VMAX) continue;
                         double z = lerp(net.z0[sl], net.z1[sl], u);
                         // waterfalls: the reach below starts at the lip and never cuts back into it; the reach above
@@ -723,47 +959,91 @@ public class RiverStage extends GenStage {
                             if (along < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z + fin);
                         }
                         if (fin > 0 && u < 0.3) pool = (2 + 0.1 * fin) * (1 - u / 0.3); // plunge pool
-                        // near its lip, the reach above stops where the ground has already dropped below its water: past
+                        // near its lip, the reach above stops where the ground has already dropped below its water:
+                        // past
                         // an oblique cliff edge it would stand as a wall of water over the low ground
                         if (lip != 0 && k >= SEG - 3 && h < z - RiverNetBuilder.MIN_FALL) continue;
                         if (lip != 0 && k == SEG - 1) {
                             double past = (tr - 1) * Math.sqrt(l2);
                             if (past > -(hw + 4) && v < 3) o.fall = 1;
                             if (tr > 1) {
-                                if (lip == 2 && past < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z); // into the sea
+                                if (lip == 2 && past < 1.5 && v <= 0) o.fallTop = Math.max(o.fallTop, z); // into the
+                                                                                                          // sea
                                 continue;
                             }
                         }
                         // the glacial trough is made by the broad valley; here the glacier only lowers the bed
                         double G = glacial(o, z) * (s.FOK ? ss(8, 45, s.FR) : 0);
-                        double W = Math.min((5 + hw * 2) * wMul, VMAX);
-                        if (v >= W) continue;
+                        double W = Math.min((5 + hw * 2) * wMul, VMAX), Wc = inc > 0.02 ? VMAX : W;
+                        double brd = net.br0.length > 0 ? lerp(net.br0[sl], net.br1[sl], u) : 0;
                         double dep = net.head[sl] != 0 ? ss(0, 0.9, u) : 1; // headwater starts without a valley
-                        double zu = z - G * glacialDepth(z, hw); // below sea level next to the sea → fjord
+                        // the water in a glacial trough lies on the trough's floor, as the broad valley cut it: the
+                        // same
+                        // depth (from the river's own width, without the braiding and the irregular banks), once (the
+                        // channel used to take it twice over, so in a half-glaciated valley its water stood above the
+                        // valley floor: clamped to the ground column by column, with the gravel bars of a braided river
+                        // standing blocks above it). Below sea level next to the sea → fjord
+                        double zc = z - G * glacialDepth(z, hw / (cm.widthMul * RiverNetBuilder.braidWiden(brd)));
+                        if (v >= Wc) continue;
                         if (v < best) {
                             best = v;
                             bhw = hw;
                             bz = z;
                             bacc = net.acc[sl];
                             bW = W;
-                            bws = lerp(z, zu, G); // water surface of the nearest reach
+                            bws = zc; // water surface of the nearest reach
                             bLake = net.inLake.length > 0 && net.inLake[sl] != 0;
                             bwl = Math.min(h, bws); // water fills the channel up to the bank
+                            bBrd = brd;
+                            if (brd > 0.1) { // position along and across the channel, for the gravel bars
+                                bAlong = lerp(net.am0[sl], net.am1[sl], u);
+                                bAcross = vx * dy - vy * dx >= 0 ? dist : -dist;
+                            }
                         }
                         double hc;
                         if (v <= 0) {
-                            double qq = dist / Math.max(hw, 1e-3), zc = lerp(z, zu, G);
-                            hc = Math.min(h, zc) - (1.2 + hw * 0.25 + pool) * cm.depthMul * (1 - qq * qq);
+                            double qq = dist / Math.max(hw, 1e-3);
+                            double depth = (1.2 + hw * 0.25 + pool) * cm.depthMul;
+                            if (brd > 0.02) depth = lerp(depth, 0.7 + 0.03 * hw, brd); // braided: wide and shallow
+                            hc = Math.min(h, zc) - depth * (1 - qq * qq);
                         } else {
-                            double bank = lerp(z, zu, G) + v * bankSlope;
-                            hc = h > bank ? lerp(bank, h, ss(0, W, v)) : h;
+                            double bank = zc + v * bankSlope;
+                            hc = v < W && h > bank ? lerp(bank, h, ss(0, W, v)) : h;
+                            if (inc > 0) { // canyon walls straight up from the bank, steeper for slots
+                                double wall = z + 0.8 + v * lerp(2.2, 7, slot * ss(3.5, 1.5, hw));
+                                hc = lerp(hc, Math.min(h, wall), inc);
+                            }
                         }
                         if (dep < 1) hc = lerp(h, hc, dep);
                         if (hc < hmin) hmin = hc;
                     }
+                    // no water stands higher than a channel beside it allows: its own level, rising gently away from
+                    // its bank over the first blocks. Only beside the reach, not beyond its two ends: there the next
+                    // reach takes over, and a
+                    // reach says nothing about the river above a waterfall or about the one it flows into
+                    if (!nEnd && nv < VMAX
+                        && net.head[sl] == 0
+                        && !(net.fallIn.length > 0 && (net.fallIn[sl] > 0 || net.lipOut[sl] != 0))) {
+                        double nz = lerp(net.z0[sl], net.z1[sl], nu);
+                        double nG = glacial(o, nz) * (s.FOK ? ss(8, 45, s.FR) : 0);
+                        double nbrd = net.br0.length > 0 ? lerp(net.br0[sl], net.br1[sl], nu) : 0;
+                        double cap = nz - nG * glacialDepth(nz, nhw / (cm.widthMul * RiverNetBuilder.braidWiden(nbrd)))
+                            + WATER_SLOPE * Math.max(0, nv)
+                            + 3 * Math.max(0, nv - WATER_REACH);
+                        if (cap < cm.wcap) cm.wcap = cap;
+                    }
                 }
             }
             if (best < 1e8) {
+                if (best <= 0 && bBrd > 0.1) { // gravel bars split a braided channel into threads
+                    double w0 = bhw / RiverNetBuilder.braidWiden(bBrd);
+                    // lens-shaped bars, several channel widths long
+                    double nb = fbm(bAlong / (5 * w0 + 10), bAcross / (1.1 * w0 + 2) + 13.7, SD.rivF + 5, 2);
+                    if (nb > 0.1 - 0.2 * bBrd && Math.abs(bAcross) < 0.82 * bhw) {
+                        hmin = Math.max(hmin, bwl + 0.5); // just above the water as it stands here
+                        o.surf = GenPoint.SURF_GRAVEL;
+                    }
+                }
                 if (best < o.riverD) { // the nearest channel (of any network, or a delta distributary) sets the water
                     o.riverD = best;
                     o.riverHW = bhw;
@@ -772,7 +1052,7 @@ public class RiverStage extends GenStage {
                     o.riverWL = bwl;
                     if (m != null) m.nearestInLake = bLake;
                 }
-                o.h = hmin;
+                if (hmin < o.h) o.h = hmin;
                 // a low bank right next to the water would let it spill: keep the first blocks at least at water level
                 // (applied after the carve, and only when this network owns the nearest channel, so it never fills
                 // another network's or a delta's channel)
@@ -783,6 +1063,73 @@ public class RiverStage extends GenStage {
                 if (best <= 0) o.river = 1;
                 else o.valley = Math.max(o.valley, 1 - best / bW);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ 10a'. alluvial fans and oxbow lakes
+
+    /**
+     * Alluvial fans (planned by the network builder): a cone spreading from the canyon mouth over a sector of ~±100°
+     * downstream, concave in profile (steep at the apex, flattening towards the toe), filling the low ground below it.
+     * The river keeps its own level: its channel is cut into the fan afterwards.
+     */
+    protected void fans(double x, double y, GenPoint o, RiverNet net) {
+        float[] F = net.fans;
+        final int FN = RiverNet.FN;
+        for (int q = 0; q < net.nFan; q++) {
+            int b = q * FN;
+            double R = F[b + 4], dx = x - F[b], dy = y - F[b + 1];
+            if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
+            double r = Math.sqrt(dx * dx + dy * dy);
+            if (r >= R) continue;
+            double cs = r > 1e-6 ? (dx * F[b + 2] + dy * F[b + 3]) / r : 1;
+            double sw = Math.max(ss(-0.25, 0.4, cs), 1 - ss(6, 16, r)) * (1 - ss(0.8 * R, R, r));
+            if (sw <= 0) continue;
+            double zA = F[b + 5], zT = F[b + 6];
+            // concave radial profile, with shallow radial ribs (old channels on the fan)
+            double zf = zT + (zA - zT) * Math.pow(1 - r / R, 1.7)
+                + 0.7 * perlin(Math.atan2(dy, dx) * R / 18, r / 60, SD.rivF + 3) * ss(0, 0.3 * R, r);
+            if (o.h >= zf) continue;
+            double hn = lerp(o.h, zf, sw);
+            if (hn - o.h > 0.5) o.surf = GenPoint.SURF_FAN;
+            o.h = hn;
+        }
+    }
+
+    /**
+     * Oxbow lakes (planned by the network builder): a horseshoe of water, tapering shut at both ends, on the flat
+     * floodplain (or the foot of the valley side), never touching a channel.
+     */
+    protected void oxbowLakes(double x, double y, GenPoint o, RiverNet net) {
+        if (o.lake != 0 || o.river != 0) return;
+        float[] X = net.ox;
+        final int OXN = RiverNet.OXN;
+        for (int q = 0; q < net.nOx; q++) {
+            int b = q * OXN;
+            double r = X[b + 2], w = X[b + 3], dx = x - X[b], dy = y - X[b + 1];
+            if (Math.abs(dx) > 1.25 * (r + w) + 1 || Math.abs(dy) > 1.25 * (r + w) + 1) continue;
+            // a cut-off loop is wider across than deep: an ellipse stretched across the open side, a little irregular
+            double gap = X[b + 5], gc = Math.cos(gap), gs = Math.sin(gap);
+            double u = dx * gc + dy * gs, v = -dx * gs + dy * gc;
+            double d0 = Math.sqrt(u * u + v * v);
+            if (d0 < 1e-6) continue;
+            double d = Math.sqrt(u * u / 0.72 + v * v * 0.8)
+                * (1 + 0.12 * perlin(Math.atan2(v, u) * 1.6, q * 3.1 + X[b] * 0.01, SD.rivF + 4));
+            if (Math.abs(d - r) > w + 1) continue;
+            double cg = u / d0; // 1 = towards the open side
+            double we = w * (1 - ss(0.35, 0.6, cg)); // the arc tapers shut at both ends
+            if (we < 0.5) continue;
+            double qq = Math.abs(d - r) / we;
+            if (qq >= 1) continue;
+            double Z = X[b + 4];
+            // on the floodplain or the foot of the valley side (ground above the water all round: the floodplain is at
+            // least 0.7 above it), never next to a channel
+            if (o.h < Z + 0.3 || o.h > Z + 8 || o.riverD < o.riverHW + 3) continue;
+            o.h = Math.min(o.h, Z - 0.3 - X[b + 6] * (1 - qq * qq));
+            o.lake = 1;
+            o.lakeZ = Z;
+            o.surf = GenPoint.SURF_NONE;
+            return;
         }
     }
 
@@ -831,6 +1178,7 @@ public class RiverStage extends GenStage {
         // (a channel inside a river lake is the lake's own water: the rim closes around it)
         FieldMemo fm = FIELD_MEMO.get();
         if (m > thr - 0.3) fm.shoreZ = fm.shoreZ == fm.shoreZ ? Math.max(fm.shoreZ, Z) : Z;
-        if (o.h < rim) o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m) * (fm.nearestInLake ? 1 : ss(2, 14, o.riverD - o.riverHW)));
+        if (o.h < rim)
+            o.h = lerp(o.h, rim, ss(thr - 0.3, thr, m) * (fm.nearestInLake ? 1 : ss(2, 14, o.riverD - o.riverHW)));
     }
 }

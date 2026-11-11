@@ -49,7 +49,7 @@ Reaches normally join halfway between nodes. A fall moves the joint to the lip:
 
 The broad valley of a river cell is taken from its nearest river node. Below a fall, cells up at the level of the lip used to take the pool's level and the valley cut a 50-block ramp into the plateau behind the lip. Now cells at least `0.7·drop` above the pool, whose nearest node is one of the 4 nodes below a fall, take the node at the lip.
 
-The valley field is also interpolated between grid cells (32 blocks): between a cell above the fall and one at the pool it still cut a ramp right where the river reaches the cliff, lowering the plateau by ~35 blocks under the water of the river. So there is **no broad valley within 1.6 cells of a lip**: the terrain keeps its scarp and only the two channels are carved.
+The valley field is also interpolated between grid cells (32 blocks): between a cell above the fall and one at the pool it still cut a ramp right where the river reaches the cliff, lowering the plateau by ~35 blocks under the water of the river. So there is **no broad valley within 1.6 cells of a lip**: the terrain keeps its scarp and only the two channels are carved. It is stored as a valley **strength** of 0 on those cells (`vx`, interpolated like the rest of the field), not as "no river": the distance to the river stays, so the valleys of neighbouring networks still give way to this river there (they used to cut the plateau from under it right above its fall).
 
 ### Blocks
 

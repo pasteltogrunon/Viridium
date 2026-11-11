@@ -70,7 +70,9 @@ public final class GenStats {
     public static final Timer RIVER_DELTAS = new Timer("  river: deltas");
     public static final Timer RIVER_VALLEY = new Timer("  river: valley field");
 
-    public static final Timer[] ALL = { PLAN, PREFETCH, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK, POPULATE, FLORA, FLORA_FEATURES, RIVER_NET, RIVER_DEPS, RIVER_GRID, RIVER_FLOW, RIVER_LAKES, RIVER_ACC, RIVER_LEVELS, RIVER_REACHES, RIVER_DELTAS, RIVER_VALLEY };
+    public static final Timer[] ALL = { PLAN, PREFETCH, PLAN_WAIT, FILL_AIR, FILL_CRUST, FILL_MIXED, FILL_BEDROCK,
+        POPULATE, FLORA, FLORA_FEATURES, RIVER_NET, RIVER_DEPS, RIVER_GRID, RIVER_FLOW, RIVER_LAKES, RIVER_ACC,
+        RIVER_LEVELS, RIVER_REACHES, RIVER_DELTAS, RIVER_VALLEY };
 
     private GenStats() {}
 
@@ -78,8 +80,14 @@ public final class GenStats {
         StringBuilder sb = new StringBuilder();
         for (Timer t : ALL) {
             if (t.count() == 0) continue;
-            sb.append(String.format("%-38s %7d × %8.3f ms (max %7.1f) = %9.0f ms%n", t.name, t.count(), t.meanMs(),
-                t.maxMs(), t.totalMs()));
+            sb.append(
+                String.format(
+                    "%-38s %7d × %8.3f ms (max %7.1f) = %9.0f ms%n",
+                    t.name,
+                    t.count(),
+                    t.meanMs(),
+                    t.maxMs(),
+                    t.totalMs()));
         }
         return sb.length() == 0 ? "no generation recorded yet\n" : sb.toString();
     }

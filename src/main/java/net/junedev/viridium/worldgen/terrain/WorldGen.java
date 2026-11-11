@@ -103,6 +103,8 @@ public final class WorldGen {
         if (upTo == Stage.PLATES) return o;
         continents.apply(x, z, o);
         if (upTo == Stage.CONTINENTS) return o;
+        o.surf = GenPoint.SURF_NONE; // landforms below set it
+        o.terrace = 0;
         o.h0 = relief.baseHeight(x, z, o, true, s);
         o.h = o.h0;
         if (upTo == Stage.RELIEF) return o;

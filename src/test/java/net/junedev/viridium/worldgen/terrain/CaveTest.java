@@ -95,19 +95,31 @@ class CaveTest {
             }
         }
         double ms = (System.nanoTime() - t0) / 1e6;
-        StringBuilder sb = new StringBuilder("caves (220 columns, " + cubes + " cubes, " + String.format("%.2f", ms / cubes)
-            + " ms per cube incl. lithology):\n");
+        StringBuilder sb = new StringBuilder(
+            "caves (220 columns, " + cubes
+                + " cubes, "
+                + String.format("%.2f", ms / cubes)
+                + " ms per cube incl. lithology):\n");
         for (int b = 0; b < bands.length - 1; b++) {
             long all = solid[b] + open[b];
             if (all == 0) continue;
-            sb.append(String.format("  y %5d..%5d: void %5.2f%%  (water %4.1f%%, lava %4.1f%% of it)%n", bands[b + 1],
-                bands[b], 100.0 * open[b] / all, 100.0 * wet[b] / Math.max(1, open[b]),
-                100.0 * lava[b] / Math.max(1, open[b])));
+            sb.append(
+                String.format(
+                    "  y %5d..%5d: void %5.2f%%  (water %4.1f%%, lava %4.1f%% of it)%n",
+                    bands[b + 1],
+                    bands[b],
+                    100.0 * open[b] / all,
+                    100.0 * wet[b] / Math.max(1, open[b]),
+                    100.0 * lava[b] / Math.max(1, open[b])));
         }
-        for (CaveCarver.Style st : CaveCarver.Style.values())
-            if (styleAll[st.ordinal()] > 0) sb.append(String.format("  %-12s void %5.2f%% of %d blocks%n", st,
-                100.0 * styleOpen[st.ordinal()] / styleAll[st.ordinal()], styleAll[st.ordinal()]));
-        sb.append(String.format("  carved in the safety layer under water: %d, water next to air: %d%n", safety, walls));
+        for (CaveCarver.Style st : CaveCarver.Style.values()) if (styleAll[st.ordinal()] > 0) sb.append(
+            String.format(
+                "  %-12s void %5.2f%% of %d blocks%n",
+                st,
+                100.0 * styleOpen[st.ordinal()] / styleAll[st.ordinal()],
+                styleAll[st.ordinal()]));
+        sb.append(
+            String.format("  carved in the safety layer under water: %d, water next to air: %d%n", safety, walls));
         System.out.print(sb);
         assertTrue(safety == 0, "caves carved under water bodies");
     }
@@ -147,8 +159,12 @@ class CaveTest {
             if (o.L > 0.02 && o.h0 > 3 && net.junedev.viridium.worldgen.terrain.caves.Karst.karstOf(o) > 0.4) kOk++;
         }
         System.out.printf("shaft candidates %d, on karst land %d%n", cand, kOk);
-        System.out.printf("karst: %.2f%% of land in dolines (deepest %.1f), %d shafts checked, %d open 12 blocks down%n",
-            100.0 * inDoline / Math.max(1, pts), deepest, shafts, open);
+        System.out.printf(
+            "karst: %.2f%% of land in dolines (deepest %.1f), %d shafts checked, %d open 12 blocks down%n",
+            100.0 * inDoline / Math.max(1, pts),
+            deepest,
+            shafts,
+            open);
         assertTrue(inDoline > 0, "no dolines");
         assertTrue(shafts == 0 || open > 0, "shafts not carved");
     }
@@ -178,12 +194,31 @@ class CaveTest {
                     sm.cube(x >> 4, y >> 4, z >> 4);
                     byte code = sm.code[(((y & 15) * 16) + (z & 15)) * 16 + (x & 15)];
                     if (code > 0) carved++;
-                    else System.out.printf("  not carved: chamber %.0f,%.0f,%.0f r %.0f/%.0f/%.0f floor %.0f code %d surface %d%n", c.x, c.y, c.z, c.rx, c.ry, c.rz, c.floor, code, sm.plans.get(x >> 4, z >> 4).surfaceY[ColumnPlan.index(x & 15, z & 15)]);
+                    else System.out.printf(
+                        "  not carved: chamber %.0f,%.0f,%.0f r %.0f/%.0f/%.0f floor %.0f code %d surface %d%n",
+                        c.x,
+                        c.y,
+                        c.z,
+                        c.rx,
+                        c.ry,
+                        c.rz,
+                        c.floor,
+                        code,
+                        sm.plans.get(x >> 4, z >> 4).surfaceY[ColumnPlan.index(x & 15, z & 15)]);
                 }
             }
         }
-        System.out.printf("cave systems (121 regions): chambers shallow %d, mid %d, deep %d; %d with a lake; %d collapse pits; widest %.0f blocks; %d/%d chamber centres carved;%s%n",
-            shallow, mid, deep, lakes, pits, widest, carved, checked, where);
+        System.out.printf(
+            "cave systems (121 regions): chambers shallow %d, mid %d, deep %d; %d with a lake; %d collapse pits; widest %.0f blocks; %d/%d chamber centres carved;%s%n",
+            shallow,
+            mid,
+            deep,
+            lakes,
+            pits,
+            widest,
+            carved,
+            checked,
+            where);
         assertTrue(shallow + mid + deep > 0, "no chambers");
         assertTrue(carved >= checked * 0.8, "chambers not carved");
     }
@@ -209,7 +244,11 @@ class CaveTest {
             systems++;
             var top = r.chambers.get(0);
             for (var c : r.chambers) if (c.y > top.y) top = c;
-            var oo = sm.gen.evaluate(top.x, top.z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION, new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint());
+            var oo = sm.gen.evaluate(
+                top.x,
+                top.z,
+                net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION,
+                new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint());
             if (top.pitR > 0) pitSys++;
             else if (oo.L > 0.05) landSys++;
             if (r.mouth.isEmpty()) continue;
@@ -217,14 +256,22 @@ class CaveTest {
             if (openAt(sm, r.mouth.get(0))) gOpen++;
         }
         System.out.printf("systems with a pit %d, on land without pit %d%n", pitSys, landSys);
-        System.out.printf("entrances: %d hillside mouths in %d cells (%d/%d checked open); %d great entrances for %d systems (%d open)%n",
-            mouths, cells, open, checked, great, systems, gOpen);
+        System.out.printf(
+            "entrances: %d hillside mouths in %d cells (%d/%d checked open); %d great entrances for %d systems (%d open)%n",
+            mouths,
+            cells,
+            open,
+            checked,
+            great,
+            systems,
+            gOpen);
         assertTrue(mouths > 0 && open >= checked * 0.7, "hillside mouths missing or closed");
         assertTrue(great > 0 && gOpen >= great * 0.7, "great entrances missing or closed");
     }
 
     private static boolean openAt(Sample sm, net.junedev.viridium.worldgen.terrain.caves.CaveSystems.Segment s) {
-        int x = (int) Math.floor(s.minX() + (s.maxX() - s.minX()) * 0.5), z = (int) Math.floor(s.minZ() + (s.maxZ() - s.minZ()) * 0.5);
+        int x = (int) Math.floor(s.minX() + (s.maxX() - s.minX()) * 0.5),
+            z = (int) Math.floor(s.minZ() + (s.maxZ() - s.minZ()) * 0.5);
         ColumnPlan p = sm.plans.get(x >> 4, z >> 4);
         int y = p.surfaceY[ColumnPlan.index(x & 15, z & 15)] - 2;
         for (int d = 0; d < 10; d++, y--) { // the first block below the ground that is part of the ramp
@@ -261,7 +308,9 @@ class CaveTest {
             lith = t1 - t0;
             cave = t2 - t1;
         }
-        System.out.printf("crust cube: lithology %.3f ms, lithology + caves %.3f ms%n", lith / 1e6 / cubes.length,
+        System.out.printf(
+            "crust cube: lithology %.3f ms, lithology + caves %.3f ms%n",
+            lith / 1e6 / cubes.length,
             cave / 1e6 / cubes.length);
     }
 
@@ -270,7 +319,8 @@ class CaveTest {
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CAVES", matches = ".+")
     void section() {
         Sample sm = new Sample();
-        String[] a = System.getenv("VIRIDIUM_CAVES").split(",");
+        String[] a = System.getenv("VIRIDIUM_CAVES")
+            .split(",");
         int x0 = Integer.parseInt(a[0]), x1 = Integer.parseInt(a[1]), z = Integer.parseInt(a[2]),
             yt = Integer.parseInt(a[3]), yb = Integer.parseInt(a[4]);
         int step = Math.max(1, (x1 - x0) / 180);
@@ -283,7 +333,9 @@ class CaveTest {
                 }
                 int k = (((y & 15) * 16) + (z & 15)) * 16 + (x & 15);
                 byte c = sm.code[k];
-                sb.append(c < 0 ? '.' : c == CaveCarver.SOLID ? '#' : c == CaveCarver.AIR ? ' ' : c == CaveCarver.WATER ? '~' : '^');
+                sb.append(
+                    c < 0 ? '.'
+                        : c == CaveCarver.SOLID ? '#' : c == CaveCarver.AIR ? ' ' : c == CaveCarver.WATER ? '~' : '^');
             }
             System.out.println(sb);
         }

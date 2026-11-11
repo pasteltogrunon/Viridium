@@ -3,7 +3,8 @@ package net.junedev.viridium.worldgen.terrain.caves;
 import net.junedev.viridium.worldgen.terrain.core.Noise;
 
 /**
- * A wobbly closed outline: r(θ) = 1 + Σ a_k cos(kθ − φ_k) over a few low harmonics, random per feature. Evaluated from a
+ * A wobbly closed outline: r(θ) = 1 + Σ a_k cos(kθ − φ_k) over a few low harmonics, random per feature. Evaluated from
+ * a
  * unit direction (cos θ, sin θ) by complex powers: no trigonometry per call.
  */
 final class Lobes {

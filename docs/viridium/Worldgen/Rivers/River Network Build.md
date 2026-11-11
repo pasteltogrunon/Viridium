@@ -96,6 +96,18 @@ never converge. So receivers are re-picked:
 The ±8-block noise `rkey` carves gentle virtual valleys that make the flow converge into few rivers. `riverRouteNoise
 = 0` disables it.
 
+**No crossing links.** Two diagonal links through the same square of the grid (`a → d` and `b → c`) cross: two rivers
+would run through each other. The higher of the two source nodes drains into the other instead (still strictly
+downhill on `filled`).
+
+### River capture
+
+After the flow is accumulated, a river node next to (8-neighbour) a **lower** node of another river drains into it
+instead, unless the two rivers join within three nodes anyway (`captureNeighbours`, upstream first; the flow is then
+accumulated again, up to 4 rounds). Two rivers in neighbouring nodes are at most 32 blocks apart and, over the flats
+the flood filled, used to run side by side for hundreds of blocks, each at its own level and with its own meanders:
+channels overlapping and crossing, the higher one a wall of water over the other. Now they join where they meet.
+
 ## Flow accumulation
 
 ```

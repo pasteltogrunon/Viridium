@@ -48,8 +48,12 @@ class CliffDetailTest {
                 }
             }
         }
-        System.out.printf("cliff detail: %d notch columns (%d flooded), %d talus columns, %d boulder sites%n", notches,
-            wet, talus, boulderSites);
+        System.out.printf(
+            "cliff detail: %d notch columns (%d flooded), %d talus columns, %d boulder sites%n",
+            notches,
+            wet,
+            talus,
+            boulderSites);
         assertTrue(wet > 0, "no sea notch at the sea cliff");
         assertTrue(talus > 0, "no talus at the escarpment");
         assertTrue(boulderSites > 0, "no boulder sites");

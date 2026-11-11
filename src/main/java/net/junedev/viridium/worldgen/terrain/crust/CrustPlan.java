@@ -6,8 +6,8 @@ package net.junedev.viridium.worldgen.terrain.crust;
  */
 public final class CrustPlan {
 
-    public static final int FLAG_RIDGE = 1, FLAG_BLUESCHIST = 2, FLAG_ECLOGITE_ROOT = 4, FLAG_ATOLL = 8,
-        FLAG_ARID = 16, FLAG_WARM = 32, FLAG_DIKE = 64, FLAG_PLUTONS = 128;
+    public static final int FLAG_RIDGE = 1, FLAG_BLUESCHIST = 2, FLAG_ECLOGITE_ROOT = 4, FLAG_ATOLL = 8, FLAG_ARID = 16,
+        FLAG_WARM = 32, FLAG_DIKE = 64, FLAG_PLUTONS = 128;
 
     final byte[] province = new byte[256];
     final byte[] flags = new byte[256];

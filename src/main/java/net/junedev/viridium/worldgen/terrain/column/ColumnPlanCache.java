@@ -105,6 +105,7 @@ public final class ColumnPlanCache {
     }
 
     private static long key(int chunkX, int chunkZ) {
-        return net.junedev.viridium.worldgen.terrain.core.GenMath.mixKey((chunkX & 0xffffffffL) | ((long) chunkZ << 32));
+        return net.junedev.viridium.worldgen.terrain.core.GenMath
+            .mixKey((chunkX & 0xffffffffL) | ((long) chunkZ << 32));
     }
 }

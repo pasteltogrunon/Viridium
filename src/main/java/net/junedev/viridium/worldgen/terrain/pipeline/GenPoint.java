@@ -35,7 +35,8 @@ public final class GenPoint {
     public double L;
 
     /**
-     * Continental rift: strength along the rift line (0 beyond its ends), distance across it in half-widths (&lt; 1 inside
+     * Continental rift: strength along the rift line (0 beyond its ends), distance across it in half-widths (&lt; 1
+     * inside
      * the graben), position along it (blocks) and stage (0 young with lakes, 1 failed and worn down, 2 mature: a narrow
      * sea).
      */
@@ -49,7 +50,9 @@ public final class GenPoint {
     /** Plateau share (0..1, the escarpment rises across it) and type (0 uplifted tableland, 1 basalt traps). */
     public double plat;
     public int platType;
-    /** Nearness to an escarpment or cliff (1 on it, 0 beyond ~25 blocks): erosion leaves the scarp and its foot alone. */
+    /**
+     * Nearness to an escarpment or cliff (1 on it, 0 beyond ~25 blocks): erosion leaves the scarp and its foot alone.
+     */
     public double scarp;
     /** Coastal cliff share (0..1: the raised coast behind a sea cliff). */
     public double cliff;
@@ -81,6 +84,15 @@ public final class GenPoint {
     public double riverD = 1e9, riverHW, riverZ, riverAcc, valley, delta, estu, lakeZ, glac, gorge;
     /** Water surface of the river channel (never above the uncarved terrain; Java-only, not in the JS). */
     public double riverWL;
+    /**
+     * Surface material set by a landform ({@link #SURF_NONE} = the biome decides): alluvium of river terraces, gravel
+     * bars, fan deposits, beach and dune sand, reef limestone.
+     */
+    public int surf;
+    public static final int SURF_NONE = 0, SURF_ALLUVIUM = 1, SURF_GRAVEL = 2, SURF_FAN = 3, SURF_SAND = 4,
+        SURF_REEF = 5;
+    /** River terraces: weight of the stepped valley sides (0..1). */
+    public double terrace;
     /** 1 inside a river channel. */
     public int river;
     /** 0 none, 1 lake, 2 salt flat. */

@@ -17,22 +17,38 @@ public final class CaveNoise {
 
     private static double grad(int h, double x, double y, double z) {
         switch (h & 15) {
-            case 0: return x + y;
-            case 1: return -x + y;
-            case 2: return x - y;
-            case 3: return -x - y;
-            case 4: return x + z;
-            case 5: return -x + z;
-            case 6: return x - z;
-            case 7: return -x - z;
-            case 8: return y + z;
-            case 9: return -y + z;
-            case 10: return y - z;
-            case 11: return -y - z;
-            case 12: return x + y;
-            case 13: return -y + z;
-            case 14: return -x + y;
-            default: return -y - z;
+            case 0:
+                return x + y;
+            case 1:
+                return -x + y;
+            case 2:
+                return x - y;
+            case 3:
+                return -x - y;
+            case 4:
+                return x + z;
+            case 5:
+                return -x + z;
+            case 6:
+                return x - z;
+            case 7:
+                return -x - z;
+            case 8:
+                return y + z;
+            case 9:
+                return -y + z;
+            case 10:
+                return y - z;
+            case 11:
+                return -y - z;
+            case 12:
+                return x + y;
+            case 13:
+                return -y + z;
+            case 14:
+                return -x + y;
+            default:
+                return -y - z;
         }
     }
 
@@ -45,10 +61,18 @@ public final class CaveNoise {
         double xf = x - xi, yf = y - yi, zf = z - zi;
         double u = fade(xf), v = fade(yf), w = fade(zf);
         double x1 = lerp(grad(hash(xi, yi, zi, seed), xf, yf, zf), grad(hash(xi + 1, yi, zi, seed), xf - 1, yf, zf), u);
-        double x2 = lerp(grad(hash(xi, yi + 1, zi, seed), xf, yf - 1, zf), grad(hash(xi + 1, yi + 1, zi, seed), xf - 1, yf - 1, zf), u);
-        double x3 = lerp(grad(hash(xi, yi, zi + 1, seed), xf, yf, zf - 1), grad(hash(xi + 1, yi, zi + 1, seed), xf - 1, yf, zf - 1), u);
-        double x4 = lerp(grad(hash(xi, yi + 1, zi + 1, seed), xf, yf - 1, zf - 1),
-            grad(hash(xi + 1, yi + 1, zi + 1, seed), xf - 1, yf - 1, zf - 1), u);
+        double x2 = lerp(
+            grad(hash(xi, yi + 1, zi, seed), xf, yf - 1, zf),
+            grad(hash(xi + 1, yi + 1, zi, seed), xf - 1, yf - 1, zf),
+            u);
+        double x3 = lerp(
+            grad(hash(xi, yi, zi + 1, seed), xf, yf, zf - 1),
+            grad(hash(xi + 1, yi, zi + 1, seed), xf - 1, yf, zf - 1),
+            u);
+        double x4 = lerp(
+            grad(hash(xi, yi + 1, zi + 1, seed), xf, yf - 1, zf - 1),
+            grad(hash(xi + 1, yi + 1, zi + 1, seed), xf - 1, yf - 1, zf - 1),
+            u);
         return lerp(lerp(x1, x2, v), lerp(x3, x4, v), w);
     }
 

@@ -24,8 +24,8 @@ public class GeologyStage extends GenStage {
     protected int rockFor(int i, int j, GenPoint o) {
         double r = rnd(i, j, SD.rock);
         if (o.volc > 0.15 && o.h0 > -40) { // volcanic islands
-            if (o.volcType == 1)
-                return (r < 0.55 ? Rock.ANDESITE : (r < 0.85 ? Rock.TUFF : Rock.BASALT)).ordinal(); // subduction arc
+            if (o.volcType == 1) return (r < 0.55 ? Rock.ANDESITE : (r < 0.85 ? Rock.TUFF : Rock.BASALT)).ordinal(); // subduction
+                                                                                                                     // arc
             if (o.volcType == 4) return (r < 0.7 ? Rock.LIMESTONE : Rock.BASALT).ordinal(); // coral atoll
             return (r < 0.82 ? Rock.BASALT : Rock.TUFF).ordinal(); // hotspot
         }
@@ -34,7 +34,8 @@ public class GeologyStage extends GenStage {
             if (o.ridge > 0.22) return Rock.BASALT.ordinal();
             return seaRock(r).ordinal();
         }
-        if (o.platType == 1 && o.plat > 0.3) return (r < 0.88 ? Rock.BASALT : Rock.TUFF).ordinal(); // flood basalt plateau
+        if (o.platType == 1 && o.plat > 0.3) return (r < 0.88 ? Rock.BASALT : Rock.TUFF).ordinal(); // flood basalt
+                                                                                                    // plateau
         if (o.orog > 0.35 && r < 0.5) return (r < 0.32 ? Rock.ANDESITE : Rock.TUFF).ordinal(); // volcanic arc
         double r2 = rnd(i, j, SD.rock + 1) * Rock.TOTAL;
         for (int k = 0; k < Rock.VALUES.length; k++) if (r2 < Rock.CUM[k]) return k;

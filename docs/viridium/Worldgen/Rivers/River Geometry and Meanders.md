@@ -42,7 +42,7 @@ node's grid cell; queries search that far (River Stage Evaluation).
 The meander amplitude at the midpoint between node `a` and its receiver `b`:
 
 ```
-ampAt(a, b) = min(1.3·g, 3.2·hw + 4)          size: grows with the river, at most ~42 blocks
+ampAt(a, b) = min(1.3·g, 3.2·hw + 4, room)    size: grows with the river, at most ~42 blocks; see room below
             · ss(0.05, 0.008, grad)           only on gentle slopes (filled drop per block)
             · ss(1.8, 3.6, hw)                only on rivers wide enough
             · straight[a] · straight[b]       never on a sharp bend
@@ -52,6 +52,12 @@ ampAt(a, b) = min(1.3·g, 3.2·hw + 4)          size: grows with the river, at m
 `straight[n] = ss(1.5, 0.45, turning angle)` measures how much the river already turns at node `n` (angle between
 `mainUp → n` and `n → recv`). On a sharp bend of the network, meanders would make loops cross; there they are turned
 off.
+
+`room` (`meanderRoom`) keeps a river from meandering into another one: per river node, `0.45·gap − 2`, the gap being
+the distance between its channel and the channel of the nearest other river within three cells (`distance − hw − hw`);
+the smaller of the two nodes' rooms is used. Both rivers may swing towards each other and still not touch. Not counted
+as "other": the river's own nodes three up and down, and tributaries about to join it (their last reach ends on its
+curve). Without it two rivers a cell or two apart, each swinging up to 42 blocks, crossed each other.
 
 Inside a reach the amplitude is interpolated from its upstream value `A0` to its downstream value `A1`, so it changes
 smoothly along the river.

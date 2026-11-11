@@ -1,6 +1,5 @@
 package net.junedev.viridium.worldgen.terrain;
 
-import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
 
@@ -14,7 +13,7 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_MOUTHS", matches = ".+")
     void biggestMouths() {
-        WorldGen gen = new WorldGen(new GenParams());
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
         double half = Double.parseDouble(System.getenv("VIRIDIUM_MOUTHS"));
         java.util.Set<Long> seen = new java.util.HashSet<>();
         java.util.List<double[]> mouths = new java.util.ArrayList<>();
@@ -31,15 +30,22 @@ class DebugPointTest {
             var net = gen.rivers.net(c.ci, c.cj);
             for (int q = 0; q < net.nMouth; q++) {
                 int b = q * net.MS;
-                mouths.add(new double[] { net.mouths[b + 6], net.mouths[b], net.mouths[b + 1], net.mouths[b + 4],
-                    net.mouths[b + 5], net.mouths[b + 8] });
+                mouths.add(
+                    new double[] { net.mouths[b + 6], net.mouths[b], net.mouths[b + 1], net.mouths[b + 4],
+                        net.mouths[b + 5], net.mouths[b + 8] });
             }
         }
         mouths.sort((a, b) -> Double.compare(b[0], a[0]));
         for (int i = 0; i < Math.min(8, mouths.size()); i++) {
             double[] m = mouths.get(i);
-            System.out.printf("mouth flow %.0f at %.0f,%.0f deltaR %.0f halfWidth %.1f estuary %.2f%n", m[0], m[1], m[2],
-                m[3], m[4], m[5]);
+            System.out.printf(
+                "mouth flow %.0f at %.0f,%.0f deltaR %.0f halfWidth %.1f estuary %.2f%n",
+                m[0],
+                m[1],
+                m[2],
+                m[3],
+                m[4],
+                m[5]);
         }
         // delta branches whose tip is not out in the water (they look like a mouth without a river)
         GenPoint tp = new GenPoint();
@@ -54,8 +60,13 @@ class DebugPointTest {
                 tips++;
                 gen.evaluate(net.dv[b], net.dv[b + 1], Stage.BIOMES, tp);
                 double a0x = net.dv[v0 * net.DV], a0y = net.dv[v0 * net.DV + 1];
-                if (tp.h > 0.5 && dry++ < 10) System.out.printf("  tip on land at %.0f,%.0f (h %.1f), branch from %.0f,%.0f%n",
-                    net.dv[b], net.dv[b + 1], tp.h, a0x, a0y);
+                if (tp.h > 0.5 && dry++ < 10) System.out.printf(
+                    "  tip on land at %.0f,%.0f (h %.1f), branch from %.0f,%.0f%n",
+                    net.dv[b],
+                    net.dv[b + 1],
+                    tp.h,
+                    a0x,
+                    a0y);
             }
         }
         System.out.println("delta tips " + tips + ", on land " + dry);
@@ -75,20 +86,35 @@ class DebugPointTest {
                     int e = (t * net.NPT + net.NPT - 1) * 2;
                     if (Math.abs(net.pts[e] - sx) < 4 && Math.abs(net.pts[e + 1] - sy) < 4) ok = true;
                 }
-                if (!ok && orphans++ < 10) System.out.printf("  orphan reach %d at %.0f,%.0f w %.1f z %.1f (basin %d,%d)%n", s,
-                    sx, sy, net.w0[s], net.z0[s], c.ci, c.cj);
+                if (!ok && orphans++ < 10) System.out.printf(
+                    "  orphan reach %d at %.0f,%.0f w %.1f z %.1f (basin %d,%d)%n",
+                    s,
+                    sx,
+                    sy,
+                    net.w0[s],
+                    net.z0[s],
+                    c.ci,
+                    c.cj);
             }
         }
         System.out.println("orphan wide reaches " + orphans);
-        System.out.println("mouths: " + mouths.size() + ", networks built: " + gen.rivers.buildCount() + ", cells: outlet "
-            + outlets + ", inner " + inner + ", terminal " + terminal);
+        System.out.println(
+            "mouths: " + mouths.size()
+                + ", networks built: "
+                + gen.rivers.buildCount()
+                + ", cells: outlet "
+                + outlets
+                + ", inner "
+                + inner
+                + ", terminal "
+                + terminal);
     }
 
     /** Lists the biggest lakes and the river reaches running inside them (VIRIDIUM_LAKES = half size in blocks). */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_LAKES", matches = ".+")
     void biggestLakes() {
-        WorldGen gen = new WorldGen(new GenParams());
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
         double half = Double.parseDouble(System.getenv("VIRIDIUM_LAKES"));
         java.util.Set<Long> seen = new java.util.HashSet<>();
         double B = gen.rivers.basins.size();
@@ -103,7 +129,8 @@ class DebugPointTest {
             int lakeRiv = 0;
             for (int s = 0; s < net.count; s++) {
                 int q = (s * net.NPT + net.NPT / 2) * 2;
-                int i = (int) Math.floor((net.pts[q] - net.x0) / net.g), j = (int) Math.floor((net.pts[q + 1] - net.y0) / net.g);
+                int i = (int) Math.floor((net.pts[q] - net.x0) / net.g),
+                    j = (int) Math.floor((net.pts[q + 1] - net.y0) / net.g);
                 if (net.lakes.containsKey(j * net.nx + i)) lakeRiv++;
             }
             total += net.count;
@@ -114,11 +141,20 @@ class DebugPointTest {
                 sx += net.x0 + (idx % net.nx + 0.5) * net.g;
                 sy += net.y0 + (idx / net.nx + 0.5) * net.g;
             }
-            out.add(String.format("%6d cells lake area, %4d reaches inside, centre %.0f,%.0f (basin %d,%d)", net.lakes.size(),
-                lakeRiv, sx / net.lakes.size(), sy / net.lakes.size(), c.ci, c.cj));
+            out.add(
+                String.format(
+                    "%6d cells lake area, %4d reaches inside, centre %.0f,%.0f (basin %d,%d)",
+                    net.lakes.size(),
+                    lakeRiv,
+                    sx / net.lakes.size(),
+                    sy / net.lakes.size(),
+                    c.ci,
+                    c.cj));
         }
         out.sort(java.util.Comparator.reverseOrder());
-        out.stream().limit(12).forEach(System.out::println);
+        out.stream()
+            .limit(12)
+            .forEach(System.out::println);
         System.out.println("reaches " + total + ", inside lakes " + inLake);
     }
 
@@ -129,7 +165,7 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CONFLUENCES", matches = ".+")
     void confluences() {
-        WorldGen gen = new WorldGen(new GenParams());
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
         double half = Double.parseDouble(System.getenv("VIRIDIUM_CONFLUENCES"));
         java.util.Set<Long> seen = new java.util.HashSet<>();
         double B = gen.rivers.basins.size();
@@ -172,8 +208,16 @@ class DebugPointTest {
         System.out.println("confluences: " + out.size());
         for (int n = 0; n < Math.min(12, out.size()); n++) {
             double[] v = out.get(n);
-            System.out.printf("  drop %.1f at %.0f,%.0f trib hw %.1f main hw %.1f, trib z %.1f..%.1f main z %.1f%n", v[0], v[1],
-                v[2], v[3], v[4], v[5], v[6], v[7]);
+            System.out.printf(
+                "  drop %.1f at %.0f,%.0f trib hw %.1f main hw %.1f, trib z %.1f..%.1f main z %.1f%n",
+                v[0],
+                v[1],
+                v[2],
+                v[3],
+                v[4],
+                v[5],
+                v[6],
+                v[7]);
         }
         int nb = 0;
         for (double[] v : out) if (v[0] > 3) nb++;
@@ -184,35 +228,69 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_REACHES", matches = ".+")
     void reachesNear() {
-        WorldGen gen = new WorldGen(new GenParams());
-        String[] a = System.getenv("VIRIDIUM_REACHES").split(",");
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
+        String[] a = System.getenv("VIRIDIUM_REACHES")
+            .split(",");
         double x = Double.parseDouble(a[0]), z = Double.parseDouble(a[1]), r = Double.parseDouble(a[2]);
         for (long k : gen.rivers.basins.nearCells(x, z, 1000)) {
             var c = gen.rivers.basins.cell(k);
             if (c.ocean) continue;
             var net = gen.rivers.net(c.ci, c.cj);
-            System.out.printf("basin %d,%d outlet=%b terminal=%b L=%.2f reaches %d lakes %d exit %s%n", c.ci, c.cj, c.outlet,
-                c.terminal, c.L, net.count, net.lakes.size(), net.exitLevel);
-            System.out.printf("  estimated flow out %.0f, real exit flow %.0f, mouths %d%n", gen.rivers.basins.flowOut(c),
-                net.exitFlow, net.nMouth);
+            System.out.printf(
+                "basin %d,%d outlet=%b terminal=%b L=%.2f reaches %d lakes %d exit %s%n",
+                c.ci,
+                c.cj,
+                c.outlet,
+                c.terminal,
+                c.L,
+                net.count,
+                net.lakes.size(),
+                net.exitLevel);
+            System.out.printf(
+                "  estimated flow out %.0f, real exit flow %.0f, mouths %d%n",
+                gen.rivers.basins.flowOut(c),
+                net.exitFlow,
+                net.nMouth);
             for (var ch : gen.rivers.basins.children(c)) {
                 var cn = gen.rivers.net(ch.ci, ch.cj);
                 double mouthFlow = 0;
                 for (int q = 0; q < cn.nMouth; q++) mouthFlow += cn.mouths[q * cn.MS + 6];
-                System.out.printf("  child %d,%d L=%.2f: estimated %.0f, real exit %.0f, its mouths %d (flow/thr %.0f), lakes %d%n",
-                    ch.ci, ch.cj, ch.L, gen.rivers.basins.flowOut(ch), cn.exitFlow, cn.nMouth, mouthFlow, cn.lakes.size());
+                System.out.printf(
+                    "  child %d,%d L=%.2f: estimated %.0f, real exit %.0f, its mouths %d (flow/thr %.0f), lakes %d%n",
+                    ch.ci,
+                    ch.cj,
+                    ch.L,
+                    gen.rivers.basins.flowOut(ch),
+                    cn.exitFlow,
+                    cn.nMouth,
+                    mouthFlow,
+                    cn.lakes.size());
             }
             for (int q = 0; q < net.nMouth; q++) {
                 int c0 = net.dmc[q * 2], ncn = net.dmc[q * 2 + 1];
                 if (ncn == 0) continue;
-                System.out.printf("  delta of mouth %d: R %.0f, plain %.0f, %d branches%n", q, net.mouths[q * net.MS + 4],
-                    net.dbox[q * 5 + 4], ncn);
+                System.out.printf(
+                    "  delta of mouth %d: R %.0f, plain %.0f, %d branches%n",
+                    q,
+                    net.mouths[q * net.MS + 4],
+                    net.dbox[q * 5 + 4],
+                    ncn);
                 for (int cc = c0; cc < c0 + ncn; cc++) {
                     int v0 = net.dch[cc * 2], vn = net.dch[cc * 2 + 1], D = net.DV;
                     int a0 = v0 * D, a1 = (v0 + vn - 1) * D;
-                    System.out.printf("    branch %d: %d vertices (%.0f,%.0f)->(%.0f,%.0f) w %.1f->%.1f z %.1f->%.1f tip %.0f%n", cc,
-                        vn, net.dv[a0], net.dv[a0 + 1], net.dv[a1], net.dv[a1 + 1], net.dv[a0 + 2], net.dv[a1 + 2],
-                        net.dv[a0 + 3], net.dv[a1 + 3], net.dv[a0 + 4]);
+                    System.out.printf(
+                        "    branch %d: %d vertices (%.0f,%.0f)->(%.0f,%.0f) w %.1f->%.1f z %.1f->%.1f tip %.0f%n",
+                        cc,
+                        vn,
+                        net.dv[a0],
+                        net.dv[a0 + 1],
+                        net.dv[a1],
+                        net.dv[a1 + 1],
+                        net.dv[a0 + 2],
+                        net.dv[a1 + 2],
+                        net.dv[a0 + 3],
+                        net.dv[a1 + 3],
+                        net.dv[a0 + 4]);
                 }
             }
             int shown = 0;
@@ -222,9 +300,26 @@ class DebugPointTest {
                 if (Math.hypot(px - x, pz - z) > r) continue;
                 shown++;
                 int q0 = s * net.NPT * 2, q1 = (s * net.NPT + net.NPT - 1) * 2;
-                System.out.printf("  reach %d (%.0f,%.0f)->(%.0f,%.0f) w %.1f..%.1f z %.1f..%.1f acc %.1f head %d%n", s,
-                    net.pts[q0], net.pts[q0 + 1], net.pts[q1], net.pts[q1 + 1], net.w0[s], net.w1[s], net.z0[s], net.z1[s],
-                    net.acc[s], net.head[s]);
+                int cell = -1;
+                for (int cc = 0; cc < net.slot.length && cell < 0; cc++) if (net.slot[cc] == s) cell = cc;
+                System.out.printf(
+                    "  reach %d (%.0f,%.0f)->(%.0f,%.0f) w %.1f..%.1f z %.1f..%.1f acc %.1f head %d node %d,%d fall %.0f lip %d lake %d%n",
+                    s,
+                    net.pts[q0],
+                    net.pts[q0 + 1],
+                    net.pts[q1],
+                    net.pts[q1 + 1],
+                    net.w0[s],
+                    net.w1[s],
+                    net.z0[s],
+                    net.z1[s],
+                    net.acc[s],
+                    net.head[s],
+                    cell % net.nx,
+                    cell / net.nx,
+                    net.fallIn[s],
+                    net.lipOut[s],
+                    net.inLake[s]);
             }
         }
     }
@@ -237,10 +332,12 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_WATERPNG", matches = ".+")
     void waterPicture() throws java.io.IOException {
-        WorldGen gen = new WorldGen(new GenParams());
-        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(
+            gen,
             net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
-        String[] a = System.getenv("VIRIDIUM_WATERPNG").split(",");
+        String[] a = System.getenv("VIRIDIUM_WATERPNG")
+            .split(",");
         int cx = Integer.parseInt(a[0]), cz = Integer.parseInt(a[1]), half = Integer.parseInt(a[2]);
         int n = 2 * half;
         int[] surf = new int[(n + 2) * (n + 2)], wat = new int[(n + 2) * (n + 2)];
@@ -275,9 +372,14 @@ class DebugPointTest {
                         if (w - wn >= 1) step = true;
                     } else if (w > sn) {
                         wall = true;
-                        if (walls < 6) System.out.printf("  wall at %d,%d water %d, dry neighbour %d,%d top %d%n",
-                            x0 + i, z0 + j, w, x0 + i + (d == 1 ? 1 : d == -1 ? -1 : 0),
-                            z0 + j + (d == W ? 1 : d == -W ? -1 : 0), sn);
+                        if (walls < 6) System.out.printf(
+                            "  wall at %d,%d water %d, dry neighbour %d,%d top %d%n",
+                            x0 + i,
+                            z0 + j,
+                            w,
+                            x0 + i + (d == 1 ? 1 : d == -1 ? -1 : 0),
+                            z0 + j + (d == W ? 1 : d == -W ? -1 : 0),
+                            sn);
                     }
                 }
                 if (step) {
@@ -302,19 +404,24 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_MAPTIME", matches = ".+")
     void mapTileTime() {
-        WorldGen gen = new WorldGen(new GenParams());
-        String[] a = System.getenv("VIRIDIUM_MAPTIME").split(",");
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
+        String[] a = System.getenv("VIRIDIUM_MAPTIME")
+            .split(",");
         var r = new net.junedev.viridium.worldgen.terrain.map.MapTileRenderer(gen);
         var layer = net.junedev.viridium.worldgen.terrain.map.MapLayer.byId(a[0]);
         int level = Integer.parseInt(a[1]), tx = Integer.parseInt(a[2]), tz = Integer.parseInt(a[3]);
-        if (a.length > 4) { // sweep: one warm-up tile, then each level from `level` to a[4], two neighbouring tiles each
+        if (a.length > 4) { // sweep: one warm-up tile, then each level from `level` to a[4], two neighbouring tiles
+                            // each
             r.render(layer, 3, 0, 0, 128, false);
             for (int lv = level; lv <= Integer.parseInt(a[4]); lv++) {
                 long t0 = System.nanoTime();
                 r.render(layer, lv, tx, tz, 128, false);
                 long t1 = System.nanoTime();
                 r.render(layer, lv, tx + 1, tz, 128, false);
-                System.out.printf("level %d: first tile %.0f ms, neighbour %.0f ms%n", lv, (t1 - t0) / 1e6,
+                System.out.printf(
+                    "level %d: first tile %.0f ms, neighbour %.0f ms%n",
+                    lv,
+                    (t1 - t0) / 1e6,
                     (System.nanoTime() - t1) / 1e6);
             }
             return;
@@ -322,21 +429,31 @@ class DebugPointTest {
         for (int pass = 0; pass < 3; pass++) {
             long b0 = gen.rivers.buildCount(), t0 = System.nanoTime();
             r.render(layer, level, tx, tz, 128, false);
-            System.out.printf("pass %d: %.0f ms, %d river nets built (%.0f ms building in total so far)%n", pass,
-                (System.nanoTime() - t0) / 1e6, gen.rivers.buildCount() - b0, gen.rivers.buildNanos() / 1e6);
+            System.out.printf(
+                "pass %d: %.0f ms, %d river nets built (%.0f ms building in total so far)%n",
+                pass,
+                (System.nanoTime() - t0) / 1e6,
+                gen.rivers.buildCount() - b0,
+                gen.rivers.buildNanos() / 1e6);
         }
     }
 
-    /** Plan view around a waterfall: VIRIDIUM_FALLMAP=x0,z0,size,split (# dry above split, . dry below, A water above, b water below, | curtain, upper-case-ish F marks the fall zone on dry ground). */
+    /**
+     * Plan view around a waterfall: VIRIDIUM_FALLMAP=x0,z0,size,split (# dry above split, . dry below, A water above, b
+     * water below, | curtain, upper-case-ish F marks the fall zone on dry ground).
+     */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_FALLMAP", matches = ".+")
     void fallMap() {
-        WorldGen gen = new WorldGen(new GenParams());
-        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(
+            gen,
             net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
         var plans = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache(planner);
-        String[] a = System.getenv("VIRIDIUM_FALLMAP").split(",");
-        int x0 = Integer.parseInt(a[0]), z0 = Integer.parseInt(a[1]), n = Integer.parseInt(a[2]), split = Integer.parseInt(a[3]);
+        String[] a = System.getenv("VIRIDIUM_FALLMAP")
+            .split(",");
+        int x0 = Integer.parseInt(a[0]), z0 = Integer.parseInt(a[1]), n = Integer.parseInt(a[2]),
+            split = Integer.parseInt(a[3]);
         final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE;
         for (int z = z0; z < z0 + n; z++) {
             StringBuilder sb = new StringBuilder(String.format("%6d ", z));
@@ -346,7 +463,8 @@ class DebugPointTest {
                 char ch;
                 if (p.fallTop[i] != NONE) ch = '|';
                 else if (p.waterY[i] != NONE) ch = p.waterY[i] >= split ? 'A' : 'b';
-                else if (p.has(i, net.junedev.viridium.worldgen.terrain.column.ColumnPlan.F_FALL)) ch = p.surfaceY[i] >= split ? 'F' : 'f';
+                else if (p.has(i, net.junedev.viridium.worldgen.terrain.column.ColumnPlan.F_FALL))
+                    ch = p.surfaceY[i] >= split ? 'F' : 'f';
                 else ch = p.surfaceY[i] >= split ? '#' : '.';
                 sb.append(ch);
             }
@@ -354,20 +472,26 @@ class DebugPointTest {
         }
     }
 
-    /** ASCII section of cliff detail along x: VIRIDIUM_CLIFF=x0,x1,z (# rock, ~ water, o notch air, w notch water, + talus). */
+    /**
+     * ASCII section of cliff detail along x: VIRIDIUM_CLIFF=x0,x1,z (# rock, ~ water, o notch air, w notch water, +
+     * talus).
+     */
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_CLIFF", matches = ".+")
     void cliffSection() {
-        WorldGen gen = new WorldGen(new GenParams());
-        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(gen,
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
+        var planner = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanner(
+            gen,
             net.junedev.viridium.worldgen.terrain.column.BiomeMapper.FROM_STAGE);
         var plans = new net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache(planner);
         var cd = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(plans, 7, 1.0);
-        String[] a = System.getenv("VIRIDIUM_CLIFF").split(",");
+        String[] a = System.getenv("VIRIDIUM_CLIFF")
+            .split(",");
         int x0 = Integer.parseInt(a[0]), x1 = Integer.parseInt(a[1]), z = Integer.parseInt(a[2]);
         final int NONE = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.NONE;
         int n = x1 - x0 + 1, ymin = Integer.MAX_VALUE, ymax = Integer.MIN_VALUE;
-        int[] S = new int[n], Wl = new int[n], lo = new int[n], hi = new int[n], nw = new int[n], tt = new int[n], ft = new int[n];
+        int[] S = new int[n], Wl = new int[n], lo = new int[n], hi = new int[n], nw = new int[n], tt = new int[n],
+            ft = new int[n];
         for (int k = 0; k < n; k++) {
             int x = x0 + k, i = net.junedev.viridium.worldgen.terrain.column.ColumnPlan.index(x & 15, z & 15);
             var p = plans.get(x >> 4, z >> 4);
@@ -383,7 +507,9 @@ class DebugPointTest {
             ymax = Math.max(ymax, Math.max(Math.max(S[k], ft[k]), Math.max(Wl[k], tt[k])));
         }
         StringBuilder hs = new StringBuilder("S: ");
-        for (int k = 0; k < n; k++) hs.append(S[k]).append(Wl[k] != NONE ? "~" : "").append(' ');
+        for (int k = 0; k < n; k++) hs.append(S[k])
+            .append(Wl[k] != NONE ? "~" : "")
+            .append(' ');
         System.out.println(hs);
         for (int y = ymax + 1; y >= ymin - 3; y--) {
             StringBuilder sb = new StringBuilder(String.format("%4d ", y));
@@ -404,9 +530,10 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_PROFILE", matches = ".+")
     void profile() {
-        WorldGen gen = new WorldGen(new GenParams());
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
         GenPoint o = new GenPoint();
-        String[] a = System.getenv("VIRIDIUM_PROFILE").split(",");
+        String[] a = System.getenv("VIRIDIUM_PROFILE")
+            .split(",");
         double x0 = Double.parseDouble(a[0]), z0 = Double.parseDouble(a[1]), x1 = Double.parseDouble(a[2]),
             z1 = Double.parseDouble(a[3]), st = Double.parseDouble(a[4]);
         double len = Math.hypot(x1 - x0, z1 - z0);
@@ -414,8 +541,25 @@ class DebugPointTest {
         for (double t = 0; t <= len; t += st) {
             double x = Math.floor(x0 + (x1 - x0) * t / len), z = Math.floor(z0 + (z1 - z0) * t / len);
             gen.evaluate(x, z, Stage.BIOMES, o);
-            System.out.printf("%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d  L %.4f cliff %.2f scarp %.2f rift %.2f d %.2f t%d%n", x, z,
-                o.h0, o.h, prev == prev ? o.h - prev : 0, o.plat, o.platType, o.slope, o.river, o.riverWL, o.rock, o.L, o.cliff, o.scarp, o.rift, o.riftD, o.riftType);
+            System.out.printf(
+                "%7.0f %7.0f  h0 %6.1f  h %6.1f  d %5.1f  plat %.2f t%d  slope %.2f  river %d wl %6.1f  rock %d  L %.4f cliff %.2f scarp %.2f rift %.2f d %.2f t%d%n",
+                x,
+                z,
+                o.h0,
+                o.h,
+                prev == prev ? o.h - prev : 0,
+                o.plat,
+                o.platType,
+                o.slope,
+                o.river,
+                o.riverWL,
+                o.rock,
+                o.L,
+                o.cliff,
+                o.scarp,
+                o.rift,
+                o.riftD,
+                o.riftType);
             prev = o.h;
         }
     }
@@ -423,9 +567,10 @@ class DebugPointTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_POINTS", matches = ".+")
     void printPoints() {
-        WorldGen gen = new WorldGen(new GenParams());
+        WorldGen gen = new WorldGen(TerrainViewTest.params());
         GenPoint o = new GenPoint();
-        for (String pt : System.getenv("VIRIDIUM_POINTS").split(";")) {
+        for (String pt : System.getenv("VIRIDIUM_POINTS")
+            .split(";")) {
             String[] xz = pt.split(",");
             double x = Double.parseDouble(xz[0]), z = Double.parseDouble(xz[1]);
             gen.evaluate(x, z, Stage.EROSION, o);
@@ -433,8 +578,26 @@ class DebugPointTest {
             gen.evaluate(x, z, Stage.BIOMES, o);
             System.out.printf(
                 "(%s) h0=%.2f hEro=%.2f h=%.2f river=%d riverD=%.2f hw=%.2f riverZ=%.2f riverWL=%.2f valley=%.2f glac=%.2f gorge=%.2f lake=%d T=%.1f%n",
-                pt, o.h0, hEro, o.h, o.river, o.riverD, o.riverHW, o.riverZ, o.riverWL, o.valley, o.glac, o.gorge,
-                o.lake, o.T);
+                pt,
+                o.h0,
+                hEro,
+                o.h,
+                o.river,
+                o.riverD,
+                o.riverHW,
+                o.riverZ,
+                o.riverWL,
+                o.valley,
+                o.glac,
+                o.gorge,
+                o.lake,
+                o.T);
+            StringBuilder nb = new StringBuilder("    networks shaping it:");
+            for (long k : gen.rivers.basinsAt(x, z)) nb.append(' ')
+                .append(net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyA(k))
+                .append(',')
+                .append(net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyB(k));
+            System.out.println(nb);
         }
     }
 }

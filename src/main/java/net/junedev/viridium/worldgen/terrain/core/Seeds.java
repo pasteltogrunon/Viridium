@@ -14,13 +14,16 @@ public final class Seeds {
         // landforms
         "plat", "rift", "cliff", "fall",
         // caves
-        "cave", "aquifer", "karst", "chamber" };
+        "cave", "aquifer", "karst", "chamber",
+        // river and coast landforms
+        "rivF", "coast" };
 
     public final int warp, plate, vel, cont, contN, hills, mmask, mtn, sea, seaR, temp, prec, wind, rock, rockP, rockW,
         ero, rivJ, rivW, coll, isl, micro, arcN, hot, ice, berg, delta, wind2, lake, cur, estu, mea;
     public final int crust, strata, pluton, dike, pipe, fold, basin, basinW;
     public final int plat, rift, cliff, fall;
     public final int cave, aquifer, karst, chamber;
+    public final int rivF, coast;
 
     public Seeds(int seed) {
         int[] s = new int[NAMES.length];
@@ -74,5 +77,7 @@ public final class Seeds {
         aquifer = s[k++];
         karst = s[k++];
         chamber = s[k++];
+        rivF = s[k++];
+        coast = s[k++];
     }
 }

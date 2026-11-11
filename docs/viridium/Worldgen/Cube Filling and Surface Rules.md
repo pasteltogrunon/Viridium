@@ -29,11 +29,14 @@ For each Y of a block column:
 
 ## Surface rules
 
+The slope is the gradient of the final terrain of the column (`ColumnPlanner.terrainSlope`: central differences of the planned heights, one-sided on the chunk's border), so gully walls, crests and canyon sides show rock. Before, it was the smoothed base relief's slope, which misses every gully. (A single planned point, for the Distant Horizons LODs, keeps the smoothed slope.)
+
 Chosen once per column from biome, water, slope and temperature. Rules never look at neighbouring columns or cubes, so
 any cube can be painted on its own.
 
 - Under water: gravel in rivers, clay/sand in lakes, clay or gravel in deep or cold sea, sand in shallow warm sea.
 - Salt flats: evaporite.
+- Landform covers (`ColumnPlan.surf`, set by the relief and the rivers) come first and are never bare rock: river terrace risers (coarse dirt over gravel, the treads keep the biome's soil), gravel bars, alluvial fans (gravel over sand where dry), barrier and beach sand; under water reef limestone, gravel and sand. See [[Landforms Overview|Coast Landforms]] and [[Rivers Overview|River Landforms]].
 - Cliffs (`slope > 1.1`, except beaches and deserts): bare rock (the crust shows through).
 - Per biome: sand on beaches and deserts, red sand over banded hardened clay in badlands, packed ice on glaciers, snow
   on peaks and slopes, podzol patches in taiga, coarse dirt in savanna, grass + dirt elsewhere, with varying depth.

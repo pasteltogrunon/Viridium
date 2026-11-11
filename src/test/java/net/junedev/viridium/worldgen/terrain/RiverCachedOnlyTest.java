@@ -54,8 +54,11 @@ class RiverCachedOnlyTest {
             assertEquals(r.lake, o.lake);
             assertEquals(Double.doubleToLongBits(r.riverD), Double.doubleToLongBits(o.riverD));
         }
-        System.out.printf("cached-only: %d of %d points incomplete when cold, %d compared equal once built%n", incomplete,
-            POINTS.length * 9, compared);
+        System.out.printf(
+            "cached-only: %d of %d points incomplete when cold, %d compared equal once built%n",
+            incomplete,
+            POINTS.length * 9,
+            compared);
         assertTrue(compared > POINTS.length * 9 / 2, "too few complete points to compare: " + compared);
     }
 }

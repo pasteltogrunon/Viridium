@@ -58,7 +58,9 @@ class ParityTest {
                     "hash " + String.join(",", r));
                 case "perlin" -> maxErr = Math.max(
                     maxErr,
-                    Math.abs(Double.parseDouble(r[5]) - Noise.perlin(Double.parseDouble(r[1]), Double.parseDouble(r[2]), s)));
+                    Math.abs(
+                        Double.parseDouble(r[5])
+                            - Noise.perlin(Double.parseDouble(r[1]), Double.parseDouble(r[2]), s)));
                 case "fbm" -> maxErr = Math.max(
                     maxErr,
                     Math.abs(
@@ -127,6 +129,17 @@ class ParityTest {
         p.plannedCaves = 0;
         p.dolines = 0;
         p.fissures = 0;
+        p.erosionClimate = 0;
+        p.terraces = 0;
+        p.oxbows = 0;
+        p.fans = 0;
+        p.braids = 0;
+        p.incision = 0;
+        p.stacks = 0;
+        p.barriers = 0;
+        p.rias = 0;
+        p.reefs = 0;
+        p.seaCanyons = 0;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 

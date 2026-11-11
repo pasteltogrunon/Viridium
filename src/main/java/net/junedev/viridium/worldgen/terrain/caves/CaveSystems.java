@@ -73,7 +73,8 @@ public final class CaveSystems implements CaveFeatures {
         final Lobes outline;
         /**
          * Shape of a collapse pit, if the roof falls in: an ellipse of semi-axes pa (along rx) and pb, lobed; walls
-         * wallW wide (varying around), in 1-3 ledges, with a mound of rubble on the floor; nothing beyond pitReach (x and
+         * wallW wide (varying around), in 1-3 ledges, with a mound of rubble on the floor; nothing beyond pitReach (x
+         * and
          * z) of the centre.
          */
         double pa, pb; // shrunk (before pitDone) when the full pit would cut into water
@@ -141,7 +142,8 @@ public final class CaveSystems implements CaveFeatures {
         }
 
         /**
-         * Floor of the open pit at (px, pz) (absolute Y): the chamber floor, rough, with a mound of rubble from the fallen
+         * Floor of the open pit at (px, pz) (absolute Y): the chamber floor, rough, with a mound of rubble from the
+         * fallen
          * roof in the middle (q from {@link #pitQ}). Both the 2D pit and the carved chamber use it.
          */
         double pitFloor(double px, double pz, double q) {
@@ -162,12 +164,29 @@ public final class CaveSystems implements CaveFeatures {
             return y + ry * Math.sqrt(1.3 - h2);
         }
 
-        public int minX() { return x0; }
-        public int minY() { return y0; }
-        public int minZ() { return z0; }
-        public int maxX() { return x1; }
-        public int maxY() { return pitR > 0 ? 10000 : y1; }
-        public int maxZ() { return z1; }
+        public int minX() {
+            return x0;
+        }
+
+        public int minY() {
+            return y0;
+        }
+
+        public int minZ() {
+            return z0;
+        }
+
+        public int maxX() {
+            return x1;
+        }
+
+        public int maxY() {
+            return pitR > 0 ? 10000 : y1;
+        }
+
+        public int maxZ() {
+            return z1;
+        }
 
         @Override
         public boolean inside(int px, int py, int pz, double c1) {
@@ -227,12 +246,29 @@ public final class CaveSystems implements CaveFeatures {
             z1 = (int) Math.ceil(Math.max(az, bz) + m);
         }
 
-        public int minX() { return x0; }
-        public int minY() { return y0; }
-        public int minZ() { return z0; }
-        public int maxX() { return x1; }
-        public int maxY() { return y1; }
-        public int maxZ() { return z1; }
+        public int minX() {
+            return x0;
+        }
+
+        public int minY() {
+            return y0;
+        }
+
+        public int minZ() {
+            return z0;
+        }
+
+        public int maxX() {
+            return x1;
+        }
+
+        public int maxY() {
+            return y1;
+        }
+
+        public int maxZ() {
+            return z1;
+        }
 
         @Override
         public boolean inside(int px, int py, int pz, double c1) {
@@ -317,7 +353,8 @@ public final class CaveSystems implements CaveFeatures {
     }
 
     /**
-     * Resolves the collapse pit of a chamber, once: it needs the rivers at the chamber centre, so it is only done when a
+     * Resolves the collapse pit of a chamber, once: it needs the rivers at the chamber centre, so it is only done when
+     * a
      * point or a cube near the chamber needs it (river networks are never built just to plan caves far away). Races
      * compute the same value.
      */
@@ -327,7 +364,8 @@ public final class CaveSystems implements CaveFeatures {
 
     /**
      * As above; caller (not null) is the scratch of an evaluation that asked for cached river networks only (map
-     * previews): then no network is built for the pit, and if one it needs is missing the pit stays unresolved (none for
+     * previews): then no network is built for the pit, and if one it needs is missing the pit stays unresolved (none
+     * for
      * now) and the caller is told so ({@code riversIncomplete}).
      */
     private void pit(Chamber ch, GenScratch caller) {
@@ -351,8 +389,10 @@ public final class CaveSystems implements CaveFeatures {
                 GenPoint p = rivers(ch.x + eu * ch.ca - ew * ch.sa, ch.z + eu * ch.sa + ew * ch.ca, caller);
                 if (p == null) return; // a network it needs is not cached (map preview): undecided for now
                 double shore = net.junedev.viridium.worldgen.terrain.stages.RiverStage.lakeShore();
-                if (p.river != 0 || p.lake != 0 || (shore == shore && shore > ch.floor - TerrainLayout.SEA_LEVEL - 4)
-                    || p.h < 3 || p.riverD < p.riverHW + 4) ok = false;
+                if (p.river != 0 || p.lake != 0
+                    || (shore == shore && shore > ch.floor - TerrainLayout.SEA_LEVEL - 4)
+                    || p.h < 3
+                    || p.riverD < p.riverHW + 4) ok = false;
                 low = Math.min(low, TerrainLayout.SEA_LEVEL + p.h);
             }
             if (!ok) continue;
@@ -396,7 +436,8 @@ public final class CaveSystems implements CaveFeatures {
         int n = r0 < 0.3 / P.plannedCaves ? 0 : r0 < 0.8 ? 1 : 2;
         for (int c = 0; c < n; c++) {
             int s = seed + 17 * c;
-            double x = (ri + 0.15 + 0.7 * Noise.rnd(ri, rj, s + 1)) * R, z = (rj + 0.15 + 0.7 * Noise.rnd(ri, rj, s + 2)) * R;
+            double x = (ri + 0.15 + 0.7 * Noise.rnd(ri, rj, s + 1)) * R,
+                z = (rj + 0.15 + 0.7 * Noise.rnd(ri, rj, s + 2)) * R;
             GenPoint o = gen.evaluate(x, z, Stage.EROSION, 1, point.get(), scratch.get());
             double surface = TerrainLayout.SEA_LEVEL + o.h;
             double kind = Noise.rnd(ri, rj, s + 3);
@@ -479,8 +520,17 @@ public final class CaveSystems implements CaveFeatures {
                 if (other.isEmpty()) continue;
                 Chamber b = other.get((int) (Noise.rnd(ri * 3 + e, rj * 5 + c, seed + 31) * other.size()));
                 if (Math.abs(a.y - b.y) > 700) continue;
-                gallery(a.x, a.y - a.ry * 0.3, a.z, b.x, b.y - b.ry * 0.3, b.z, r.segments, seed + ri * 7919 + rj * 104729
-                    + e * 13 + c, galleryRadius(Math.min(a.y, b.y)), false);
+                gallery(
+                    a.x,
+                    a.y - a.ry * 0.3,
+                    a.z,
+                    b.x,
+                    b.y - b.ry * 0.3,
+                    b.z,
+                    r.segments,
+                    seed + ri * 7919 + rj * 104729 + e * 13 + c,
+                    galleryRadius(Math.min(a.y, b.y)),
+                    false);
             }
         }
         Chamber best = null;
@@ -500,7 +550,8 @@ public final class CaveSystems implements CaveFeatures {
     }
 
     /**
-     * Every system gets a great entrance: a wide ramp (mouth radius 9-13) from the surface down to its shallowest chamber
+     * Every system gets a great entrance: a wide ramp (mouth radius 9-13) from the surface down to its shallowest
+     * chamber
      * (unless that one has a collapse pit), 1.4 times as long as it is deep down to ~600 blocks, steeper below (120-950
      * blocks), starting on land away from rivers in one of six directions (then the same at 0.6 of the length).
      */
@@ -523,7 +574,17 @@ public final class CaveSystems implements CaveFeatures {
             if (o.river != 0 || o.lake != 0 || o.riverD < 30) continue;
             double r0 = 9 + 4 * Noise.rnd(ri, rj, seed + 73);
             int before = r.entrance.size();
-            ramp(sx, TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0, sz, tx, ty, tz, r0, 7, r.entrance, seed + 79 + ri * 31 + rj * 37);
+            ramp(
+                sx,
+                TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0,
+                sz,
+                tx,
+                ty,
+                tz,
+                r0,
+                7,
+                r.entrance,
+                seed + 79 + ri * 31 + rj * 37);
             for (int q = before; q < Math.min(r.entrance.size(), before + 4); q++) r.mouth.add(r.entrance.get(q));
             return;
         }
@@ -608,12 +669,16 @@ public final class CaveSystems implements CaveFeatures {
     }
 
     private static boolean touches(CaveCarver.Shape s, int bx, int by, int bz) {
-        return s.maxX() >= bx && s.minX() <= bx + 15 && s.maxY() >= by && s.minY() <= by + 15 && s.maxZ() >= bz
+        return s.maxX() >= bx && s.minX() <= bx + 15
+            && s.maxY() >= by
+            && s.minY() <= by + 15
+            && s.maxZ() >= bz
             && s.minZ() <= bz + 15;
     }
 
     /**
-     * Collapse pits in the 2D terrain (after the rivers): inside the pit the ground drops to the chamber floor with steep
+     * Collapse pits in the 2D terrain (after the rivers): inside the pit the ground drops to the chamber floor with
+     * steep
      * walls; a chamber lake shows as a lake (a cenote).
      */
     public void surface(double x, double z, GenPoint o) {
@@ -670,6 +735,7 @@ public final class CaveSystems implements CaveFeatures {
                 if (target < o.h) {
                     o.doline = Math.max(o.doline, o.h - target);
                     o.h = target;
+                    o.surf = net.junedev.viridium.worldgen.terrain.pipeline.GenPoint.SURF_NONE;
                     o.river = 0;
                     // a cenote: water wherever the pit is below the chamber's lake (the rim is always higher)
                     if (c.lake == c.lake && c.lakeKind == CaveCarver.WATER && o.h < c.lake - TerrainLayout.SEA_LEVEL) {

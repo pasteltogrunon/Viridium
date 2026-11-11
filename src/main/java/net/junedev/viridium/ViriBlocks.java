@@ -332,7 +332,7 @@ public class ViriBlocks {
         white_poplar = new WhitePoplarBlockSet("white_poplar");
         yew = new LargeTreeBlockSet("yew");
 
-        //Rocks
+        // Rocks
         adakite = registerRock("adakite");
         amphibolite = registerRock("amphibolite");
         andesite = registerRock("andesite");
@@ -803,12 +803,12 @@ public class ViriBlocks {
     public static Block adakite;
     public static Block amphibolite;
     public static Block andesite;
-    public static Block arkose; //TODO: top texture
+    public static Block arkose; // TODO: top texture
     public static Block astorite;
     public static Block basalt;
     public static Block black_granite;
     public static Block black_shale;
-    public static Block blueschist; //TODO x
+    public static Block blueschist; // TODO x
     public static Block breccia;
     public static Block chalcedony;
     public static Block chalk;
@@ -827,17 +827,17 @@ public class ViriBlocks {
     public static Block geyserite;
     public static Block glauconite;
     public static Block gneiss;
-    public static Block granitic_gneiss; //TODO x
+    public static Block granitic_gneiss; // TODO x
     public static Block granodiorite;
     public static Block greenschist;
-    public static Block greywacke; //TODO x
+    public static Block greywacke; // TODO x
     public static Block ironstone;
     public static Block jasper;
     public static Block jasperoid;
     public static Block kimberlite;
     public static Block komatiite;
     public static Block lapis_lazuli;
-    public static Block limestone; //TODO x
+    public static Block limestone; // TODO x
     public static Block listvenite;
     public static Block llanite;
     public static Block marble;
@@ -860,7 +860,7 @@ public class ViriBlocks {
     public static Block rapakivi;
     public static Block red_granite;
     public static Block rhyolite;
-    public static Block sandstone; //TODO x
+    public static Block sandstone; // TODO x
     public static Block scoria;
     public static Block serpentinite;
     public static Block shale;
@@ -868,10 +868,10 @@ public class ViriBlocks {
     public static Block slate;
     public static Block soapstone;
     public static Block tufa;
-    public static Block tuff; //TODO x
+    public static Block tuff; // TODO x
     public static Block unakite;
     public static Block variolite;
-    public static Block weathered_sandstone; //TODO x
+    public static Block weathered_sandstone; // TODO x
     public static Block white_granite;
 
 }

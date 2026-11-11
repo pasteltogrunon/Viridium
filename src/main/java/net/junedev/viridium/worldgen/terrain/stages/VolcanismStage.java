@@ -102,9 +102,19 @@ public class VolcanismStage extends GenStage {
                 plates.apply(hx, hy, p, s);
             }
             gen.continents.apply(hx, hy, p);
-            if (p.L < -0.25)
-                return new Hotspot(TYPE_ICELAND, hx, hy, 0, 0, 0, 0, 0, I, J, false,
-                    (0.1 + 0.07 * rnd(I, J, SD.hot + 3)) * S);
+            if (p.L < -0.25) return new Hotspot(
+                TYPE_ICELAND,
+                hx,
+                hy,
+                0,
+                0,
+                0,
+                0,
+                0,
+                I,
+                J,
+                false,
+                (0.1 + 0.07 * rnd(I, J, SD.hot + 3)) * S);
             return null;
         } else if (p.L < -0.1) {
             plates.plateVel(p.pi, p.pj, s);

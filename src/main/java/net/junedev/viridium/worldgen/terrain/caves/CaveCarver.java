@@ -20,12 +20,14 @@ import net.junedev.viridium.worldgen.terrain.crust.Lithology;
  * extremes of a lattice cell are at its corners: cells that cannot hold a cave are skipped without any per-block work):
  * <ul>
  * <li>caverns {@code C1} (a threshold of 3D noise, flattened vertically);</li>
- * <li>huge deep caverns {@code C2} (lower frequency, more of them with depth: halls of 100+ blocks deep in the crust);</li>
+ * <li>huge deep caverns {@code C2} (lower frequency, more of them with depth: halls of 100+ blocks deep in the
+ * crust);</li>
  * <li>tunnels: where two noises {@code A}, {@code B} are both near zero (long winding tubes);</li>
  * <li>fissures {@code F}: vertical sheets (noise stretched vertically) near zero, inside cavern-prone rock;</li>
  * <li>lava tubes: horizontal tubes a few blocks under the surface of volcanic rock.</li>
  * </ul>
- * The rock decides the shape ({@link Style}): karst rock (limestone, dolostone, chalk, evaporite, marble) has the largest
+ * The rock decides the shape ({@link Style}): karst rock (limestone, dolostone, chalk, evaporite, marble) has the
+ * largest
  * caverns and widest tunnels, crystalline rock tall narrow fissures and thin tunnels, volcanic rock lava tubes, clastic
  * rock something in between, the mantle only the huge deep caverns.
  * <p>
@@ -70,8 +72,7 @@ public final class CaveCarver {
             case LIMESTONE, DOLOSTONE, CHALK, EVAPORITE, MARBLE -> Style.KARST;
             case BASALT, SCORIA, TUFF, BRECCIA, PUMICE, ANDESITE, RHYOLITE -> Style.VOLCANIC;
             case PERIDOTITE, CHROMITITE -> Style.MANTLE;
-            case SANDSTONE, QUARTZ_ARENITE, ARKOSE, CONGLOMERATE, MUDSTONE, SHALE, BLACK_SHALE, CHERT, GREYWACKE,
-                IRONSTONE -> Style.CLASTIC;
+            case SANDSTONE, QUARTZ_ARENITE, ARKOSE, CONGLOMERATE, MUDSTONE, SHALE, BLACK_SHALE, CHERT, GREYWACKE, IRONSTONE -> Style.CLASTIC;
             default -> Style.CRYSTALLINE;
         };
     }
@@ -83,7 +84,17 @@ public final class CaveCarver {
     /** A planned cave piece: tests a point, with an optional fluid of its own (else the aquifer decides). */
     public interface Shape {
 
-        int minX(); int minY(); int minZ(); int maxX(); int maxY(); int maxZ();
+        int minX();
+
+        int minY();
+
+        int minZ();
+
+        int maxX();
+
+        int maxY();
+
+        int maxZ();
 
         /** True if (x, y, z) is inside; {@code c1} is the cavern noise there (to roughen walls). */
         boolean inside(int x, int y, int z, double c1);
@@ -226,7 +237,8 @@ public final class CaveCarver {
             acj0 = Math.floorDiv(by, AY) - 1;
             ack0 = Math.floorDiv(bz, AX) - 1;
             shapes.clear();
-            for (int f = 0; f < features.size(); f++) features.get(f).collect(bx, by, bz, shapes);
+            for (int f = 0; f < features.size(); f++) features.get(f)
+                .collect(bx, by, bz, shapes);
             // per column: highest block a cave may reach, and the level of lava tubes
             int maxRoof = Integer.MIN_VALUE;
             tubeMin = Integer.MAX_VALUE;
@@ -289,7 +301,8 @@ public final class CaveCarver {
                 if (sf) mf = 0;
                 int yCell = by + L * b;
                 int m = (mc1 > tcMin ? 1 : 0) | (deep && mc2 > hugeThreshold(yCell + L) ? 2 : 0)
-                    | (ma < twMax && mb < twMax ? 4 : 0) | (mf < fwMax && mc1 > 0.1 ? 8 : 0)
+                    | (ma < twMax && mb < twMax ? 4 : 0)
+                    | (mf < fwMax && mc1 > 0.1 ? 8 : 0)
                     | (ma < tube && yCell + L >= tubeMin - 4 && yCell <= tubeMax + 4 ? 16 : 0);
                 cell[(a * CELLS + b) * CELLS + k] = (byte) m;
                 any |= m != 0;
@@ -326,8 +339,11 @@ public final class CaveCarver {
             if (!shapes.isEmpty()) {
                 for (int s = 0; s < shapes.size(); s++) {
                     Shape sh = shapes.get(s);
-                    if (x < sh.minX() || x > sh.maxX() || y < sh.minY() || y > sh.maxY() || z < sh.minZ() || z > sh.maxZ())
-                        continue;
+                    if (x < sh.minX() || x > sh.maxX()
+                        || y < sh.minY()
+                        || y > sh.maxY()
+                        || z < sh.minZ()
+                        || z > sh.maxZ()) continue;
                     if (c1 != c1) c1 = lerp3(C1, a, b, k, u, v, w);
                     if (roofed && !sh.opensSurface()) continue;
                     if (sh.inside(x, y, z, amount > 0 ? c1 : 0)) {
@@ -343,15 +359,18 @@ public final class CaveCarver {
             return fluid(x, y, z, plan.surfaceY[i] - y);
         }
 
-        private boolean noise(int mask, int a, int b, int k, double u, double v, double w, int y, int i, Style st, double c1) {
+        private boolean noise(int mask, int a, int b, int k, double u, double v, double w, int y, int i, Style st,
+            double c1) {
             int d = plan.surfaceY[i] - y;
             if ((mask & 9) != 0) {
                 if (c1 != c1) c1 = lerp3(C1, a, b, k, u, v, w);
                 // fewer caverns just under the surface (thin roofs collapse), more and larger deep down
-                double tc = st.cavern - 0.1 * (amount - 1) + (roofY[i] >= plan.surfaceY[i] ? 0 : 0.06 * (1 - ss(8, 40, d)))
+                double tc = st.cavern - 0.1 * (amount - 1)
+                    + (roofY[i] >= plan.surfaceY[i] ? 0 : 0.06 * (1 - ss(8, 40, d)))
                     - 0.05 * ss(100, 600, d);
                 if ((mask & 1) != 0 && c1 > tc) return true;
-                if ((mask & 8) != 0 && st.fissure > 0 && c1 > 0.2
+                if ((mask & 8) != 0 && st.fissure > 0
+                    && c1 > 0.2
                     && Math.abs(lerp3(F, a, b, k, u, v, w)) < st.fissure * amount * ss(0.2, 0.35, c1)) return true;
             }
             if ((mask & 2) != 0 && lerp3(C2, a, b, k, u, v, w) > hugeThreshold(y)) return true;
@@ -423,7 +442,8 @@ public final class CaveCarver {
     }
 
     /**
-     * Water never rises close to the ground: a per-cell constant (the lowest coarse ground at 9 points of the cell, minus
+     * Water never rises close to the ground: a per-cell constant (the lowest coarse ground at 9 points of the cell,
+     * minus
      * 24 blocks), so neighbouring columns of different height never get water next to air.
      */
     private int cap(int ci, int ck) {

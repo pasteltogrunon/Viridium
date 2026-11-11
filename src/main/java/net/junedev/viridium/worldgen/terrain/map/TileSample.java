@@ -20,15 +20,15 @@ final class TileSample {
     static final int SST = 22, SHADOW = 23, ORO = 24; // CLIMATE_FINAL
     static final int ERO = 25, MESA = 26; // EROSION
     static final int RIVERD = 27, RIVERHW = 28, VALLEY = 29, DELTA = 30, ESTU = 31, LAKEZ = 32, GLAC = 33, GORGE = 34,
-        DOLINE = 35; // RIVERS
-    static final int BERG = 36, PERMA = 37, ICEFRAC = 38, HS = 39; // CRYOSPHERE
+        DOLINE = 35, TERRACE = 36; // RIVERS
+    static final int BERG = 37, PERMA = 38, ICEFRAC = 39, HS = 40; // CRYOSPHERE
     // int fields
     static final int PI = 0, PJ = 1; // PLATES
     static final int PLATTYPE = 2, RIFTTYPE = 3, VOLCTYPE = 4; // RELIEF
     static final int ROCK = 5, ROCK2 = 6; // GEOLOGY
-    static final int RIVER = 7, LAKE = 8; // RIVERS
-    static final int SEAICE = 9; // CRYOSPHERE
-    static final int COLOR = 10; // BIOMES
+    static final int RIVER = 7, LAKE = 8, SURF = 9; // RIVERS (the landform cover, set from the relief on)
+    static final int SEAICE = 10; // CRYOSPHERE
+    static final int COLOR = 11; // BIOMES
 
     /** Float and int fields available after each stage (index = Stage ordinal). */
     private static final int[] FLOATS = new int[Stage.values().length], INTS = new int[Stage.values().length];
@@ -41,9 +41,9 @@ final class TileSample {
         set(Stage.GEOLOGY, 22, 7);
         set(Stage.CLIMATE_FINAL, 25, 7);
         set(Stage.EROSION, 27, 7);
-        set(Stage.RIVERS, 36, 9);
-        set(Stage.CRYOSPHERE, 40, 10);
-        set(Stage.BIOMES, 40, 11);
+        set(Stage.RIVERS, 37, 10);
+        set(Stage.CRYOSPHERE, 41, 11);
+        set(Stage.BIOMES, 41, 12);
     }
 
     private static void set(Stage s, int floats, int ints) {
@@ -122,6 +122,8 @@ final class TileSample {
         f[GLAC][k] = (float) o.glac;
         f[GORGE][k] = (float) o.gorge;
         f[DOLINE][k] = (float) o.doline;
+        f[TERRACE][k] = (float) o.terrace;
+        i[SURF][k] = o.surf;
         i[RIVER][k] = o.river;
         i[LAKE][k] = o.lake;
         if (s < Stage.CRYOSPHERE.ordinal()) return;
@@ -187,6 +189,8 @@ final class TileSample {
         o.glac = f[GLAC][k];
         o.gorge = f[GORGE][k];
         o.doline = f[DOLINE][k];
+        o.terrace = f[TERRACE][k];
+        o.surf = i[SURF][k];
         o.river = i[RIVER][k];
         o.lake = i[LAKE][k];
         if (s < Stage.CRYOSPHERE.ordinal()) return;
@@ -211,7 +215,8 @@ final class TileSample {
     /**
      * Whether a layer evaluated up to {@code need} can be painted from this sample with the same values. Later stages
      * only add fields, except the final height {@code h}, which the erosion and then the rivers (and collapse pits)
-     * lower: a layer that reads it ({@code usesH}) needs a sample that stopped in the same group (before the erosion, at
+     * lower: a layer that reads it ({@code usesH}) needs a sample that stopped in the same group (before the erosion,
+     * at
      * the erosion, or from the rivers on).
      */
     boolean serves(Stage need, boolean usesH) {

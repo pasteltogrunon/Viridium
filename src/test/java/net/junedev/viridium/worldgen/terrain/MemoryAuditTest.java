@@ -30,7 +30,8 @@ class MemoryAuditTest {
             try {
                 Thread.sleep(60);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                    .interrupt();
             }
             best = Math.min(best, rt.totalMemory() - rt.freeMemory());
         }
@@ -61,7 +62,8 @@ class MemoryAuditTest {
         for (int i = 0; i < 32; i++) planner.plan(38 + i, -12);
         long perPlan = (allocated() - a0) / 32;
         long a1 = allocated();
-        g.rivers.net(net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyA(g.rivers.basins.cellAt(20000, 9000)),
+        g.rivers.net(
+            net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyA(g.rivers.basins.cellAt(20000, 9000)),
             net.junedev.viridium.worldgen.terrain.stages.BasinGraph.keyB(g.rivers.basins.cellAt(20000, 9000)));
         long perNet = allocated() - a1; // includes the networks it depends on
         long nets1 = g.rivers.buildCount();
@@ -78,28 +80,43 @@ class MemoryAuditTest {
             cols++;
         }
         long full = used();
-        out.append(String.format("  after planning %d columns along ~%d km: %s total (pipeline caches + plan cache)%n",
-            cols, 2600 * 16 / 1000, mb(full - empty)));
+        out.append(
+            String.format(
+                "  after planning %d columns along ~%d km: %s total (pipeline caches + plan cache)%n",
+                cols,
+                2600 * 16 / 1000,
+                mb(full - empty)));
 
         plans = null;
         long noPlans = used();
-        out.append(String.format("  column plan cache (%d max)          %s%n", ColumnPlanCache.DEFAULT_MAXIMUM_SIZE,
-            mb(full - noPlans)));
+        out.append(
+            String.format(
+                "  column plan cache (%d max)          %s%n",
+                ColumnPlanCache.DEFAULT_MAXIMUM_SIZE,
+                mb(full - noPlans)));
         long nNets = g.rivers.cachedCount();
         g.rivers.clearNets();
         long noNets = used();
-        out.append(String.format("  river networks (%d cached)           %s  (%s each)%n", nNets, mb(noPlans - noNets),
-            mb(nNets == 0 ? 0 : (noPlans - noNets) / nNets)));
+        out.append(
+            String.format(
+                "  river networks (%d cached)           %s  (%s each)%n",
+                nNets,
+                mb(noPlans - noNets),
+                mb(nNets == 0 ? 0 : (noPlans - noNets) / nNets)));
         long nExits = g.rivers.exitCount();
         g.rivers.clearCache();
         long noExits = used();
         out.append(String.format("  river exits (%d)                     %s%n", nExits, mb(noNets - noExits)));
-        int ct = ((FastClimateStage) g.climateFinal).grid().cachedTiles();
-        ((FastClimateStage) g.climateFinal).grid().clear();
+        int ct = ((FastClimateStage) g.climateFinal).grid()
+            .cachedTiles();
+        ((FastClimateStage) g.climateFinal).grid()
+            .clear();
         long noClim = used();
         out.append(String.format("  climate lattice (%d tiles)            %s%n", ct, mb(noExits - noClim)));
-        int et = ((FastErosionStage) g.erosion).grid().cachedTiles();
-        ((FastErosionStage) g.erosion).grid().clear();
+        int et = ((FastErosionStage) g.erosion).grid()
+            .cachedTiles();
+        ((FastErosionStage) g.erosion).grid()
+            .clear();
         long noEro = used();
         out.append(String.format("  erosion lattice (%d tiles)           %s%n", et, mb(noClim - noEro)));
         g.volcanism.clearCache();
@@ -110,7 +127,12 @@ class MemoryAuditTest {
         out.append(String.format("  column plan                          %s%n", mb(perPlan)));
         out.append(String.format("  river network build (%d nets)         %s%n", nets1, mb(perNet)));
         out.append(String.format("  map tile 128x128 composite level 4   %s%n", mb(perTile)));
-        out.append(String.format("JVM max heap %s%n", mb(Runtime.getRuntime().maxMemory())));
+        out.append(
+            String.format(
+                "JVM max heap %s%n",
+                mb(
+                    Runtime.getRuntime()
+                        .maxMemory())));
         System.out.print(out);
     }
 }

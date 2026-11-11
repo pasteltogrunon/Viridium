@@ -95,16 +95,73 @@ public class CrustModel {
         }
     }
 
-    private static final Palette PLATFORM_COVER = new Palette(SANDSTONE, 3, SHALE, 3, LIMESTONE, 3, DOLOSTONE, 1.5,
-        MUDSTONE, 2, QUARTZ_ARENITE, 1, CONGLOMERATE, 0.6, IRONSTONE, 0.2);
-    private static final Palette BASIN_COVER = new Palette(MUDSTONE, 3, SHALE, 3, BLACK_SHALE, 1.5, SANDSTONE, 2,
-        LIMESTONE, 1, ARKOSE, 1);
-    private static final Palette MARGIN_COVER = new Palette(LIMESTONE, 3, MUDSTONE, 2, SANDSTONE, 2, DOLOSTONE, 1,
-        GREYWACKE, 1, CHALK, 0.6);
-    private static final Palette OROGEN_COVER = new Palette(PHYLLITE, 3, MICASCHIST, 2, MARBLE, 1.5, QUARTZITE, 1.5,
-        GREYWACKE, 1);
-    private static final Palette ARC_COVER = new Palette(ANDESITE, 4, TUFF, 3, BRECCIA, 1.5, RHYOLITE, 1, PUMICE, 0.4,
-        BASALT, 0.8);
+    private static final Palette PLATFORM_COVER = new Palette(
+        SANDSTONE,
+        3,
+        SHALE,
+        3,
+        LIMESTONE,
+        3,
+        DOLOSTONE,
+        1.5,
+        MUDSTONE,
+        2,
+        QUARTZ_ARENITE,
+        1,
+        CONGLOMERATE,
+        0.6,
+        IRONSTONE,
+        0.2);
+    private static final Palette BASIN_COVER = new Palette(
+        MUDSTONE,
+        3,
+        SHALE,
+        3,
+        BLACK_SHALE,
+        1.5,
+        SANDSTONE,
+        2,
+        LIMESTONE,
+        1,
+        ARKOSE,
+        1);
+    private static final Palette MARGIN_COVER = new Palette(
+        LIMESTONE,
+        3,
+        MUDSTONE,
+        2,
+        SANDSTONE,
+        2,
+        DOLOSTONE,
+        1,
+        GREYWACKE,
+        1,
+        CHALK,
+        0.6);
+    private static final Palette OROGEN_COVER = new Palette(
+        PHYLLITE,
+        3,
+        MICASCHIST,
+        2,
+        MARBLE,
+        1.5,
+        QUARTZITE,
+        1.5,
+        GREYWACKE,
+        1);
+    private static final Palette ARC_COVER = new Palette(
+        ANDESITE,
+        4,
+        TUFF,
+        3,
+        BRECCIA,
+        1.5,
+        RHYOLITE,
+        1,
+        PUMICE,
+        0.4,
+        BASALT,
+        0.8);
     private static final Palette LIP_COVER = new Palette(BASALT, 6, SCORIA, 1, TUFF, 0.6);
     private static final Palette PELAGIC = new Palette(CHERT, 2, MUDSTONE, 2, CHALK, 1, LIMESTONE, 0.5);
     private static final Palette ISLAND = new Palette(BASALT, 5, SCORIA, 1.5, TUFF, 1);
@@ -282,7 +339,6 @@ public class CrustModel {
 
     // ------------------------------------------------------------------ per-block lithology
 
-
     /**
      * Lithology at absolute (x, y, z) of column i.
      *
@@ -371,7 +427,8 @@ public class CrustModel {
         int T = cp.strataT[i];
         double ys = y + cp.fold[i] + (yd - y) * 0.3;
         int idx = floor(ys / T);
-        // 60+ blocks under the surface the bias weight below is exactly 1, so the unit's rock depends on idx alone and a
+        // 60+ blocks under the surface the bias weight below is exactly 1, so the unit's rock depends on idx alone and
+        // a
         // unit (5..13 blocks) is picked once per column of the cube instead of once per block
         boolean unbiased = surface - y >= 60;
         double r;

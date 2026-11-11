@@ -2,6 +2,7 @@ package net.junedev.viridium.worldgen.terrain.crust;
 
 /** Geological provinces (see docs/viridium/Design/Geology.md). Decide the cover and the basement of a column. */
 public enum Province {
+
     /** Stable interior with flat-lying sedimentary strata. */
     PLATFORM,
     /** Thick, fine-grained sediments in a low area. */

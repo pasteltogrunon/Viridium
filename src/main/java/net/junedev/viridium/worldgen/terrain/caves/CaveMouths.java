@@ -62,8 +62,17 @@ public final class CaveMouths implements CaveFeatures {
                     double slope = Math.tan(Math.toRadians(15 + 15 * Noise.rnd(ci, cj, seed + 5)));
                     double r0 = 5 + 3 * Noise.rnd(ci, cj, seed + 6);
                     double sy = TerrainLayout.SEA_LEVEL + o.h + 0.3 * r0;
-                    CaveSystems.ramp(x, sy, z, x + Math.cos(ang) * len, sy - len * slope - r0, z + Math.sin(ang) * len, r0,
-                        0.65 * r0, l, seed + ci * 31 + cj * 37);
+                    CaveSystems.ramp(
+                        x,
+                        sy,
+                        z,
+                        x + Math.cos(ang) * len,
+                        sy - len * slope - r0,
+                        z + Math.sin(ang) * len,
+                        r0,
+                        0.65 * r0,
+                        l,
+                        seed + ci * 31 + cj * 37);
                 }
             }
         }
@@ -88,7 +97,8 @@ public final class CaveMouths implements CaveFeatures {
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
             if (!mayReach(ci + di, cj + dj, x, z, 4)) continue;
             List<CaveSystems.Segment> l = cell(ci + di, cj + dj);
-            for (int q = 0; q < Math.min(3, l.size()); q++) if (l.get(q).near2d(x, z, 3)) return true;
+            for (int q = 0; q < Math.min(3, l.size()); q++) if (l.get(q)
+                .near2d(x, z, 3)) return true;
         }
         return false;
     }
@@ -97,9 +107,12 @@ public final class CaveMouths implements CaveFeatures {
     public void collect(int bx, int by, int bz, List<CaveCarver.Shape> out) {
         if (P.caveEntrances <= 0) return;
         int ci = Math.floorDiv(bx, G), cj = Math.floorDiv(bz, G);
-        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++)
-            if (mayReach(ci + di, cj + dj, bx + 8, bz + 8, 8)) for (CaveSystems.Segment s : cell(ci + di, cj + dj))
-                if (s.maxX() >= bx && s.minX() <= bx + 15 && s.maxY() >= by && s.minY() <= by + 15 && s.maxZ() >= bz
+        for (int dj = -1; dj <= 1; dj++)
+            for (int di = -1; di <= 1; di++) if (mayReach(ci + di, cj + dj, bx + 8, bz + 8, 8))
+                for (CaveSystems.Segment s : cell(ci + di, cj + dj)) if (s.maxX() >= bx && s.minX() <= bx + 15
+                    && s.maxY() >= by
+                    && s.minY() <= by + 15
+                    && s.maxZ() >= bz
                     && s.minZ() <= bz + 15) out.add(s);
     }
 }

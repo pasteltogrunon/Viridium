@@ -2,6 +2,7 @@ package net.junedev.viridium.worldgen.terrain.pipeline;
 
 /** Pipeline stages, in evaluation order. Evaluating up to a stage runs it and every stage before it. */
 public enum Stage {
+
     /** 1-2. Base temperature, precipitation and general circulation. */
     CLIMATE,
     /** 3-4. Tectonic plates, ridges, trenches, arcs and collisions. */

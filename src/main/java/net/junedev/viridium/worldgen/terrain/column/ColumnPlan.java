@@ -14,8 +14,8 @@ public final class ColumnPlan {
     /** "No water / no ice" marker for the Y arrays. */
     public static final int NONE = Integer.MIN_VALUE;
 
-    public static final int F_RIVER = 1, F_LAKE = 2, F_SALT = 4, F_FLOE = 8, F_SHELF = 16, F_BERG = 32,
-        F_FROZEN = 64, F_FALL = 128;
+    public static final int F_RIVER = 1, F_LAKE = 2, F_SALT = 4, F_FLOE = 8, F_SHELF = 16, F_BERG = 32, F_FROZEN = 64,
+        F_FALL = 128;
 
     public final int chunkX, chunkZ;
 
@@ -33,6 +33,8 @@ public final class ColumnPlan {
     public final byte[] flags = new byte[AREA];
     /** Final temperature (°C at the surface), precipitation (mm/year), slope (gradient). */
     public final float[] temperature = new float[AREA], precipitation = new float[AREA], slope = new float[AREA];
+    /** Landform surface material (GenPoint.SURF_*), 0 = the biome decides. */
+    public final byte[] surf = new byte[AREA];
     /** Surface rock ({@code Rock} ordinal) and Viridium biome ({@code Biome} ordinal). */
     public final byte[] rock = new byte[AREA], biome = new byte[AREA];
     /** Minecraft biome ids. */

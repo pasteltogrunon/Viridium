@@ -3,7 +3,8 @@ package net.junedev.viridium.worldgen.terrain.stages;
 import java.util.Map;
 
 /**
- * Pre-generated drainage network of one drainage basin cell (see {@link BasinGraph}); rivers coming from upstream basins
+ * Pre-generated drainage network of one drainage basin cell (see {@link BasinGraph}); rivers coming from upstream
+ * basins
  * enter through the shared divide node with their whole flow. Immutable once built.
  */
 public final class RiverNet {
@@ -28,7 +29,9 @@ public final class RiverNet {
     public float[] am0, am1;
     /** How far a curve strays from its cell (search radius in queries). */
     public double reach;
-    /** River mouths, MS floats each (x, y, ux, uy, deltaR, hw, flow, cell, estuary, Lest, Wm, reach, estStart, estN). */
+    /**
+     * River mouths, MS floats each (x, y, ux, uy, deltaR, hw, flow, cell, estuary, Lest, Wm, reach, estStart, estN).
+     */
     public float[] mouths;
     public int nMouth;
     /** Reaches that belong to estuaries. */
@@ -44,7 +47,8 @@ public final class RiverNet {
     /** Reaches replaced by a delta (the main stem between the delta apex and the old mouth). */
     public byte[] skip;
     /**
-     * Waterfalls: drop (blocks) at the start of a reach that begins at the foot of a fall (0 none), and 1 for a reach that
+     * Waterfalls: drop (blocks) at the start of a reach that begins at the foot of a fall (0 none), and 1 for a reach
+     * that
      * ends at the lip of one (the next reach, or the sea, lies below it).
      */
     public float[] fallIn = new float[0];
@@ -52,12 +56,34 @@ public final class RiverNet {
     public byte[] lipOut = new byte[0];
     /** 1 for a reach whose node lies in a river lake (its water is the lake's: no banks of its own), else 0. */
     public byte[] inLake = new byte[0];
+    /**
+     * Oxbow lakes: {@link #OXN} floats each (centre x, y, radius, half-width of the arc, water level, bearing of the
+     * open
+     * side, depth).
+     */
+    public float[] ox = new float[0];
+    public int nOx;
+    public static final int OXN = 7;
+    /** Braiding (0..1) at both ends of each reach: shallow channel with gravel bars (the widths already include it). */
+    public float[] br0 = new float[0], br1 = new float[0];
+    /** Alluvial fans: {@link #FN} floats each (apex x, y, unit direction, radius, apex height, toe height, flow). */
+    public float[] fans = new float[0];
+    public int nFan;
+    public static final int FN = 8;
     /** River lakes of this network (lakes a river flows through, full to their outlet). */
     public int riverLakes;
     /** Valley field: distance to nearest river (65535 = none), its bed height ×16, width ×10, meander ×4, relief /2. */
     public char[] vd;
     public short[] vz;
     public byte[] vw, va, vr;
+    /**
+     * Strength of the broad valley (×255): 0 around a waterfall lip, where the terrain keeps its scarp (the distance
+     * still
+     * says how near the river is: the valleys of other networks give way to it there).
+     */
+    public byte[] vx;
+    /** Ria mark of the nearest river (×255): its valley is drowned towards the mouth. */
+    public byte[] vq;
     /** Rock erodibility ×255 per cell (0 = not this plate's land). */
     public byte[] cer;
     /** Lake level per cell (negative = salt flat). */
@@ -128,6 +154,7 @@ public final class RiverNet {
         int k = java.util.Arrays.binarySearch(lakeIdx, idx);
         return k >= 0 ? lakeLv[k] : Double.NaN;
     }
+
     /** Water level at the exit node towards the downstream basin (NaN if the basin drains to the sea). */
     public float exitLevel = Float.NaN;
     /** Flow (runoff units) that reaches the exit node: what the downstream basin receives. */

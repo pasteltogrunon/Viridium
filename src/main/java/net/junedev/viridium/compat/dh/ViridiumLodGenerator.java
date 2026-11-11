@@ -180,8 +180,22 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
                     int leafTop = canopy.leafMax[ci] == ColumnPlan.NONE ? ColumnPlan.NONE : canopy.leafMax[ci] + 1;
                     s.column.tree(canopy.logTop[ci], canopy.leafMin[ci], leafTop);
                 }
-                emitColumn(p, s, plan, i, x, z, minY, maxY, rx, rz, ds, canopy.leafBlock[ci], canopy.leafMeta[ci],
-                    canopy.logBlock[ci], canopy.logMeta[ci]);
+                emitColumn(
+                    p,
+                    s,
+                    plan,
+                    i,
+                    x,
+                    z,
+                    minY,
+                    maxY,
+                    rx,
+                    rz,
+                    ds,
+                    canopy.leafBlock[ci],
+                    canopy.leafMeta[ci],
+                    canopy.logBlock[ci],
+                    canopy.logMeta[ci]);
             }
         }
     }
@@ -208,8 +222,22 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
                     int x = blockMinX + rx * step + (step >> 1), z = blockMinZ + rz * step + (step >> 1);
                     p.planner.planPoint(plan, 0, x, z, step);
                     TreeShapes.Shape tree = sampleTree(p, s, plan, x, z);
-                    emitColumn(p, s, plan, 0, x, z, minY, maxY, rx, rz, ds, tree == null ? null : tree.leaves(),
-                        tree == null ? 0 : tree.leavesMeta(), null, 0);
+                    emitColumn(
+                        p,
+                        s,
+                        plan,
+                        0,
+                        x,
+                        z,
+                        minY,
+                        maxY,
+                        rx,
+                        rz,
+                        ds,
+                        tree == null ? null : tree.leaves(),
+                        tree == null ? 0 : tree.leavesMeta(),
+                        null,
+                        0);
                 }
             }
         } finally {
@@ -287,8 +315,16 @@ public final class ViridiumLodGenerator implements IDhApiWorldGenerator {
         // separate caches: LOD work far from the players must not evict the plans the real world is using
         ColumnPlanCache lodPlans = new ColumnPlanCache(planner, LOD_PLAN_CACHE);
         FloraPlanner flora = new FloraPlanner(lodPlans, rules, world.getSeed(), true);
-        return pipeline = new Pipeline(g.gen(), planner, rules, g.gen().crust, LithologyBlocks.get(), g.plans(),
-            lodPlans, flora, world.getSeed());
+        return pipeline = new Pipeline(
+            g.gen(),
+            planner,
+            rules,
+            g.gen().crust,
+            LithologyBlocks.get(),
+            g.plans(),
+            lodPlans,
+            flora,
+            world.getSeed());
     }
 
     private static IDhApiBlockStateWrapper air() {

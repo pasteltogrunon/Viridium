@@ -27,6 +27,7 @@ For each node closer than 900 blocks the network stores, from its nearest river 
 | `vw` | byte, ×4 | its half-width |
 | `va` | byte, ×4 | its meander amplitude (the meander belt the floodplain must hold) |
 | `vr` | byte, /2 | **local relief**: highest node in the 7×7 around the river node minus its water level. Tells whether the valley is boxed in by mountains |
+| `vx` | byte, ×255 | **strength** of the broad valley: 0 around a waterfall lip (the terrain keeps its scarp), 1 elsewhere |
 | `cer` | byte, ×255 | erodibility of the node (stored for every owned node) |
 
 ## Sampling the field (runtime)

@@ -91,8 +91,8 @@ public class CubeFiller {
         if (kind == Kind.AIR && cc == null) return flora == null ? null : flora.draw(plan, cubeX, cubeY, cubeZ, null);
         ExtendedBlockStorage ebs = new ExtendedBlockStorage(y0, hasSky);
         if (kind == Kind.BEDROCK) {
-            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
-                ebs.func_150818_a(x, y, z, Blocks.bedrock);
+            for (int y = 0; y < 16; y++)
+                for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) ebs.func_150818_a(x, y, z, Blocks.bedrock);
             return ebs;
         }
         CrustModel.Sampler s = crust.sampler();
@@ -128,11 +128,12 @@ public class CubeFiller {
     }
 
     /**
-     * Cuts the notch of column i (flooded below the water level of the cliff foot) and piles its talus: cobblestone with
+     * Cuts the notch of column i (flooded below the water level of the cliff foot) and piles its talus: cobblestone
+     * with
      * gravel on top, mossy cobblestone where it rains.
      */
-    private void cliff(ExtendedBlockStorage ebs, ColumnPlan plan, net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc,
-        int i, int y0, int cubeX, int cubeZ) {
+    private void cliff(ExtendedBlockStorage ebs, ColumnPlan plan,
+        net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc, int i, int y0, int cubeX, int cubeZ) {
         int lx = i & 15, lz = i >> 4;
         int lo = cc.notchLo[i];
         if (lo != NONE) {
@@ -140,7 +141,8 @@ public class CubeFiller {
             // never hang sand or gravel over the hole: keep at least one block of rock under loose soil
             SurfaceRules.Column sc = surface.get();
             rules.resolve(plan, i, (cubeX << 4) + lx, (cubeZ << 4) + lz, sc);
-            if (sc.top instanceof net.minecraft.block.BlockFalling || sc.under instanceof net.minecraft.block.BlockFalling)
+            if (sc.top instanceof net.minecraft.block.BlockFalling
+                || sc.under instanceof net.minecraft.block.BlockFalling)
                 hi = Math.min(hi, plan.surfaceY[i] - sc.depth - 2);
             for (int y = Math.max(lo, y0); y <= Math.min(hi, y0 + 15); y++)
                 ebs.func_150818_a(lx, y - y0, lz, wl != NONE && y <= wl ? Blocks.water : Blocks.air);
@@ -176,7 +178,8 @@ public class CubeFiller {
         rules.resolve(plan, i, x, z, sc);
         boolean packed = plan.has(i, ColumnPlan.F_SHELF) || plan.has(i, ColumnPlan.F_BERG);
         // caves never hollow out loose soil (sand, gravel) or the blocks right under it: it would fall
-        boolean loose = sc.top instanceof net.minecraft.block.BlockFalling || sc.under instanceof net.minecraft.block.BlockFalling;
+        boolean loose = sc.top instanceof net.minecraft.block.BlockFalling
+            || sc.under instanceof net.minecraft.block.BlockFalling;
         int caveTop = loose ? sy - sc.depth - 2 : sy;
         for (int ly = 0; ly < 16; ly++) {
             int y = y0 + ly;

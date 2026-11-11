@@ -34,7 +34,8 @@ public final class GenScratch {
     public boolean riversCachedOnly, riversIncomplete;
     /**
      * Map previews: coarse height lattice of the tile being drawn ({@code heightAt(x, z, false)} on a square grid of
-     * {@code latticeN}² nodes from (latticeX0, latticeZ0), spacing latticeStep), from which the erosion gradient is taken
+     * {@code latticeN}² nodes from (latticeX0, latticeZ0), spacing latticeStep), from which the erosion gradient is
+     * taken
      * instead of 4 heightAt calls per pixel. Null in game; set and cleared (in a finally) by the map renderer.
      */
     public float[] reliefLattice;
@@ -59,7 +60,9 @@ public final class GenScratch {
     public double[] PCONV;
     public boolean[] PCOLL;
     public int[] POVER, PDOK;
-    /** Clip interval of the Voronoi edge (bk, k) along its bisector, from the midpoint (NaN: the plates do not touch). */
+    /**
+     * Clip interval of the Voronoi edge (bk, k) along its bisector, from the midpoint (NaN: the plates do not touch).
+     */
     public double[] PTMIN, PTMAX;
     public int[] PSOK;
 
@@ -93,10 +96,16 @@ public final class GenScratch {
 
     // erosion: last gully value and gradient
     public double EV, EGX, EGY;
+    /**
+     * Climate style of the erosion at the current point: depth multiplier, crest exponent, octave gain, valley fill.
+     */
+    public double ECD, ECP, ECG, ECF;
+    /** Gradient output of {@code HeightGrid.gradient}. */
+    public final double[] GRAD = new double[2];
 
     // rivers: cubic B-spline weights and the sampled network field
     public final double[] BWX = new double[4], BWY = new double[4];
-    public double FD, FZ, FW, FA, FR, FE, FEW;
+    public double FD, FZ, FW, FA, FR, FE, FEW, FQ, FS = 1;
     public boolean FOK;
 
     // volcanism: hotspots near the last evaluated hotspot cell

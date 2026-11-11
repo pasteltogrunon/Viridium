@@ -57,7 +57,8 @@ public enum FeatureType {
             int h = 13 + r.nextInt(7);
             for (int i = 0; i < h; i++) s.log(x, y + i, z, Blocks.log, 1);
             int crown = 4 + r.nextInt(3);
-            for (int i = h - crown; i <= h; i++) disc(s, x, y + i, z, i >= h - 1 ? 1 : 2 - (i - (h - crown)) % 2, Blocks.leaves, 1, r, false);
+            for (int i = h - crown; i <= h; i++)
+                disc(s, x, y + i, z, i >= h - 1 ? 1 : 2 - (i - (h - crown)) % 2, Blocks.leaves, 1, r, false);
             s.leaves(x, y + h, z, Blocks.leaves, 1);
         }
     },

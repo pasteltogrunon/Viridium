@@ -138,7 +138,8 @@ public class PlateStage extends GenStage {
     }
 
     /**
-     * Distance from (wx, wy) in plate bk to the real Voronoi edge with plate k: the bisector clipped by the plate's other
+     * Distance from (wx, wy) in plate bk to the real Voronoi edge with plate k: the bisector clipped by the plate's
+     * other
      * half-planes (the bisector line alone runs on past a triple junction, where it is no boundary at all). Infinity if
      * the two plates do not touch. {@code q} is the pair index of (bk, k).
      */
@@ -154,7 +155,8 @@ public class PlateStage extends GenStage {
     }
 
     /**
-     * The edge (bk, k) as an interval [PTMIN, PTMAX] along its bisector measured from the midpoint: the bisector clipped
+     * The edge (bk, k) as an interval [PTMIN, PTMAX] along its bisector measured from the midpoint: the bisector
+     * clipped
      * by bk's half-planes with every other seed. Depends only on the cell, so it is computed once per pair.
      */
     private void segment(int bk, int k, int q, GenScratch s) {
@@ -195,7 +197,8 @@ public class PlateStage extends GenStage {
     }
 
     /**
-     * Soft distance to the non-collisional boundaries, measured to their real segments: a bisector line alone runs on past
+     * Soft distance to the non-collisional boundaries, measured to their real segments: a bisector line alone runs on
+     * past
      * the triple junction where the boundary turns into a collision, and cut a straight ocean wedge there.
      * {@code open} has a bit per non-collisional neighbour.
      */
@@ -204,7 +207,8 @@ public class PlateStage extends GenStage {
         final double[] LD = s.LD;
         double best = 2 * S;
         int n = 0;
-        while (open != 0) { // nearest lines first, until the next line is beyond the best segment found (+ the soft margin)
+        while (open != 0) { // nearest lines first, until the next line is beyond the best segment found (+ the soft
+                            // margin)
             int pick = -1;
             double pd = 0;
             for (int bits = open; bits != 0; bits &= bits - 1) {
@@ -245,7 +249,8 @@ public class PlateStage extends GenStage {
         }
         double ax = FX[bk], ay = FY[bk];
         int ai = FI[bk], aj = FJ[bk];
-        double edge = Double.POSITIVE_INFINITY, edgeNC = 2 * S, ridge = 0, orog = 0, trench = 0, cw = 0, cs = 0, arc = 0;
+        double edge = Double.POSITIVE_INFINITY, edgeNC = 2 * S, ridge = 0, orog = 0, trench = 0, cw = 0, cs = 0,
+            arc = 0;
         double collZ = 0, cwS = 0, cwK = 0, cwD = 0;
         int nk = bk, ncMask = 0; // ncMask: neighbours whose boundary is not a collision
         double wR = S * 0.045, wO = S * 0.16, tW = S * 0.025, aC = S * 0.08, aW = S * 0.022, Wz = S * 0.3,

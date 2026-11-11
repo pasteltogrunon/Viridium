@@ -1,10 +1,10 @@
 package net.junedev.viridium.worldgen.terrain.map;
 
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
+import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
 import static net.junedev.viridium.worldgen.terrain.map.ColorRamp.hsl;
 import static net.junedev.viridium.worldgen.terrain.map.ColorRamp.lerp;
-import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.map.ColorRamp.rgb;
 
 import java.util.ArrayList;
@@ -57,19 +57,158 @@ public final class MapLayer {
     // ------------------------------------------------------------------ ramps (layers.js)
 
     public static final ColorRamp R_TEMP = new ColorRamp(
-        -30, 40, 0, 110, -15, 60, 90, 210, -3, 160, 210, 250, 3, 236, 244, 248,
-        12, 250, 226, 130, 22, 245, 150, 60, 32, 200, 40, 30, 42, 110, 0, 20);
+        -30,
+        40,
+        0,
+        110,
+        -15,
+        60,
+        90,
+        210,
+        -3,
+        160,
+        210,
+        250,
+        3,
+        236,
+        244,
+        248,
+        12,
+        250,
+        226,
+        130,
+        22,
+        245,
+        150,
+        60,
+        32,
+        200,
+        40,
+        30,
+        42,
+        110,
+        0,
+        20);
     public static final ColorRamp R_PREC = new ColorRamp(
-        Math.log10(50), 140, 80, 40, Math.log10(200), 215, 175, 90, Math.log10(500), 230, 225, 120,
-        Math.log10(1000), 120, 190, 90, Math.log10(2000), 40, 135, 140, Math.log10(3500), 30, 50, 150);
+        Math.log10(50),
+        140,
+        80,
+        40,
+        Math.log10(200),
+        215,
+        175,
+        90,
+        Math.log10(500),
+        230,
+        225,
+        120,
+        Math.log10(1000),
+        120,
+        190,
+        90,
+        Math.log10(2000),
+        40,
+        135,
+        140,
+        Math.log10(3500),
+        30,
+        50,
+        150);
     public static final ColorRamp R_HEIGHT = new ColorRamp(
-        -75, 8, 20, 60, -45, 20, 55, 120, -18, 40, 105, 175, -0.01, 110, 180, 215, 0, 72, 140, 76,
-        25, 116, 166, 86, 70, 186, 180, 112, 130, 150, 110, 80, 190, 190, 186, 180, 260, 255, 255, 255,
-        400, 214, 222, 240, 560, 170, 160, 210);
+        -75,
+        8,
+        20,
+        60,
+        -45,
+        20,
+        55,
+        120,
+        -18,
+        40,
+        105,
+        175,
+        -0.01,
+        110,
+        180,
+        215,
+        0,
+        72,
+        140,
+        76,
+        25,
+        116,
+        166,
+        86,
+        70,
+        186,
+        180,
+        112,
+        130,
+        150,
+        110,
+        80,
+        190,
+        190,
+        186,
+        180,
+        260,
+        255,
+        255,
+        255,
+        400,
+        214,
+        222,
+        240,
+        560,
+        170,
+        160,
+        210);
     public static final ColorRamp R_CONT = new ColorRamp(
-        -1, 10, 30, 90, -0.3, 50, 110, 180, -0.001, 160, 205, 230, 0, 205, 195, 125, 0.5, 160, 110, 60, 1, 90, 50, 30);
+        -1,
+        10,
+        30,
+        90,
+        -0.3,
+        50,
+        110,
+        180,
+        -0.001,
+        160,
+        205,
+        230,
+        0,
+        205,
+        195,
+        125,
+        0.5,
+        160,
+        110,
+        60,
+        1,
+        90,
+        50,
+        30);
     public static final ColorRamp R_ERODI = new ColorRamp(
-        0, 68, 1, 84, 0.25, 59, 82, 139, 0.5, 33, 145, 140, 0.75, 94, 201, 98, 1, 253, 231, 37);
+        0,
+        68,
+        1,
+        84,
+        0.25,
+        59,
+        82,
+        139,
+        0.5,
+        33,
+        145,
+        140,
+        0.75,
+        94,
+        201,
+        98,
+        1,
+        253,
+        231,
+        37);
 
     static double plateHue(GenPoint o) {
         return Noise.rnd(o.pi, o.pj, 777) * 360;
@@ -117,10 +256,64 @@ public final class MapLayer {
     }
 
     public static final ColorRamp R_WIND = new ColorRamp(
-        0, 34, 46, 70, 0.4, 46, 104, 140, 0.8, 70, 160, 150, 1.1, 210, 200, 110, 1.5, 230, 120, 70);
-    public static final ColorRamp R_ERO = new ColorRamp(-50, 80, 30, 15, -20, 170, 100, 50, -6, 225, 190, 140, 0, 245, 242, 232);
+        0,
+        34,
+        46,
+        70,
+        0.4,
+        46,
+        104,
+        140,
+        0.8,
+        70,
+        160,
+        150,
+        1.1,
+        210,
+        200,
+        110,
+        1.5,
+        230,
+        120,
+        70);
+    public static final ColorRamp R_ERO = new ColorRamp(
+        -50,
+        80,
+        30,
+        15,
+        -20,
+        170,
+        100,
+        50,
+        -6,
+        225,
+        190,
+        140,
+        0,
+        245,
+        242,
+        232);
     public static final ColorRamp R_SST = new ColorRamp(
-        -7, 30, 70, 160, -3, 110, 160, 215, 0, 225, 225, 220, 3, 230, 150, 110, 6, 180, 50, 40);
+        -7,
+        30,
+        70,
+        160,
+        -3,
+        110,
+        160,
+        215,
+        0,
+        225,
+        225,
+        220,
+        3,
+        230,
+        150,
+        110,
+        6,
+        180,
+        50,
+        40);
     public static final ColorRamp R_SHADOW = new ColorRamp(-1, 40, 110, 200, 0, 240, 240, 235, 1, 190, 90, 40);
 
     /** Rivers stay visible even when narrower than a pixel. */
@@ -150,19 +343,35 @@ public final class MapLayer {
     public static final MapLayer HEIGHT = register(
         new MapLayer("height", "Final height", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> R_HEIGHT.at(o.h)));
 
-    /** Landforms over a grey relief: plateaus (tablelands ochre, basalt traps purple), mesas (red), sea cliffs (white), rifts (red young, brown failed, teal mature), karst dolines (dark green). */
+    /**
+     * Landforms over a grey relief: plateaus (tablelands ochre, basalt traps purple), mesas (red), sea cliffs and
+     * stacks
+     * (white), rifts (red young, brown failed, teal mature), karst dolines (dark green), river terraces (brown),
+     * alluvial
+     * fans (sand), gravel bars (light grey), barrier islands and beaches (pale sand), reefs (turquoise).
+     */
     public static final MapLayer LANDFORMS = register(
         new MapLayer("landforms", "Landforms", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> {
-            if (o.h < 0 && o.river == 0) return rgb(40, 66, 112);
+            if (o.h < 0 && o.river == 0) return o.surf == GenPoint.SURF_REEF ? rgb(80, 200, 190) // reef flats and
+                                                                                                 // crests
+                : o.surf == GenPoint.SURF_SAND ? rgb(110, 150, 170) : rgb(40, 66, 112); // lagoon floor, sea
             int gv = (int) (110 + clamp(o.h, 0, 300) * 0.4);
             int c = rgb(gv, gv, gv);
-            if (o.plat > 0.02) c = lerp(c, o.platType == 1 ? rgb(120, 70, 150) : rgb(214, 150, 60), clamp(o.plat, 0, 1) * 0.75);
-            if (o.rift > 0.05 && o.riftD < 1.6) c = lerp(c, o.riftType == 2 ? rgb(40, 150, 170) : o.riftType == 1 ? rgb(150, 120, 90) : rgb(200, 50, 50), clamp(o.rift * (1.6 - o.riftD), 0, 1) * 0.6);
+            if (o.plat > 0.02)
+                c = lerp(c, o.platType == 1 ? rgb(120, 70, 150) : rgb(214, 150, 60), clamp(o.plat, 0, 1) * 0.75);
+            if (o.rift > 0.05 && o.riftD < 1.6) c = lerp(
+                c,
+                o.riftType == 2 ? rgb(40, 150, 170) : o.riftType == 1 ? rgb(150, 120, 90) : rgb(200, 50, 50),
+                clamp(o.rift * (1.6 - o.riftD), 0, 1) * 0.6);
             if (o.volc > 0.2 && o.volcType == 1 && o.rift > 0) c = rgb(90, 20, 20);
             if (o.cliff > 0.05) c = lerp(c, rgb(235, 235, 245), clamp(o.cliff, 0, 1) * 0.85);
             if (o.doline > 0.5) c = lerp(c, rgb(30, 90, 40), clamp(o.doline / 8, 0.3, 0.9));
             if (o.mesa > 0.05) c = lerp(c, rgb(200, 80, 40), clamp(o.mesa, 0, 1) * 0.8);
+            if (o.terrace > 0.05) c = lerp(c, rgb(150, 105, 60), clamp(o.terrace, 0, 1) * 0.7);
+            if (o.surf == GenPoint.SURF_FAN) c = lerp(c, rgb(225, 195, 120), 0.75);
+            if (o.surf == GenPoint.SURF_SAND) c = rgb(240, 225, 160);
             if (o.river != 0 || o.lake == 1) c = rgb(60, 110, 225);
+            if (o.surf == GenPoint.SURF_GRAVEL) c = rgb(170, 170, 160);
             return c;
         }));
 
@@ -190,8 +399,13 @@ public final class MapLayer {
             if (o.valley > 0 || o.river != 0) {
                 double a = o.river != 0 ? 0.9 : o.valley * 0.75;
                 if (o.glac > 0.3) c = lerp(c, rgb(70, 120, 230), a);
-                else c = lerp(c, rgb((int) lerp(110.0, 235.0, o.gorge), (int) lerp(190.0, 120.0, o.gorge),
-                    (int) lerp(90.0, 40.0, o.gorge)), a);
+                else c = lerp(
+                    c,
+                    rgb(
+                        (int) lerp(110.0, 235.0, o.gorge),
+                        (int) lerp(190.0, 120.0, o.gorge),
+                        (int) lerp(90.0, 40.0, o.gorge)),
+                    a);
             }
             if (o.lake == 1) c = rgb(50, 100, 210);
             if (o.lake == 2) c = rgb(240, 236, 225);
@@ -202,7 +416,12 @@ public final class MapLayer {
         new MapLayer("temp", "Temperature", Stage.CLIMATE_FINAL, false, HeightField.BASE, (o, bpp) -> R_TEMP.at(o.T)));
 
     public static final MapLayer PRECIPITATION_FINAL = register(
-        new MapLayer("precip", "Precipitation", Stage.CLIMATE_FINAL, false, HeightField.BASE,
+        new MapLayer(
+            "precip",
+            "Precipitation",
+            Stage.CLIMATE_FINAL,
+            false,
+            HeightField.BASE,
             (o, bpp) -> R_PREC.at(Math.log10(o.P))));
 
     public static final MapLayer WIND = register(
@@ -212,16 +431,31 @@ public final class MapLayer {
         }));
 
     public static final MapLayer CURRENTS = register(
-        new MapLayer("currents", "Ocean currents", Stage.CLIMATE_FINAL, false, HeightField.BASE,
+        new MapLayer(
+            "currents",
+            "Ocean currents",
+            Stage.CLIMATE_FINAL,
+            false,
+            HeightField.BASE,
             (o, bpp) -> o.h0 < 0 ? lerp(R_SST.at(o.sst), rgb(20, 30, 50), 0.15)
                 : lerp(R_PREC.at(Math.log10(o.P)), rgb(245, 240, 230), 0.25)));
 
     public static final MapLayer RAIN_SHADOW = register(
-        new MapLayer("rainShadow", "Rain shadow", Stage.CLIMATE_FINAL, true, HeightField.BASE,
+        new MapLayer(
+            "rainShadow",
+            "Rain shadow",
+            Stage.CLIMATE_FINAL,
+            true,
+            HeightField.BASE,
             (o, bpp) -> o.h0 < 0 ? rgb(30, 40, 60) : R_SHADOW.at(o.shadow - o.oro)));
 
     public static final MapLayer EROSION = register(
-        new MapLayer("erosion", "Erosion", Stage.EROSION, true, HeightField.FINAL,
+        new MapLayer(
+            "erosion",
+            "Erosion",
+            Stage.EROSION,
+            true,
+            HeightField.FINAL,
             (o, bpp) -> o.h0 < 0 ? rgb(40, 60, 95) : R_ERO.at(o.eroDelta)));
 
     public static final MapLayer CRYO = register(
@@ -241,11 +475,21 @@ public final class MapLayer {
         }));
 
     public static final MapLayer TEMPERATURE = register(
-        new MapLayer("tempBase", "Base temperature", Stage.CLIMATE, false, HeightField.BASE,
+        new MapLayer(
+            "tempBase",
+            "Base temperature",
+            Stage.CLIMATE,
+            false,
+            HeightField.BASE,
             (o, bpp) -> R_TEMP.at(o.Tb)));
 
     public static final MapLayer PRECIPITATION = register(
-        new MapLayer("precipBase", "Base precipitation", Stage.CLIMATE, false, HeightField.BASE,
+        new MapLayer(
+            "precipBase",
+            "Base precipitation",
+            Stage.CLIMATE,
+            false,
+            HeightField.BASE,
             (o, bpp) -> R_PREC.at(Math.log10(o.Pb))));
 
     public static final MapLayer PLATES = register(
@@ -265,7 +509,12 @@ public final class MapLayer {
         }));
 
     public static final MapLayer CONTINENTALITY = register(
-        new MapLayer("continentality", "Continentality", Stage.CONTINENTS, false, HeightField.BASE,
+        new MapLayer(
+            "continentality",
+            "Continentality",
+            Stage.CONTINENTS,
+            false,
+            HeightField.BASE,
             (o, bpp) -> R_CONT.at(clamp(2 * o.L, -1, 1))));
 
     public static final MapLayer GEOLOGY = register(
@@ -275,6 +524,11 @@ public final class MapLayer {
         }));
 
     public static final MapLayer ERODIBILITY = register(
-        new MapLayer("erodibility", "Erodibility", Stage.GEOLOGY, true, HeightField.BASE,
+        new MapLayer(
+            "erodibility",
+            "Erodibility",
+            Stage.GEOLOGY,
+            true,
+            HeightField.BASE,
             (o, bpp) -> R_ERODI.at(o.erod)));
 }

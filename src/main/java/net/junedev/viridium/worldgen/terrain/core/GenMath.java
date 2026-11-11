@@ -47,7 +47,8 @@ public final class GenMath {
     }
 
     /**
-     * Bijective mix of a packed (x, z) key for hash maps. Long.hashCode of (x << 32 | z) is x ^ z: nearby tiles, columns
+     * Bijective mix of a packed (x, z) key for hash maps. Long.hashCode of (x << 32 | z) is x ^ z: nearby tiles,
+     * columns
      * and cells collide by the thousands (tree bins in ConcurrentHashMap, which then reflect on Long at every lookup;
      * long chains in Guava caches). Distinct keys stay distinct.
      */

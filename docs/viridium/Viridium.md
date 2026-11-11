@@ -12,3 +12,4 @@ Viridium development will be split into 2 separate versions:
 - [[Viridium 1.0]]
 - [[Viridium 2.0]]
 Implementation documentation of the 2.0 terrain generator: [[Worldgen Overview]]
+Geological review of the generator (realism gaps, missing landforms): [[Geological Review]]

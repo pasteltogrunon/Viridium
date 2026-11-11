@@ -5,6 +5,7 @@ import static net.junedev.viridium.worldgen.terrain.column.TerrainLayout.SEA_LEV
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.core.Noise;
 import net.junedev.viridium.worldgen.terrain.crust.Lithology;
+import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
 import net.junedev.viridium.worldgen.terrain.stages.Biome;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
@@ -31,10 +32,11 @@ public final class SurfaceRules {
         public boolean snow;
     }
 
-    private final Block evaporite;
+    private final Block evaporite, reef;
 
     public SurfaceRules(Block[] lithologyBlocks) {
         this.evaporite = lithologyBlocks[Lithology.EVAPORITE.ordinal()];
+        this.reef = lithologyBlocks[Lithology.LIMESTONE.ordinal()];
     }
 
     public void resolve(ColumnPlan plan, int i, int x, int z, Column c) {
@@ -48,7 +50,11 @@ public final class SurfaceRules {
         c.snow = !underwater && t < -0.5 && surface >= SEA_LEVEL - 1;
 
         if (underwater) {
-            if (plan.has(i, ColumnPlan.F_RIVER)) set(c, Blocks.gravel, Blocks.gravel, 2);
+            int sf = plan.surf[i];
+            if (sf == GenPoint.SURF_REEF) set(c, reef, reef, 3); // reef flat and crest
+            else if (sf == GenPoint.SURF_GRAVEL) set(c, Blocks.gravel, Blocks.gravel, 3);
+            else if (sf == GenPoint.SURF_SAND) set(c, Blocks.sand, Blocks.sand, 3);
+            else if (plan.has(i, ColumnPlan.F_RIVER)) set(c, Blocks.gravel, Blocks.gravel, 2);
             else if (plan.has(i, ColumnPlan.F_LAKE)) set(c, r < 0.5 ? Blocks.clay : Blocks.sand, Blocks.sand, 2);
             else if (h < -45) set(c, Blocks.clay, Blocks.gravel, 2);
             else if (h < -20 || t < 4) set(c, Blocks.gravel, Blocks.gravel, 2);
@@ -59,6 +65,7 @@ public final class SurfaceRules {
             set(c, evaporite, evaporite, 2);
             return;
         }
+        if (landform(plan, i, slope, c)) return;
         // cliffs: too steep for soil
         if (slope > 1.1 && b != Biome.BEACH && b != Biome.DESERT) {
             set(c, null, null, 0);
@@ -102,7 +109,43 @@ public final class SurfaceRules {
         if (slope > 0.7 && c.top == Blocks.grass) c.depth = Math.min(c.depth, 1); // thin soil on steep ground
         // a snow layer only stays on an opaque, non-ice block (BlockSnow.canPlaceBlockAt); anything else would break
         // on the first neighbour update and take the whole snow field with it (stack overflow)
-        if (c.top != null && (!c.top.isOpaqueCube() || c.top == Blocks.ice || c.top == Blocks.packed_ice)) c.snow = false;
+        if (c.top != null && (!c.top.isOpaqueCube() || c.top == Blocks.ice || c.top == Blocks.packed_ice))
+            c.snow = false;
+    }
+
+    /**
+     * Loose cover of a landform (river terraces, gravel bars, alluvial fans, sand of beaches and barriers): never bare
+     * rock, even on steep ground (a terrace riser shows its alluvium, a dune its sand). False = the biome decides.
+     */
+    private static boolean landform(ColumnPlan plan, int i, float slope, Column c) {
+        switch (plan.surf[i]) {
+            case GenPoint.SURF_ALLUVIUM -> {
+                if (slope < 0.8) return false; // treads: the soil of the biome
+                set(c, Blocks.dirt, Blocks.gravel, 4);
+                c.topMeta = 1; // coarse dirt over gravel: the riser cuts the old floodplain deposits
+                return true;
+            }
+            case GenPoint.SURF_GRAVEL -> {
+                set(c, Blocks.gravel, Blocks.gravel, 3);
+                return true;
+            }
+            case GenPoint.SURF_FAN -> {
+                if (plan.precipitation[i] > 550) { // humid fans: soil on the surface, gravel where it is steep
+                    if (slope < 0.8) return false;
+                    set(c, Blocks.gravel, Blocks.gravel, 3);
+                    return true;
+                }
+                set(c, Blocks.gravel, Blocks.sand, 5); // desert pavement over sand
+                return true;
+            }
+            case GenPoint.SURF_SAND -> {
+                set(c, Blocks.sand, Blocks.sand, 5);
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
     }
 
     private static void set(Column c, Block top, Block under, int depth) {

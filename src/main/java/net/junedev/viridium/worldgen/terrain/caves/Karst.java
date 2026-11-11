@@ -55,7 +55,8 @@ public final class Karst implements CaveFeatures {
 
     double[] doline(int ci, int cj) {
         if (Noise.rnd(ci, cj, seed) >= 0.42 * P.dolines) return null;
-        double x = (ci + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 1)) * G, z = (cj + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 2)) * G;
+        double x = (ci + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 1)) * G,
+            z = (cj + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 2)) * G;
         double r = 5 + 15 * Noise.rnd(ci, cj, seed + 3);
         double depth = r * (0.35 + 0.45 * Noise.rnd(ci, cj, seed + 4));
         boolean shaft = Noise.rnd(ci, cj, seed + 5) < 0.25;
@@ -63,7 +64,9 @@ public final class Karst implements CaveFeatures {
             30 + 120 * Noise.rnd(ci, cj, seed + 7) };
     }
 
-    /** How much the doline of cell (ci, cj) lowers (x, z) (0 outside it); same values as {@link #doline}, no allocation. */
+    /**
+     * How much the doline of cell (ci, cj) lowers (x, z) (0 outside it); same values as {@link #doline}, no allocation.
+     */
     private double lowering(int ci, int cj, double x, double z) {
         if (Noise.rnd(ci, cj, seed) >= 0.42 * P.dolines) return 0;
         double dx = (ci + 0.2 + 0.6 * Noise.rnd(ci, cj, seed + 1)) * G,
@@ -104,12 +107,15 @@ public final class Karst implements CaveFeatures {
         int di0 = lx < 0.8 * G + 20.1 - G ? -1 : 0, di1 = lx > 0.2 * G - 20.1 + G ? 1 : 0;
         int dj0 = lz < 0.8 * G + 20.1 - G ? -1 : 0, dj1 = lz > 0.2 * G - 20.1 + G ? 1 : 0;
         double lower = 0;
-        for (int dj = dj0; dj <= dj1; dj++) for (int di = di0; di <= di1; di++)
-            lower = Math.max(lower, lowering(ci + di, cj + dj, x, z));
+        for (int dj = dj0; dj <= dj1; dj++)
+            for (int di = di0; di <= di1; di++) lower = Math.max(lower, lowering(ci + di, cj + dj, x, z));
         if (lower <= 0) return;
         lower *= ss(0.05, 0.4, k) * away;
         o.h -= lower;
         o.doline = lower;
+        if (lower > 0.5) o.surf = net.junedev.viridium.worldgen.terrain.pipeline.GenPoint.SURF_NONE; // the bowl cuts
+                                                                                                     // through any
+                                                                                                     // landform cover
     }
 
     @Override
@@ -164,12 +170,29 @@ public final class Karst implements CaveFeatures {
             bottom = (int) s[4];
         }
 
-        public int minX() { return x0; }
-        public int minY() { return bottom; }
-        public int minZ() { return z0; }
-        public int maxX() { return x1; }
-        public int maxY() { return top; }
-        public int maxZ() { return z1; }
+        public int minX() {
+            return x0;
+        }
+
+        public int minY() {
+            return bottom;
+        }
+
+        public int minZ() {
+            return z0;
+        }
+
+        public int maxX() {
+            return x1;
+        }
+
+        public int maxY() {
+            return top;
+        }
+
+        public int maxZ() {
+            return z1;
+        }
 
         @Override
         public boolean inside(int px, int py, int pz, double c1) {

@@ -10,6 +10,8 @@ This page is the hub of the rivers section. This stage generates **rivers, lakes
 
 Rivers that cross a cliff fall over it: see [[Landforms Overview|Waterfalls]] (lip, plunge pool, curtain of falling water).
 
+Terraces, oxbow lakes, alluvial fans, braided channels, incised meanders and slot canyons, and rias (drowned valleys): see [[River Landforms]].
+
 ## Why rivers are hard
 
 Every other stage is local: the value at (x, z) only depends on noise around (x, z). A river is not: whether there is a river here, how wide it is and at what level its water stands depend on **everything upstream**, possibly thousands of blocks away, and on where it ends, possibly thousands of blocks downstream. At the same time the world is infinite, generated in any order, on several threads, and must be identical every time.

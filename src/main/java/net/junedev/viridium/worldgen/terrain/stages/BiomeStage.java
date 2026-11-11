@@ -57,11 +57,10 @@ public class BiomeStage extends GenStage {
         set(W, TROPICAL_RAINFOREST, il * sigHi(T, 21, 2) * sigHi(lp, 7.2, 0.25));
         set(W, SWAMP, il * sigHi(T, 8, 2) * sigHi(lp, 6.9, 0.3) * sigLo(h, 12, 2.5) * flat * 2);
         set(W, MANGROVE, land * sigHi(T, 22, 2) * sigHi(lp, 7.0, 0.3) * sigLo(h, 7, 1.5) * flat * 2.5);
-        set(W, KARST, il * rockW(o, Rock.LIMESTONE)
-            * sigHi(lp, 6.8, 0.3)
-            * band(T, 4, 30, 2)
-            * sigHi(slope, 0.12, 0.04)
-            * 1.5);
+        set(
+            W,
+            KARST,
+            il * rockW(o, Rock.LIMESTONE) * sigHi(lp, 6.8, 0.3) * band(T, 4, 30, 2) * sigHi(slope, 0.12, 0.04) * 1.5);
         // mountains
         double hl = inland * high * (1 - peak);
         set(W, ALPINE_MEADOW, hl * hTm3 * hl6);

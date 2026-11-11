@@ -3,6 +3,7 @@ package net.junedev.viridium.worldgen.terrain.stages;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.TAU;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.floor;
+import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
 import static net.junedev.viridium.worldgen.terrain.core.Noise.rnd;
 
@@ -12,7 +13,7 @@ import net.junedev.viridium.worldgen.terrain.pipeline.GenScratch;
 
 /**
  * 9. Stateless erosion ("eroded terrain noise", Clay John): sum of waves whose fronts follow the slope, branching
- * between octaves. Depth ∝ rock erodibility × f(precipitation, temperature). Only digs.
+ * between octaves. Depth â rock erodibility Ã f(precipitation, temperature). Only digs.
  */
 public class ErosionStage extends GenStage {
 
@@ -63,7 +64,8 @@ public class ErosionStage extends GenStage {
                 double q = Math.rint(m * (2 / Math.PI));
                 double r = m - q * (Math.PI / 2), r2 = r * r;
                 double sr = r * (1 + r2 * (-1.0 / 6 + r2 * (1.0 / 120 + r2 * (-1.0 / 5040 + r2 * (1.0 / 362880)))));
-                double cr = 1 + r2 * (-0.5 + r2 * (1.0 / 24 + r2 * (-1.0 / 720 + r2 * (1.0 / 40320 + r2 * (-1.0 / 3628800)))));
+                double cr = 1
+                    + r2 * (-0.5 + r2 * (1.0 / 24 + r2 * (-1.0 / 720 + r2 * (1.0 / 40320 + r2 * (-1.0 / 3628800)))));
                 double cos, sin;
                 switch ((int) q & 3) {
                     case 0:
@@ -101,7 +103,8 @@ public class ErosionStage extends GenStage {
     }
 
     /**
-     * Mesas, buttes and ledges: in arid land on flat-lying sedimentary rock a hard bed protects the softer ones below, and
+     * Mesas, buttes and ledges: in arid land on flat-lying sedimentary rock a hard bed protects the softer ones below,
+     * and
      * slopes retreat as cliffs separated by benches (Monument Valley, the Colorado Plateau). The height is terraced in
      * 12-block steps with short steep risers, only on slopes (flats stay flat) and on sandstone, limestone or shale.
      */
@@ -120,7 +123,42 @@ public class ErosionStage extends GenStage {
     }
 
     private static double sedimentary(int rock) {
-        return rock == Rock.SANDSTONE.ordinal() ? 1 : rock == Rock.LIMESTONE.ordinal() ? 0.8 : rock == Rock.SHALE.ordinal() ? 0.5 : 0;
+        return rock == Rock.SANDSTONE.ordinal() ? 1
+            : rock == Rock.LIMESTONE.ordinal() ? 0.8 : rock == Rock.SHALE.ordinal() ? 0.5 : 0;
+    }
+
+    /**
+     * Climate and rock of the erosion at a point (Java-only; {@code erosionClimate = 0} keeps the prototype's filter).
+     * <ul>
+     * <li>humid temperate: soil-mantled slopes, rounded crests, valleys of moderate depth;</li>
+     * <li>humid tropical: the deepest and steepest dissection, knife-edge ridges and V valleys (Na Pali, Rio);</li>
+     * <li>arid: little erosion on hard rock, angular crests, flat sandy wash floors; on soft rock badlands, a dense
+     * network of rills with sharp crests;</li>
+     * <li>cold: frost shattering, jagged crests and couloirs.</li>
+     * </ul>
+     * Writes depth multiplier, crest exponent, octave gain and valley fill into {@code s.EC*}.
+     */
+    protected void climateStyle(GenPoint o, GenScratch s) {
+        double p = o.P, t = o.T;
+        double wet = ss(300, 1500, p), arid = ss(550, 220, p);
+        double frost = ss(3, -8, t);
+        double trop = ss(17, 24, t) * ss(1100, 1900, p);
+        double soft = ss(0.45, 0.85, o.erod);
+        s.ECD = (0.72 + 0.3 * wet + 0.45 * trop + 0.15 * frost - 0.35 * arid * (1 - soft) + 0.3 * arid * soft)
+            * lerp(0.62, 1.2, ss(0.2, 0.9, o.erod));
+        s.ECP = clamp(1.35 - 0.6 * frost - 0.55 * arid - 0.5 * trop - 0.2 * arid * soft, 0.55, 1.4);
+        s.ECG = P.erosionGain + 0.15 * arid * soft + 0.05 * frost;
+        s.ECF = clamp(0.06 + 0.3 * arid * (1 - 0.5 * soft) + 0.08 * wet * (1 - trop), 0, 0.4);
+    }
+
+    /**
+     * Submarine canyons: turbidity currents and slumps cut the continental slope into steep gullies and canyons, the
+     * largest running up into the shelf edge (Monterey, Hudson, Congo canyons). The same gully filter, on the slope
+     * between the shelf edge (-14) and the abyssal plain only. Weight of the filter at base height h0.
+     */
+    protected double seaCanyons(double h0) {
+        if (P.seaCanyons <= 0 || h0 > -12) return 0;
+        return 0.9 * P.seaCanyons * ss(-12, -24, h0) * ss(-72, -54, h0);
     }
 
     public void apply(double x, double y, GenPoint o, double bpp, GenScratch s) {
@@ -129,8 +167,11 @@ public class ErosionStage extends GenStage {
         double gx = o.gx, gy = o.gy;
         double g = Math.sqrt(gx * gx + gy * gy);
         o.slope = g;
-        double Lg = P.erosionScale, BRANCH = 1.0, GAIN = 0.45;
-        // wave frequency ∝ slope (0 on flats → no gullies), saturated to avoid noise
+        boolean climate = P.erosionClimate > 0;
+        if (climate) climateStyle(o, s);
+        double Lg = P.erosionScale * (climate ? P.erosionWidth : 1), BRANCH = climate ? P.erosionBranch : 1.0,
+            GAIN = climate ? s.ECG : 0.45;
+        // wave frequency â slope (0 on flats â no gullies), saturated to avoid noise
         double freq = Math.min(g * 2.5, 1.1), inv = g > 1e-6 ? freq / g : 0;
         double dX = gy * inv, dY = -gx * inv; // perpendicular to the gradient
         double hv = 0, hdx = 0, hdy = 0, a = 0.5, f = 1, sumA = 0;
@@ -147,7 +188,31 @@ public class ErosionStage extends GenStage {
             a *= GAIN;
             f *= 2;
         }
-        double raw = (hv - sumA) * 0.5; // ∈ [-sumA, 0]: only digs
+        if (climate) {
+            // depth of the dissection â relief: steep mountainsides get gullies tens of blocks deep, hills a few
+            // blocks,
+            // plains none. e: 0 on the crests, 1 at the gully floors; shaped by the climate (crest sharpness, valley
+            // fill)
+            double e = sumA > 0 ? clamp(0.5 * (1 - hv / sumA), 0, 1) : 0;
+            e = Math.pow(e, s.ECP);
+            double vf = 1 - s.ECF; // valley floors filled with sediment: a smooth minimum flattens them
+            e = 0.5 * (e + vf - Math.sqrt((e - vf) * (e - vf) + 0.004));
+            double amount = P.erosionStrength * P.erosionClimate
+                * s.ECD
+                * P.erosionDepth
+                * Lg
+                * Math.min(g, 1.0)
+                * (ss(-8, 6, h0) + seaCanyons(h0))
+                * (1 - o.scarp);
+            double hE = h0 - e * amount;
+            if (h0 > 0 && hE < 1) hE = Math.max(hE, Math.min(h0, 1)); // the sea is the base level: land is never dug
+                                                                      // below it
+            o.eroDelta = hE - h0;
+            o.h = hE;
+            mesas(o, g);
+            return;
+        }
+        double raw = (hv - sumA) * 0.5; // â [-sumA, 0]: only digs
         double tN = o.T / 7;
         double clim = (0.3 + clamp(o.P / 1500, 0, 1.5)) * (1 + 0.6 * Math.exp(-tN * tN)); // rain + freeze/thaw
         double amount = P.erosionStrength * 32 * o.erod * clim * ss(-8, 6, h0) * (1 - o.scarp);

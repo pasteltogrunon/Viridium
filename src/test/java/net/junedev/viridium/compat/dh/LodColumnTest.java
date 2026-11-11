@@ -80,9 +80,11 @@ class LodColumnTest {
                     assertEquals(MIN_Y, c.bottom[0], "tree column must start at minY" + at);
                     assertEquals(MAX_Y, c.top[c.size - 1], "tree column must reach maxY" + at);
                     for (int k = 1; k < c.size; k++) assertEquals(c.top[k - 1], c.bottom[k], "tree gap" + at);
-                    int liquidTop = Math.max(solidTop, Math.max(
-                        plan.waterY[0] == ColumnPlan.NONE ? 0 : plan.waterY[0] + 1,
-                        plan.iceTop[0] == ColumnPlan.NONE ? 0 : plan.iceTop[0] + 1));
+                    int liquidTop = Math.max(
+                        solidTop,
+                        Math.max(
+                            plan.waterY[0] == ColumnPlan.NONE ? 0 : plan.waterY[0] + 1,
+                            plan.iceTop[0] == ColumnPlan.NONE ? 0 : plan.iceTop[0] + 1));
                     if (base + 9 > liquidTop && base + 8 < MAX_Y)
                         assertEquals(LodColumn.LEAVES, kindAt(c, base + 8), "crown top" + at);
                     if (base + 9 >= liquidTop && base + 9 < MAX_Y)

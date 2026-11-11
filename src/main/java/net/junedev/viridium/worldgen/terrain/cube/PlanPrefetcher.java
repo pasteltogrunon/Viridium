@@ -16,7 +16,6 @@ import net.junedev.viridium.worldgen.terrain.GenStats;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
 import net.junedev.viridium.worldgen.terrain.pipeline.GenPoint;
-import net.junedev.viridium.worldgen.terrain.pipeline.Stage;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.World;
@@ -67,7 +66,12 @@ public final class PlanPrefetcher {
         this.world = world;
         this.plans = plans;
         this.gen = gen;
-        int threads = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() / 3));
+        int threads = Math.max(
+            1,
+            Math.min(
+                8,
+                Runtime.getRuntime()
+                    .availableProcessors() / 3));
         AtomicInteger n = new AtomicInteger();
         this.pool = new ThreadPoolExecutor(threads, threads, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> {
             Thread t = new Thread(r, "Viridium worldgen prefetch " + n.incrementAndGet());
@@ -128,8 +132,9 @@ public final class PlanPrefetcher {
     private void tick() {
         if (++ticks % TICK_INTERVAL != 0 || world.playerEntities.isEmpty()) return;
         MinecraftServer server = MinecraftServer.getServer();
-        int view = server == null ? 10 : server.getConfigurationManager()
-            .getViewDistance();
+        int view = server == null ? 10
+            : server.getConfigurationManager()
+                .getViewDistance();
         int radius = view + MARGIN;
         int[] pos = new int[world.playerEntities.size() * 2];
         boolean jumped = false;
@@ -160,7 +165,11 @@ public final class PlanPrefetcher {
             int ax = pcx + (int) Math.round(clampAhead(player.motionX)),
                 az = pcz + (int) Math.round(clampAhead(player.motionZ));
             long[] last = lastScan.get(player);
-            if (idle && last != null && last[0] == pcx && last[1] == pcz && last[2] == ax && last[3] == az
+            if (idle && last != null
+                && last[0] == pcx
+                && last[1] == pcz
+                && last[2] == ax
+                && last[3] == az
                 && last[4] == radius) continue;
             lastScan.put(player, new long[] { pcx, pcz, ax, az, radius });
             // the networks under the player first: every column here waits for them

@@ -20,9 +20,8 @@ public class ClimateBaseStage extends GenStage {
     public void apply(double x, double y, GenPoint o) {
         double ct = Math.cos(TAU * y / P.tempPeriod);
         o.Tb = 2 + 28 * ct + 3.5 * fbm(x / 3000, y / 3000, SD.temp, 3);
-        o.Pb = Math.max(
-            40,
-            1250 + 1100 * Math.cos(TAU * x / P.precipPeriod) + 300 * fbm(x / 2500, y / 2500, SD.prec, 3));
+        o.Pb = Math
+            .max(40, 1250 + 1100 * Math.cos(TAU * x / P.precipPeriod) + 300 * fbm(x / 2500, y / 2500, SD.prec, 3));
         double lat = Math.acos(clamp(ct, -1, 1)) * 0.5;
         o.lat = lat;
         double st = Math.sin(TAU * y / P.tempPeriod);

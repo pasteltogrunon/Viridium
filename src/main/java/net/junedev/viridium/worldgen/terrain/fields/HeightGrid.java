@@ -23,7 +23,8 @@ public final class HeightGrid {
     private final int spacing;
     /**
      * 4-way set-associative store (set = mixed key): a hit costs a few array reads and allocates nothing (a map of Long
-     * keys boxed a key per lookup, several per evaluated point). A new tile takes a free way of its set or replaces one in
+     * keys boxed a key per lookup, several per evaluated point). A new tile takes a free way of its set or replaces one
+     * in
      * turn. Final fields make a tile safe to read without locks.
      */
     private final Tile[] slots;
@@ -40,6 +41,7 @@ public final class HeightGrid {
             this.v = v;
         }
     }
+
     /** Tiles being computed: other threads wait for them instead of computing the same tile again. */
     private final ConcurrentHashMap<Long, java.util.concurrent.CompletableFuture<float[]>> building = new ConcurrentHashMap<>();
 
@@ -84,7 +86,8 @@ public final class HeightGrid {
         }
     }
 
-    // per-thread temporaries for tile rows (a GenScratch per row was a large share of all allocations). Computing a tile
+    // per-thread temporaries for tile rows (a GenScratch per row was a large share of all allocations). Computing a
+    // tile
     // never reads this grid again, so a thread never uses them twice at once
     private final ThreadLocal<GenScratch> rowScratch = ThreadLocal.withInitial(GenScratch::new);
     private final ThreadLocal<GenPoint> rowPoint = ThreadLocal.withInitial(GenPoint::new);
@@ -153,6 +156,43 @@ public final class HeightGrid {
         }
         double a = h00 + (h10 - h00) * u, b = h01 + (h11 - h01) * u;
         return a + (b - a) * v;
+    }
+
+    /**
+     * Gradient of the coarse height at (x, z) through a cubic B-spline over the 4×4 surrounding nodes: continuous with
+     * its derivative (the bilinear sample's gradient jumps at every node line, which a filter scaled by the slope turns
+     * into a visible checker pattern). The B-spline smooths over ~2 node spacings, like a central difference would.
+     * Writes (d/dx, d/dz) into {@code out}.
+     */
+    public void gradient(double x, double z, double[] out) {
+        double fx = x / spacing, fz = z / spacing;
+        int i = floor(fx), j = floor(fz);
+        double u = fx - i, v = fz - j;
+        double u2 = u * u, v2 = v * v, iu = 1 - u, iv = 1 - v;
+        double wu0 = iu * iu * iu / 6, wu1 = (3 * u2 * u - 6 * u2 + 4) / 6,
+            wu2 = (-3 * u2 * u + 3 * u2 + 3 * u + 1) / 6, wu3 = u2 * u / 6;
+        double du0 = -iu * iu / 2, du1 = (3 * u2 - 4 * u) / 2, du2 = (-3 * u2 + 2 * u + 1) / 2, du3 = u2 / 2;
+        double wv0 = iv * iv * iv / 6, wv1 = (3 * v2 * v - 6 * v2 + 4) / 6,
+            wv2 = (-3 * v2 * v + 3 * v2 + 3 * v + 1) / 6, wv3 = v2 * v / 6;
+        double dv0 = -iv * iv / 2, dv1 = (3 * v2 - 4 * v) / 2, dv2 = (-3 * v2 + 2 * v + 1) / 2, dv3 = v2 / 2;
+        int ti = Math.floorDiv(i - 1, N), tj = Math.floorDiv(j - 1, N);
+        int li = i - 1 - ti * N, lj = j - 1 - tj * N;
+        double gx = 0, gz = 0;
+        float[] t = li <= N - 4 && lj <= N - 4 ? tile(ti, tj) : null; // fast path: all 16 nodes in one tile
+        for (int b = 0; b < 4; b++) {
+            double wv = b == 0 ? wv0 : b == 1 ? wv1 : b == 2 ? wv2 : wv3,
+                dv = b == 0 ? dv0 : b == 1 ? dv1 : b == 2 ? dv2 : dv3;
+            double rx = 0, rz = 0;
+            for (int a = 0; a < 4; a++) {
+                double h = t != null ? t[((lj + b) * N + li + a) * 2] : node(i - 1 + a, j - 1 + b, 0);
+                rx += (a == 0 ? du0 : a == 1 ? du1 : a == 2 ? du2 : du3) * h;
+                rz += (a == 0 ? wu0 : a == 1 ? wu1 : a == 2 ? wu2 : wu3) * h;
+            }
+            gx += wv * rx;
+            gz += dv * rz;
+        }
+        out[0] = gx / spacing;
+        out[1] = gz / spacing;
     }
 
     public int cachedTiles() {

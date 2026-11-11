@@ -40,6 +40,22 @@ So all valleys are done before any channel measures its water against the terrai
 features that must win over them (distributaries replace the main stem, estuaries widen it, lakes replace channels).
 Valleys and channels of neighbouring basins therefore stay continuous across divides.
 
+Valleys and channels are shaped wherever the point can be land for the network builder: `L ≥ LAND_L = −0.2` (the
+builder takes a node for sea below it, and lets the relief decide above it). A stricter limit here used to leave the
+rivers of pockets of slightly negative continentality uncarved: a river cut off in the middle of the land, with its
+estuary on the other side.
+
+**The networks do not stack** (`RiverStage.valleys`). Every network shapes the *same* incoming terrain with the broad
+valley of its nearest river, and the results are blended with weights `exp(−(D − Dmin)/30)`, `D` being the distance to
+that river in each network's valley field: the nearest river of any network decides, exactly as inside one network
+(whose field only knows the nearest river of a point). Applied one after another, the wide valley of a large river in
+the next basin cut the ground from under a river on its flank (water left hanging, clamped to the slope column by
+column), and the result depended on the order of the networks, which changes at the divide (a cliff along it).
+
+Likewise every network cuts its channels into the same ground (`FieldMemo.hch`, the terrain after valleys and fans)
+and the lowest result is kept: where a river crosses a divide, the last reach of one network and the first of the next
+overlap, and cut one after the other they dug the bed twice as deep and sank the water to the other's bed.
+
 ## Rock factor
 
 For each network (phases 0 and 1), the valley field is sampled
@@ -64,7 +80,11 @@ Phase 1, for one network:
    reach, interpolated half-width `hw` (times the point's **width factor**, see below) and water level `z`, **signed
    distance to the bank** `v = dist − hw`.
 4. Per segment, a proposed height `hc`:
-   - glacial lowering `G = glacial(o, z)·ss(8, 45, FR)` and glacial bed `zc = z − G·glacialDepth`;
+   - glacial lowering `G = glacial(o, z)·ss(8, 45, FR)` and water surface `zc = z − G·glacialDepth(z, hw₀)`, with `hw₀`
+     the river's own half-width (without braiding or the width factor): the same depth the broad valley gives its
+     trough floor, so the water lies on that floor. (It used to be `z − G²·glacialDepth`: in a half-glaciated valley
+     the water stood above the floor, was clamped to the ground column by column, and the gravel bars of a braided
+     river rose blocks above it.)
    - **inside the channel** (`v ≤ 0`): a parabolic bed `min(h, zc) − (1.2 + 0.25·hw)·depth·(1 − q²)`, `q = dist/hw`: about
      1.2 blocks deep at the centre for a small stream, ~13 for the largest rivers (times the **depth factor**);
    - **on the banks** (`0 < v < W`): a bank rising from the water level with slope `bankSlope = lerp(1.5, 0.25, ef)`,
@@ -82,6 +102,19 @@ Phase 1, for one network:
    so a low bank right next to the water cannot let it spill. It is applied after the carve, the same way as the
    delta distributary banks.
 8. `river = 1` if inside a channel; otherwise `valley = max(valley, 1 − v/W)`.
+9. **Water cap between channels** (after all networks): every reach holds down the water around it to
+   `its level + 0.5·v` (`WATER_SLOPE`) within `WATER_REACH = 12` blocks of its bank (rising steeply beyond). Only
+   *beside* the reach: not where its nearest point is one of its two ends (the next reach takes over there, and a
+   reach says nothing about the river above a waterfall), and never from a headwater or a waterfall reach. If the
+   lowest cap is more than 0.75 below the point's water, the water comes down to it and the bed with it (a gravel bar
+   stays just above). So a tributary coming in at a tangent, or a hanging valley, slopes down to the lower channel
+   over the last blocks instead of standing beside it as a wall of water.
+
+A gravel bar of a braided channel stands 0.5 above the water *as it is at that column* (`riverWL`), not above the
+reach's nominal level.
+
+A river crossing the funnel of an **estuary** (a tributary still blocks above it) has its bed and banks lowered to the
+tidal flats in phase 2: its water is lowered by the same amount, instead of standing over the flats.
 
 **Irregularity** (`RiverStage.irregularity`, once per point, the same for every network): rivers are a little less
 smooth than their geometry. Width factor `clamp(1 + 0.18·perlin(p/40) + 0.025·perlin(p/12), 0.75, 1.25)`: the channel

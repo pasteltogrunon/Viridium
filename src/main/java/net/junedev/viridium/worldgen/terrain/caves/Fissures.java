@@ -125,12 +125,29 @@ public final class Fissures implements CaveFeatures {
             return Math.sqrt(best);
         }
 
-        public int minX() { return (int) Math.floor(bx0); }
-        public int minY() { return sy0; }
-        public int minZ() { return (int) Math.floor(bz0); }
-        public int maxX() { return (int) Math.ceil(bx1); }
-        public int maxY() { return sy1; }
-        public int maxZ() { return (int) Math.ceil(bz1); }
+        public int minX() {
+            return (int) Math.floor(bx0);
+        }
+
+        public int minY() {
+            return sy0;
+        }
+
+        public int minZ() {
+            return (int) Math.floor(bz0);
+        }
+
+        public int maxX() {
+            return (int) Math.ceil(bx1);
+        }
+
+        public int maxY() {
+            return sy1;
+        }
+
+        public int maxZ() {
+            return (int) Math.ceil(bz1);
+        }
 
         /** The slot below the crack (middle 70 % of it): narrower, down to slot blocks under the crack floor. */
         @Override
@@ -150,7 +167,8 @@ public final class Fissures implements CaveFeatures {
             double floor = g - depthAt(s);
             double e = Math.sin(Math.PI * (t - 0.15) / 0.7);
             double bottom = floor - slot * Math.sqrt(Math.max(0, e)) * (1 - d / (w * 0.5) * 0.5);
-            return py >= bottom && py <= floor + 6; // up into the crack (the planned ground is only close to the final one)
+            return py >= bottom && py <= floor + 6; // up into the crack (the planned ground is only close to the final
+                                                    // one)
         }
 
         @Override
@@ -188,13 +206,15 @@ public final class Fissures implements CaveFeatures {
     /** All fissures of the cells around (ci, cj) (3x3): for tests and maps. */
     public List<Fissure> around(int ci, int cj) {
         List<Fissure> l = new ArrayList<>();
-        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) for (Fissure f : cell(ci + di, cj + dj)) l.add(f);
+        for (int dj = -1; dj <= 1; dj++)
+            for (int di = -1; di <= 1; di++) for (Fissure f : cell(ci + di, cj + dj)) l.add(f);
         return l;
     }
 
     private Fissure plan(int ci, int cj) {
         if (Noise.rnd(ci, cj, seed) >= 0.2 * P.fissures) return null;
-        double x = (ci + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 1)) * G, z = (cj + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 2)) * G;
+        double x = (ci + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 1)) * G,
+            z = (cj + 0.15 + 0.7 * Noise.rnd(ci, cj, seed + 2)) * G;
         double ang = Noise.rnd(ci, cj, seed + 3) * Math.PI * 2;
         double len = 60 + 190 * Noise.rnd(ci, cj, seed + 4);
         int max = (int) Math.ceil(len / STEP) + 1;
@@ -221,8 +241,15 @@ public final class Fissures implements CaveFeatures {
         if (n < 4) return null; // too short where the ground allows it
         double width = 2 + 4 * Noise.rnd(ci, cj, seed + 6), depth = 12 + 28 * Noise.rnd(ci, cj, seed + 7);
         double slot = Noise.rnd(ci, cj, seed + 8) < 0.4 ? 20 + 40 * Noise.rnd(ci, cj, seed + 9) : 0;
-        return new Fissure(java.util.Arrays.copyOf(nx, n), java.util.Arrays.copyOf(nz, n), java.util.Arrays.copyOf(gr, n), n,
-            width, depth, slot, hs);
+        return new Fissure(
+            java.util.Arrays.copyOf(nx, n),
+            java.util.Arrays.copyOf(nz, n),
+            java.util.Arrays.copyOf(gr, n),
+            n,
+            width,
+            depth,
+            slot,
+            hs);
     }
 
     /** Cuts the cracks into the 2D terrain (after the rivers and the other cave features). */
@@ -270,7 +297,10 @@ public final class Fissures implements CaveFeatures {
         int ci = Math.floorDiv(bx, G), cj = Math.floorDiv(bz, G);
         for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) for (Fissure f : cell(ci + di, cj + dj)) {
             if (f.slot <= 0) continue;
-            if (f.maxX() >= bx && f.minX() <= bx + 15 && f.maxY() >= by && f.minY() <= by + 15 && f.maxZ() >= bz
+            if (f.maxX() >= bx && f.minX() <= bx + 15
+                && f.maxY() >= by
+                && f.minY() <= by + 15
+                && f.maxZ() >= bz
                 && f.minZ() <= bz + 15) out.add(f);
         }
     }
