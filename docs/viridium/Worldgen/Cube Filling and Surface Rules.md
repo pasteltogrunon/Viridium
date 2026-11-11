@@ -36,7 +36,7 @@ any cube can be painted on its own.
 
 - Under water: gravel in rivers, clay/sand in lakes, clay or gravel in deep or cold sea, sand in shallow warm sea.
 - Salt flats: evaporite.
-- Landform covers (`ColumnPlan.surf`, set by the relief and the rivers) come first and are never bare rock: river terrace risers (coarse dirt over gravel, the treads keep the biome's soil), gravel bars, alluvial fans (gravel over sand where dry), barrier and beach sand; under water reef limestone, gravel and sand. See [[Landforms Overview|Coast Landforms]] and [[Rivers Overview|River Landforms]].
+- Landform covers (`ColumnPlan.surf`, set by the relief and the rivers) come first and are never bare rock: lava flows (basalt and scoria), cinder cones (scoria), maar rings and fumarole ground (tuff), sinter (geyserite) and bacterial mats (orange and yellow stained clay) of hot springs, dune sand, desert pavement (gravel, coarse dirt, red sand); river terrace risers (coarse dirt over gravel, the treads keep the biome's soil), gravel bars, alluvial fans (gravel over sand where dry), barrier and beach sand; under water reef limestone, gravel and sand. See [[Landforms Overview|Coast Landforms]] and [[Rivers Overview|River Landforms]].
 - Cliffs (`slope > 1.1`, except beaches and deserts): bare rock (the crust shows through).
 - Per biome: sand on beaches and deserts, red sand over banded hardened clay in badlands, packed ice on glaciers, snow
   on peaks and slopes, podzol patches in taiga, coarse dirt in savanna, grass + dirt elsewhere, with varying depth.

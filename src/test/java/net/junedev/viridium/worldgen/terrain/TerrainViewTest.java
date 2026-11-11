@@ -41,7 +41,9 @@ class TerrainViewTest {
             double az = a.length > 3 ? Double.parseDouble(a[3]) : 45,
                 above = a.length > 4 ? Double.parseDouble(a[4]) : 60;
             long t0 = System.nanoTime();
-            Region r = Region.sample(planner, cx, cz, half);
+            int step = a.length > 5 ? Integer.parseInt(a[5]) : 1;
+            Region r = step > 1 ? Region.sampleStrided(planner, cx, cz, half, step)
+                : Region.sample(planner, cx, cz, half);
             System.out.printf("view %d,%d ±%d: sampled in %.1f s%n", cx, cz, half, (System.nanoTime() - t0) / 1e9);
             File dir = new File("build/reports/view");
             dir.mkdirs();
@@ -97,11 +99,12 @@ class TerrainViewTest {
                     new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint());
                 boolean mtn = p.scarp < 0.02 && p.mtnMask > 0.4 && p.slope < 1.2 && p.plat < 0.05;
                 res[k] = new double[] { x, z, p.h, p.T, p.P, p.L, p.cliff, p.plat, p.erod, mtn ? p.slope : 0, p.Tb,
-                    p.surf };
+                    p.surf, p.volcType, p.volc, p.geo, p.scarp, p.insel };
             });
         String[] kinds = { "mountain arid (P<450)", "mountain humid (P>1300)", "mountain cold (T<-2)",
             "mountain temperate", "sea cliff", "low coast warm (Tb>22)", "low coast temperate", "plateau",
-            "barrier sand", "reef", "sea stack" };
+            "barrier sand", "reef", "sea stack", "stratovolcano", "volcanic field", "continental hotspot", "geothermal",
+            "dunes", "reg", "tepui", "inselberg" };
         for (int kind = 0; kind < kinds.length; kind++) {
             final int kd = kind;
             java.util.List<double[]> l = new java.util.ArrayList<>();
@@ -117,7 +120,15 @@ class TerrainViewTest {
                     case 7 -> r[7] > 0.8;
                     case 8 -> r[11] == 4 && r[5] < 0 && r[2] > 0.5 && r[2] < 8;
                     case 9 -> r[11] == 5 && r[2] < 0;
-                    default -> r[6] >= 0.5 && r[5] < 0 && r[2] > 4;
+                    case 10 -> r[6] >= 0.5 && r[5] < 0 && r[2] > 4;
+                    case 11 -> r[12] == 1 && r[13] > 0.6 && r[2] > 60;
+                    case 12 -> r[12] == 6;
+                    case 13 -> r[12] == 5;
+                    case 14 -> r[14] > 0.4 && r[2] > 2;
+                    case 15 -> r[11] == 13;
+                    case 16 -> r[11] == 11;
+                    case 17 -> r[10] > 18 && r[5] > 0.15;
+                    default -> r[16] > 0.8;
                 };
                 if (ok) l.add(r);
             }
@@ -204,6 +215,96 @@ class TerrainViewTest {
         for (int q = 0; q < names.length; q++) System.out.println(names[q] + ": " + cnt[q] + " " + where[q]);
     }
 
+    /** Lists stratovolcanoes and volcanic fields ({@code VIRIDIUM_FIND_VOLC="half"} around 0,0). */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_FIND_VOLC", matches = ".+")
+    void findVolcanoes() {
+        WorldGen gen = new WorldGen(params());
+        double h = Double.parseDouble(System.getenv("VIRIDIUM_FIND_VOLC"));
+        var p = new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint();
+        int n = 0;
+        for (double[] v : gen.volcanism.stratovolcanoesIn(-h, -h, h, h)) {
+            gen.evaluate(v[0], v[1], net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION, p);
+            if (n++ < 25) System.out.printf(
+                "  strato %.0f,%.0f H %.0f R %.0f caldera %.0f  h %.0f T %.1f P %.0f%n",
+                v[0],
+                v[1],
+                v[2],
+                v[3],
+                v[4],
+                p.h,
+                p.T,
+                p.P);
+        }
+        for (double[] f : gen.volcanism.volcanicFieldsIn(-h, -h, h, h)) {
+            gen.evaluate(f[0], f[1], net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION, p);
+            System.out.printf(
+                "  field %.0f,%.0f R %.0f dens %.2f cold %.0f  h %.0f T %.1f P %.0f%n",
+                f[0],
+                f[1],
+                f[2],
+                f[3],
+                f[4],
+                p.h,
+                p.T,
+                p.P);
+        }
+        double HS = gen.params.plateSize * 1.7;
+        var sc = new net.junedev.viridium.worldgen.terrain.pipeline.GenScratch();
+        for (int J = (int) Math.floor(-h / HS); J <= (int) Math.floor(h / HS); J++)
+            for (int I = (int) Math.floor(-h / HS); I <= (int) Math.floor(h / HS); I++) {
+                var v = gen.volcanism.hotspot(I, J, sc);
+                if (v != null) System.out.printf("  hotspot type %d at %.0f,%.0f R %.0f%n", v.type, v.x, v.y, v.R);
+            }
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_TEPUI", matches = ".+")
+    void tepuiProbe() throws Exception {
+        WorldGen gen = new WorldGen(params());
+        var m = net.junedev.viridium.worldgen.terrain.stages.ReliefStage.class.getDeclaredMethod(
+            "tepuis",
+            double.class,
+            double.class,
+            double.class,
+            double.class,
+            net.junedev.viridium.worldgen.terrain.pipeline.GenPoint.class);
+        m.setAccessible(true);
+        var p = new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint();
+        int hits = 0, wet = 0, n = 0;
+        for (double z = -4000; z <= 4000; z += 100) for (double x = -40000; x <= 40000; x += 100) {
+            gen.evaluate(x, z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.CONTINENTS, p);
+            if (p.L < 0.15) continue;
+            n++;
+            if (p.Pb > 1300 && p.Tb > 18) wet++;
+            double h = (double) m.invoke(gen.relief, x, z, p.L, 0.0, p);
+            if (h > 0 && hits++ < 5) System.out.println("  tepui at " + x + "," + z + " +" + h);
+        }
+        System.out.println("  land " + n + " wet hot " + wet + " tepui points " + hits);
+    }
+
+    /** Basalt causeway sites ({@code VIRIDIUM_FIND_CAUSEWAY="half,step"} around 0,0): coarse scan, then a full evaluation. */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "VIRIDIUM_FIND_CAUSEWAY", matches = ".+")
+    void findCauseways() {
+        WorldGen gen = new WorldGen(params());
+        String[] a = System.getenv("VIRIDIUM_FIND_CAUSEWAY").split(",");
+        int half = Integer.parseInt(a[0]), step = Integer.parseInt(a[1]), m = 2 * half / step + 1;
+        java.util.List<String> hits = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        IntStream.range(0, m * m).parallel().forEach(k -> {
+            double x = -half + (k % m) * step, z = -half + (k / m) * step;
+            var p = new net.junedev.viridium.worldgen.terrain.pipeline.GenPoint();
+            gen.evaluate(x, z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.EROSION, p);
+            if (p.rock != net.junedev.viridium.worldgen.terrain.stages.Rock.BASALT.ordinal() || p.rockT < 0.6) return;
+            if (p.L < -0.05 || p.L > 0.04 || p.h < -2.5 || p.h > 6) return;
+            gen.evaluate(x, z, net.junedev.viridium.worldgen.terrain.pipeline.Stage.BIOMES, p);
+            if (p.surf == net.junedev.viridium.worldgen.terrain.pipeline.GenPoint.SURF_LAVA && p.volc < 0.1 && p.h > 0)
+                hits.add((int) x + "," + (int) z + " h " + Math.round(p.h + 63) + " T " + Math.round(p.T));
+        });
+        System.out.println("causeway columns: " + hits.size());
+        hits.stream().sorted().limit(30).forEach(s -> System.out.println("  " + s));
+    }
+
     /** Heights, water and colours of a square region. */
     static final class Region {
 
@@ -234,6 +335,44 @@ class TerrainViewTest {
             byte[] surf = new byte[r.n * r.n];
             float[] temp = new float[r.n * r.n];
             byte[] biome = new byte[r.n * r.n];
+            return finish(r, ground, flags, surf, temp, biome, plans, nc);
+        }
+
+        /**
+         * One planned point every {@code step} blocks (large areas); heights scaled by 1/step so slopes and the view
+         * keep their proportions.
+         */
+        static Region sampleStrided(ColumnPlanner planner, int cx, int cz, int half, int step) {
+            int n = 2 * half / step;
+            Region r = new Region(n, cx - half, cz - half);
+            float[] ground = new float[n * n];
+            int[] flags = new int[n * n];
+            byte[] surf = new byte[n * n];
+            float[] temp = new float[n * n];
+            byte[] biome = new byte[n * n];
+            ThreadLocal<ColumnPlan> scratch = ThreadLocal.withInitial(planner::newScratchPlan);
+            IntStream.range(0, n * n)
+                .parallel()
+                .forEach(idx -> {
+                    ColumnPlan p = scratch.get();
+                    planner.planPoint(p, 0, cx - half + (idx % n) * step, cz - half + (idx / n) * step, step);
+                    ground[idx] = p.height[0] / step;
+                    flags[idx] = p.flags[0] & 0xff;
+                    temp[idx] = p.temperature[0];
+                    biome[idx] = p.biome[0];
+                    surf[idx] = p.surf[0];
+                    int top = p.surfaceY[0];
+                    if (p.waterY[0] != ColumnPlan.NONE && p.waterY[0] > top) {
+                        r.wet[idx] = true;
+                        top = p.waterY[0];
+                    }
+                    r.h[idx] = r.wet[idx] ? (top + 1 - 63) / (float) step : ground[idx];
+                });
+            return colour(r, ground, flags, surf, temp, biome);
+        }
+
+        private static Region finish(Region r, float[] ground, int[] flags, byte[] surf, float[] temp, byte[] biome,
+            ColumnPlan[] plans, int nc) {
             for (int k = 0; k < nc * nc; k++) {
                 ColumnPlan p = plans[k];
                 int ox = (k % nc) * 16, oz = (k / nc) * 16;
@@ -253,6 +392,10 @@ class TerrainViewTest {
                     r.h[idx] = r.wet[idx] || p.iceTop[i] != ColumnPlan.NONE ? top + 1 - 63 : p.height[i];
                 }
             }
+            return colour(r, ground, flags, surf, temp, biome);
+        }
+
+        private static Region colour(Region r, float[] ground, int[] flags, byte[] surf, float[] temp, byte[] biome) {
             for (int j = 0; j < r.n; j++) for (int i = 0; i < r.n; i++) {
                 int idx = j * r.n + i;
                 int il = Math.max(i - 1, 0), ir = Math.min(i + 1, r.n - 1), jl = Math.max(j - 1, 0),
@@ -271,6 +414,14 @@ class TerrainViewTest {
                 else if (surf[idx] == 2) c = 0x9a968e; // gravel
                 else if (surf[idx] == 3) c = 0xc9b58c; // fan deposits
                 else if (surf[idx] == 4) c = 0xead8a0; // sand
+                else if (surf[idx] == 6) c = 0x2c2c32; // lava
+                else if (surf[idx] == 7) c = 0x6a2e28; // cinder
+                else if (surf[idx] == 8) c = 0xe8e4d8; // sinter
+                else if (surf[idx] == 9) c = 0xd88030; // mats
+                else if (surf[idx] == 10) c = 0xd8c040;
+                else if (surf[idx] == 11) c = 0xb09878; // reg
+                else if (surf[idx] == 12) c = 0xa8ae88; // ash
+                else if (surf[idx] == 13) c = 0xe8c890; // dunes
                 else if (slope > 1.1 && b != Biome.BEACH && b != Biome.DESERT) c = 0x85827c;
                 else if (temp[idx] < -0.5) c = 0xf4f6fa;
                 else if (b == Biome.BEACH || b == Biome.DESERT) c = 0xe6d496;

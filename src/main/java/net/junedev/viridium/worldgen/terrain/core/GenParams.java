@@ -103,6 +103,22 @@ public final class GenParams implements Cloneable {
      */
     public double stacks = 1.0, barriers = 1.0, rias = 1.0, reefs = 1.0, seaCanyons = 1.0;
     /**
+     * Latitude in the moisture supply (Java-only, 0 = the prototype's precipitation along x only): the wet equatorial
+     * belt, the dry subtropical belts of the Hadley cells (~20-32°), the wet westerlies, the dry poles.
+     */
+    public double hadley = 1.0;
+    /**
+     * Volcanoes (Java-only, 0 turns each off): stratovolcanoes and calderas on the arcs, volcanic fields (cinder cones,
+     * maars, lava flows, tuyas), continental hotspots (Yellowstone), geothermal fields (hot springs, geysers), basalt
+     * causeways.
+     */
+    public double stratovolcanoes = 1.0, volcanicFields = 1.0, continentalHotspots = 1.0, geothermal = 1.0,
+        causeways = 1.0;
+    /**
+     * Deserts (Java-only, 0 turns each off): dune seas, yardangs, inselbergs, hoodoos, tepuis, gravel desert pavement.
+     */
+    public double dunes = 1.0, yardangs = 1.0, inselbergs = 1.0, hoodoos = 1.0, tepuis = 1.0, desertPavement = 1.0;
+    /**
      * Caves (Java-only, 0 off): amount of noise caves (&gt; 1 more void), entrances to the surface, aquifers (flooded
      * and
      * lava cells), karst dolines and shafts, planned systems (giant chambers and galleries), ground fissures (long

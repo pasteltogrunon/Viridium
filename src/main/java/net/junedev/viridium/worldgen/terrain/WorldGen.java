@@ -105,6 +105,7 @@ public final class WorldGen {
         if (upTo == Stage.CONTINENTS) return o;
         o.surf = GenPoint.SURF_NONE; // landforms below set it
         o.terrace = 0;
+        o.geo = 0;
         o.h0 = relief.baseHeight(x, z, o, true, s);
         o.h = o.h0;
         if (upTo == Stage.RELIEF) return o;
@@ -115,6 +116,8 @@ public final class WorldGen {
         erosion.apply(x, z, o, bpp, s);
         if (upTo == Stage.EROSION) return o;
         rivers.apply(x, z, o, s);
+        volcanism.geothermal(x, z, o); // hot springs and geysers on the final ground
+        volcanism.causeway(x, z, o);
         if (!s.riversOff) caves.surface(x, z, o); // collapse pits are planned away from rivers
         if (upTo == Stage.RIVERS) return o;
         cryo.apply(x, z, o, bpp);

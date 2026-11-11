@@ -195,7 +195,9 @@ public class CrustModel {
 
         // province
         Province prov;
-        if (o.volc > 0.15 && o.h0 > -45 && (o.volcType >= 2)) prov = Province.VOLCANIC_ISLAND;
+        if (o.volc > 0.15 && o.h0 > -45 && o.volcType >= 2 && o.volcType <= 4) prov = Province.VOLCANIC_ISLAND;
+        else if (o.volc > 0.15 && o.volcType >= 5 && o.L > 0) prov = Province.LIP; // continental hotspot, volcanic
+                                                                                   // field
         else if (o.L < -0.12) prov = Province.OCEANIC;
         else if (o.collR > 0.3 || rock == Rock.SLATE || rock == Rock.MARBLE || (o.orog > 0.55 && o.mtnMask > 0.5))
             prov = Province.OROGEN;

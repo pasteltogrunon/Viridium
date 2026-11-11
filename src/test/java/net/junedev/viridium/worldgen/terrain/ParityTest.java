@@ -140,6 +140,18 @@ class ParityTest {
         p.rias = 0;
         p.reefs = 0;
         p.seaCanyons = 0;
+        p.hadley = 0;
+        p.stratovolcanoes = 0;
+        p.volcanicFields = 0;
+        p.continentalHotspots = 0;
+        p.geothermal = 0;
+        p.causeways = 0;
+        p.dunes = 0;
+        p.yardangs = 0;
+        p.inselbergs = 0;
+        p.hoodoos = 0;
+        p.tepuis = 0;
+        p.desertPavement = 0;
         WorldGen gen = new WorldGen(p);
         GenPoint o = new GenPoint();
 

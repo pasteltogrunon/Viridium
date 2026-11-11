@@ -54,7 +54,10 @@ public enum Lithology {
     SERPENTINITE("serpentinite", 0x3E6A4E),
     // mantle
     PERIDOTITE("peridotite", 0x6E8040),
-    CHROMITITE("chromitite", 0x2A2A2E);
+    CHROMITITE("chromitite", 0x2A2A2E),
+    // surface only (landform covers)
+    OBSIDIAN("obsidian", 0x1A1420),
+    GEYSERITE("geyserite", 0xE8E4D8);
 
     public static final Lithology[] VALUES = values();
 

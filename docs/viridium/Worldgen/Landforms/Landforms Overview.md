@@ -12,6 +12,7 @@ This section documents the landforms added on top of the base relief: **plateaus
 | [[Cliff Detail]] | notch at the foot of a cliff, talus, fallen boulders, falling water at river lips | `column/CliffDetail`, `CubeFiller`, `FloraPlanner` |
 | [[Waterfalls]] | rivers that keep their level to a cliff and fall over it | `RiverNetBuilder.findFalls`, `RiverStage` |
 | [[Coast Landforms]] | sea stacks, barrier islands and lagoons, spits, coral reefs, submarine canyons | `ReliefStage.coastLandforms`, `ErosionStage.seaCanyons` |
+| [[Deserts]] | dune seas (transverse, barchan, linear, star), yardangs, hoodoos, desert pavement, inselbergs, tepuis | `ErosionStage.deserts`, `ReliefStage.inselbergs`, `ReliefStage.tepuis` |
 
 ## How they fit together
 

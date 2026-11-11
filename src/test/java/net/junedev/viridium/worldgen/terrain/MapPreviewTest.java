@@ -6,7 +6,6 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
-import net.junedev.viridium.worldgen.terrain.core.GenParams;
 import net.junedev.viridium.worldgen.terrain.map.CrustSectionRenderer;
 import net.junedev.viridium.worldgen.terrain.map.MapLayer;
 import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
@@ -23,7 +22,7 @@ class MapPreviewTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "VIRIDIUM_MAP", matches = "1")
     void writePreviews() throws IOException {
-        MapTileRenderer r = new MapTileRenderer(new WorldGen(new GenParams()));
+        MapTileRenderer r = new MapTileRenderer(new WorldGen(TerrainViewTest.params()));
         int level = Integer.parseInt(
             System.getenv()
                 .getOrDefault("VIRIDIUM_MAP_LEVEL", "6"));

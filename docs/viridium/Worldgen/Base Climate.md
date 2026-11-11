@@ -36,3 +36,13 @@ windY = −0.45·sin(6·lat)·pole + 0.3·fbm(...)
 ```
 
 The final wind (`wfx, wfy`) starts equal to it and is modified by Final Climate. `T` and `P` also start equal to `Tb` and `Pb`.
+
+## Latitude in the moisture supply (`hadley`, Java-only)
+
+The prototype's precipitation only varies along x. With `hadley = 1` (0 in `ParityTest`) `Pb` is multiplied by a profile of the equivalent latitude (`ClimateBaseStage.hadley`):
+
+```
+1 + 0.3·exp(−(lat/9)²) − 0.6·exp(−((lat − 26)/8)²) + 0.12·exp(−((lat − 52)/12)²) − 0.35·ss(65, 85, lat)     (degrees)
+```
+
+Rising air over the equator (+30 %), the sinking air of the Hadley cells around 26° (−60 %: the belt of the great hot deserts), the westerlies' storms around 52° (+12 %), dry polar air (−35 %). Continentality, rain shadows and cold currents ([[Final Climate]]) still shape the deserts inside each belt.

@@ -90,7 +90,12 @@ public final class GenPoint {
      */
     public int surf;
     public static final int SURF_NONE = 0, SURF_ALLUVIUM = 1, SURF_GRAVEL = 2, SURF_FAN = 3, SURF_SAND = 4,
-        SURF_REEF = 5;
+        SURF_REEF = 5, SURF_LAVA = 6, SURF_CINDER = 7, SURF_SINTER = 8, SURF_MAT = 9, SURF_MAT2 = 10, SURF_REG = 11,
+        SURF_ASH = 12, SURF_DUNE = 13;
+    /** Geothermal activity (0..1): hot springs and geysers where high. */
+    public double geo;
+    /** Inselberg share (0..1): a dome of massive granite. */
+    public double insel;
     /** River terraces: weight of the stepped valley sides (0..1). */
     public double terrace;
     /** 1 inside a river channel. */

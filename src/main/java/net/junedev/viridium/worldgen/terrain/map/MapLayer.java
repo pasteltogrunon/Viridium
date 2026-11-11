@@ -348,7 +348,8 @@ public final class MapLayer {
      * stacks
      * (white), rifts (red young, brown failed, teal mature), karst dolines (dark green), river terraces (brown),
      * alluvial
-     * fans (sand), gravel bars (light grey), barrier islands and beaches (pale sand), reefs (turquoise).
+     * fans (sand), gravel bars (light grey), barrier islands and beaches (pale sand), reefs (turquoise), dunes (sand),
+     * lava flows (black), cinder cones (dark red), hot springs (orange).
      */
     public static final MapLayer LANDFORMS = register(
         new MapLayer("landforms", "Landforms", Stage.RIVERS, true, HeightField.FINAL, (o, bpp) -> {
@@ -370,6 +371,11 @@ public final class MapLayer {
             if (o.terrace > 0.05) c = lerp(c, rgb(150, 105, 60), clamp(o.terrace, 0, 1) * 0.7);
             if (o.surf == GenPoint.SURF_FAN) c = lerp(c, rgb(225, 195, 120), 0.75);
             if (o.surf == GenPoint.SURF_SAND) c = rgb(240, 225, 160);
+            if (o.surf == GenPoint.SURF_DUNE) c = rgb(232, 196, 130);
+            if (o.surf == GenPoint.SURF_LAVA) c = rgb(40, 40, 46);
+            if (o.surf == GenPoint.SURF_CINDER) c = rgb(120, 46, 40);
+            if (o.surf == GenPoint.SURF_SINTER || o.surf == GenPoint.SURF_MAT || o.surf == GenPoint.SURF_MAT2)
+                c = rgb(230, 140, 50);
             if (o.river != 0 || o.lake == 1) c = rgb(60, 110, 225);
             if (o.surf == GenPoint.SURF_GRAVEL) c = rgb(170, 170, 160);
             return c;

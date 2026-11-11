@@ -32,11 +32,15 @@ public final class SurfaceRules {
         public boolean snow;
     }
 
-    private final Block evaporite, reef;
+    private final Block evaporite, reef, basalt, scoria, tuff, sinter;
 
     public SurfaceRules(Block[] lithologyBlocks) {
         this.evaporite = lithologyBlocks[Lithology.EVAPORITE.ordinal()];
         this.reef = lithologyBlocks[Lithology.LIMESTONE.ordinal()];
+        this.basalt = lithologyBlocks[Lithology.BASALT.ordinal()];
+        this.scoria = lithologyBlocks[Lithology.SCORIA.ordinal()];
+        this.tuff = lithologyBlocks[Lithology.TUFF.ordinal()];
+        this.sinter = lithologyBlocks[Lithology.GEYSERITE.ordinal()];
     }
 
     public void resolve(ColumnPlan plan, int i, int x, int z, Column c) {
@@ -54,6 +58,8 @@ public final class SurfaceRules {
             if (sf == GenPoint.SURF_REEF) set(c, reef, reef, 3); // reef flat and crest
             else if (sf == GenPoint.SURF_GRAVEL) set(c, Blocks.gravel, Blocks.gravel, 3);
             else if (sf == GenPoint.SURF_SAND) set(c, Blocks.sand, Blocks.sand, 3);
+            else if (sf == GenPoint.SURF_SINTER) set(c, sinter, sinter, 3); // hot spring pools
+            else if (sf == GenPoint.SURF_LAVA) set(c, basalt, basalt, 3); // causeway columns
             else if (plan.has(i, ColumnPlan.F_RIVER)) set(c, Blocks.gravel, Blocks.gravel, 2);
             else if (plan.has(i, ColumnPlan.F_LAKE)) set(c, r < 0.5 ? Blocks.clay : Blocks.sand, Blocks.sand, 2);
             else if (h < -45) set(c, Blocks.clay, Blocks.gravel, 2);
@@ -65,7 +71,7 @@ public final class SurfaceRules {
             set(c, evaporite, evaporite, 2);
             return;
         }
-        if (landform(plan, i, slope, c)) return;
+        if (landform(plan, i, x, z, slope, r, c)) return;
         // cliffs: too steep for soil
         if (slope > 1.1 && b != Biome.BEACH && b != Biome.DESERT) {
             set(c, null, null, 0);
@@ -117,7 +123,8 @@ public final class SurfaceRules {
      * Loose cover of a landform (river terraces, gravel bars, alluvial fans, sand of beaches and barriers): never bare
      * rock, even on steep ground (a terrace riser shows its alluvium, a dune its sand). False = the biome decides.
      */
-    private static boolean landform(ColumnPlan plan, int i, float slope, Column c) {
+    private boolean landform(ColumnPlan plan, int i, int x, int z, float slope, double r, Column c) {
+        float p = plan.precipitation[i];
         switch (plan.surf[i]) {
             case GenPoint.SURF_ALLUVIUM -> {
                 if (slope < 0.8) return false; // treads: the soil of the biome
@@ -140,6 +147,40 @@ public final class SurfaceRules {
             }
             case GenPoint.SURF_SAND -> {
                 set(c, Blocks.sand, Blocks.sand, 5);
+                return true;
+            }
+            case GenPoint.SURF_LAVA -> { // young basalt flows: bare black rock, slowly overgrown where it rains
+                if (p > 1500 && r < 0.45) return false;
+                set(c, r < 0.7 ? basalt : scoria, basalt, 3);
+                return true;
+            }
+            case GenPoint.SURF_CINDER -> { // scoria cones
+                set(c, p > 1100 && r < 0.5 && slope < 0.9 ? Blocks.grass : scoria, scoria, 5);
+                return true;
+            }
+            case GenPoint.SURF_ASH -> { // tephra rings of maars, fumarole ground
+                if (p > 1100 && r < 0.6) return false;
+                set(c, tuff, tuff, 3);
+                return true;
+            }
+            case GenPoint.SURF_SINTER -> {
+                set(c, sinter, sinter, 3);
+                return true;
+            }
+            case GenPoint.SURF_MAT, GenPoint.SURF_MAT2 -> { // bacterial mats around hot springs
+                set(c, Blocks.stained_hardened_clay, sinter, 2);
+                c.topMeta = plan.surf[i] == GenPoint.SURF_MAT ? 1 : 4; // orange, yellow
+                return true;
+            }
+            case GenPoint.SURF_REG -> { // desert pavement: gravel and pebbles over sand, patches of red sand
+                if (slope > 1.1) return false; // the rock of the hamada
+                set(c, r < 0.55 ? Blocks.gravel : r < 0.8 ? Blocks.dirt : Blocks.sand, Blocks.sand, 4);
+                c.topMeta = r < 0.55 ? 0 : 1; // coarse dirt, red sand
+                return true;
+            }
+            case GenPoint.SURF_DUNE -> { // dune sand, red in some ergs
+                set(c, Blocks.sand, Blocks.sand, 6);
+                if (Noise.perlin(x / 3000.0, z / 3000.0, 0x5a7d) > 0.1) c.topMeta = c.underMeta = 1;
                 return true;
             }
             default -> {

@@ -27,6 +27,8 @@ public class GeologyStage extends GenStage {
             if (o.volcType == 1) return (r < 0.55 ? Rock.ANDESITE : (r < 0.85 ? Rock.TUFF : Rock.BASALT)).ordinal(); // subduction
                                                                                                                      // arc
             if (o.volcType == 4) return (r < 0.7 ? Rock.LIMESTONE : Rock.BASALT).ordinal(); // coral atoll
+            if (o.volcType == 5) return (r < 0.6 ? Rock.TUFF : Rock.BASALT).ordinal(); // continental hotspot:
+                                                                                       // ignimbrite
             return (r < 0.82 ? Rock.BASALT : Rock.TUFF).ordinal(); // hotspot
         }
         if (o.collR > 0.3 && o.L >= 0) return collisionRock(r).ordinal(); // regional metamorphism
@@ -62,7 +64,8 @@ public class GeologyStage extends GenStage {
         e = lerp(e, sea.erod, ss(-0.01, -0.05, o.L));
         e = lerp(e, collisionRock(r).erod, ss(0.25, 0.35, o.collR) * ss(-0.03, 0.01, o.L));
         Rock vr = o.volcType == 1 ? (r < 0.55 ? Rock.ANDESITE : (r < 0.85 ? Rock.TUFF : Rock.BASALT))
-            : o.volcType == 4 ? (r < 0.7 ? Rock.LIMESTONE : Rock.BASALT) : (r < 0.82 ? Rock.BASALT : Rock.TUFF);
+            : o.volcType == 4 ? (r < 0.7 ? Rock.LIMESTONE : Rock.BASALT)
+                : o.volcType == 5 ? (r < 0.6 ? Rock.TUFF : Rock.BASALT) : (r < 0.82 ? Rock.BASALT : Rock.TUFF);
         if (o.platType == 1) e = lerp(e, Rock.BASALT.erod, ss(0.2, 0.4, o.plat));
         return lerp(e, vr.erod, ss(0.1, 0.2, o.volc) * ss(-45, -35, o.h0));
     }
@@ -124,5 +127,10 @@ public class GeologyStage extends GenStage {
         o.rock2 = b;
         o.rockT = t;
         o.erod = es / ew;
+        if (o.insel > 0.3) { // an inselberg: a dome of massive granite
+            o.rock = Rock.GRANITE.ordinal();
+            o.rockT = 1;
+            o.erod = lerp(o.erod, Rock.GRANITE.erod, o.insel);
+        }
     }
 }

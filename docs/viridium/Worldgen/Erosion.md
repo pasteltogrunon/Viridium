@@ -27,7 +27,7 @@ Lg     = erosionScale·erosionWidth                      96·1.6 ≈ 154 blocks:
 amount = erosionStrength·ECD·erosionDepth·Lg·min(slope, 1)·(ss(−8, 6, h0) + sea canyons)·(1 − scarp)
 ```
 
-A mountainside at slope 0.5 gets gullies up to ~40 blocks deep (spurs and ravines like in the reference screenshots of RWG), hills a few blocks, plains none. The prototype used a fixed depth (32·erodibility), which left high mountains looking like smooth ridged noise. Land is never dug below sea level: the sea is the base level.
+The depth is capped at 55 blocks (deeper ravines cut below the rivers beside them), and young volcanoes lose 40-75 % of it (see [[Volcanism]]). A mountainside at slope 0.5 gets gullies up to ~40 blocks deep (spurs and ravines like in the reference screenshots of RWG), hills a few blocks, plains none. The prototype used a fixed depth (32·erodibility), which left high mountains looking like smooth ridged noise. Land is never dug below sea level: the sea is the base level.
 
 ### Crests and floors by climate and rock (`climateStyle`)
 

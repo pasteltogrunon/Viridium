@@ -1,5 +1,6 @@
 package net.junedev.viridium.worldgen.terrain.stages;
 
+import static net.junedev.viridium.worldgen.terrain.core.GenMath.TAU;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.lerp;
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.ss;
@@ -36,6 +37,7 @@ public class ReliefStage extends GenStage {
      */
     protected double plateau(double x, double y, double L, GenPoint o) {
         o.plat = 0;
+        o.insel = 0;
         o.platType = 0;
         o.scarp = 0;
         if (P.plateaus <= 0 || L < 0.02) return 0;
@@ -312,6 +314,7 @@ public class ReliefStage extends GenStage {
         double L = o.L;
         double h;
         o.plat = 0;
+        o.insel = 0;
         o.platType = 0;
         o.scarp = 0;
         o.cliff = 0;
@@ -334,6 +337,8 @@ public class ReliefStage extends GenStage {
             // k * plateauTop is +0 when k == 0 (the top is positive): skip its noise there
             h = plains + hills * (1 - 0.65 * k) + mtn * (1 - 0.85 * k) + (k > 0 ? k * plateauTop(x, y) : 0);
             o.mtnMask *= 1 - 0.85 * k;
+            h = inselbergs(x, y, L, h, o);
+            h = tepuis(x, y, L, h, o);
         } else {
             o.mtnMask = 0;
             double floor = -62 + 40 * o.ridge * P.ridgeStrength - 30 * o.trench + 5 * fbm(x / 600, y / 600, SD.sea, 2);
@@ -362,7 +367,8 @@ public class ReliefStage extends GenStage {
         if (o.arc > 0.02) {
             double v = fbm(x / 380, y / 380, SD.arcN, detail ? 4 : 2);
             double isl = o.arc * ss(-0.2, 0.4, v);
-            double cone = ridged(x / 200, y / 200, SD.arcN + 3, detail ? 3 : 1);
+            // the islands of the arc; its volcanoes are separate cones (stratovolcanoes) when those are on
+            double cone = P.stratovolcanoes > 0 ? 0 : ridged(x / 200, y / 200, SD.arcN + 3, detail ? 3 : 1);
             double ht = -75 + 150 * isl + 70 * isl * cone * cone;
             if (ht > h) {
                 h = ht;
@@ -370,9 +376,98 @@ public class ReliefStage extends GenStage {
                 o.volcType = 1;
             }
         }
+        h += gen.volcanism.stratovolcanoes(x, y, o);
         double hf = gen.volcanism.apply(x, y, o, h, detail, s);
         // a coast landform buried by a later one (arc, collision range, volcano) loses its cover
         if (o.surf != GenPoint.SURF_NONE && Math.abs(hf - hCoast) > 1.5) o.surf = GenPoint.SURF_NONE;
-        return hf;
+        return gen.volcanism.volcanicFields(x, y, o, hf, detail);
+    }
+
+    /**
+     * Inselbergs and bornhardts: smooth domes of massive rock rising abruptly from the plains of old, stable
+     * continental
+     * interiors, where everything around them has been worn down (Uluru, Spitzkoppe, the Sugarloaf, the domes of the
+     * Sahel and Australia). One candidate per 1.6 km cell where the regional mask allows it, 60-180 blocks across the
+     * base, 0.6-1 times as high as their radius: steep sides, a rounded top. Erosion leaves them smooth.
+     *
+     * @return the new height
+     */
+    protected double inselbergs(double x, double y, double L, double h, GenPoint o) {
+        if (P.inselbergs <= 0 || L < 0.2 || o.orog > 0.2 || o.mtnMask > 0.35 || o.plat > 0.1 || o.collZ > 0.05)
+            return h;
+        double m = ss(0.05, 0.3, fbm(x / 8000, y / 8000, SD.plat + 20, 2) + 0.2 * (P.inselbergs - 1)) * ss(0.2, 0.35, L)
+            * (1 - ss(0.2, 0.35, o.orog));
+        if (m <= 0) return h;
+        final double C = 1600;
+        int ci = (int) Math.floor(x / C), cj = (int) Math.floor(y / C);
+        double best = 0;
+        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+            int a = ci + di, b = cj + dj;
+            if (rnd(a, b, SD.plat + 21) > 0.45) continue;
+            double cx = (a + 0.2 + 0.6 * rnd(a, b, SD.plat + 22)) * C,
+                cy = (b + 0.2 + 0.6 * rnd(a, b, SD.plat + 23)) * C;
+            double R = 30 + 60 * rnd(a, b, SD.plat + 24), dx = x - cx, dy = y - cy;
+            if (Math.abs(dx) > 1.5 * R || Math.abs(dy) > 1.5 * R) continue;
+            // a little elongated, with an irregular outline
+            double an = TAU * rnd(a, b, SD.plat + 25), u = dx * Math.cos(an) + dy * Math.sin(an),
+                v = -dx * Math.sin(an) + dy * Math.cos(an);
+            double q = Math.hypot(u / 1.3, v) / R * (1 + 0.12 * fbm(x / 40, y / 40, SD.plat + 26, 2));
+            if (q >= 1) continue;
+            double H = R * (0.6 + 0.4 * rnd(a, b, SD.plat + 27)) * m;
+            double hv = H * Math.pow(1 - q * q * q, 0.55); // steep sides, a rounded top
+            if (hv > best) best = hv;
+        }
+        if (best <= 0) return h;
+        o.scarp = Math.max(o.scarp, ss(0, 6, best)); // the erosion leaves the dome smooth
+        o.insel = ss(2, 10, best);
+        return h + best;
+    }
+
+    private static final ThreadLocal<GenPoint> CLIMATE_POINT = ThreadLocal.withInitial(GenPoint::new);
+
+    /**
+     * Tepuis: table mountains of hard sandstone in the humid tropics, isolated by erosion from an old plateau, with
+     * sheer walls hundreds of metres high and the world's tallest waterfalls (Roraima, Auyán-tepui). One candidate per
+     * 3.5 km cell where the regional mask allows it, inland in hot and very wet climates: 350-900 blocks across, an
+     * irregular outline, a flat top 120-220 blocks above the forest, near-vertical walls (set as a scarp: the rivers
+     * that
+     * reach the edge fall over it).
+     *
+     * @return the new height
+     */
+    protected double tepuis(double x, double y, double L, double h, GenPoint o) {
+        if (P.tepuis <= 0 || L < 0.15 || o.collZ > 0.05) return h;
+        double m = ss(-0.05, 0.15, fbm(x / 9000, y / 9000, SD.plat + 30, 2) + 0.2 * (P.tepuis - 1));
+        if (m <= 0) return h;
+        GenPoint c = CLIMATE_POINT.get(); // the base climate (the coarse lattices call this without it)
+        gen.climate.apply(x, y, c);
+        m *= ss(18, 22, c.Tb) * ss(1300, 1900, c.Pb);
+        if (m <= 0) return h;
+        final double C = 2500;
+        int ci = (int) Math.floor(x / C), cj = (int) Math.floor(y / C);
+        double best = 0, edge = 0;
+        for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+            int a = ci + di, b = cj + dj;
+            if (rnd(a, b, SD.plat + 31) > 0.5) continue;
+            double cx = (a + 0.25 + 0.5 * rnd(a, b, SD.plat + 32)) * C,
+                cy = (b + 0.25 + 0.5 * rnd(a, b, SD.plat + 33)) * C;
+            double R = 175 + 275 * rnd(a, b, SD.plat + 34), dx = x - cx, dy = y - cy;
+            if (Math.abs(dx) > 1.6 * R || Math.abs(dy) > 1.6 * R) continue;
+            double q = Math.hypot(dx, dy) / R + 0.35 * fbm(x / (0.6 * R), y / (0.6 * R), SD.plat + 35, 3)
+                + 0.06 * fbm(x / 60, y / 60, SD.plat + 36, 2);
+            double k = ss(1.0, 0.985, q) * m;
+            if (k <= 0) continue;
+            // a flat summit at its own height (the old plateau surface), not the hills below lifted
+            double top = 40 + 120 + 100 * rnd(a, b, SD.plat + 37) + 4 * fbm(x / 150, y / 150, SD.plat + 38, 2);
+            double H = (Math.max(h, top) - h) * k;
+            if (H > best) {
+                best = H;
+                edge = Math.max(edge, 1 - ss(0.0, 0.08, Math.abs(q - 0.99)));
+            }
+        }
+        if (best <= 0) return h;
+        o.scarp = Math.max(o.scarp, edge);
+        o.plat = Math.max(o.plat, ss(20, 80, best) * 0.25); // not a plateau rock province; marks it for the map
+        return h + best; // (best: the rise above the ground at this point)
     }
 }
