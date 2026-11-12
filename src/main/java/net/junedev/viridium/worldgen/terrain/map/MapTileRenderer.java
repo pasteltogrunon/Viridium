@@ -2,8 +2,6 @@ package net.junedev.viridium.worldgen.terrain.map;
 
 import static net.junedev.viridium.worldgen.terrain.core.GenMath.clamp;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -68,17 +66,7 @@ public final class MapTileRenderer {
 
     /** Every public parameter as text: equal strings, equal worlds (also names the on-disk tile cache). */
     public static String paramsKey(GenParams p) {
-        StringBuilder sb = new StringBuilder();
-        for (Field f : GenParams.class.getFields()) {
-            if (Modifier.isStatic(f.getModifiers())) continue;
-            try {
-                sb.append(f.getName())
-                    .append('=')
-                    .append(f.get(p))
-                    .append(';');
-            } catch (IllegalAccessException ignored) {}
-        }
-        return sb.toString();
+        return net.junedev.viridium.worldgen.terrain.core.GenFingerprint.paramsKey(p);
     }
 
     /** Forgets every kept tile sample (benchmarks; the next render evaluates again). */

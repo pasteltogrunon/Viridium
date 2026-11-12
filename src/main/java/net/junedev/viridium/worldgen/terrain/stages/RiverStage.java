@@ -48,7 +48,19 @@ public class RiverStage extends GenStage {
     /** Recently used networks by slot (mixed key): most lookups skip the map and its boxed key. Cleared on eviction. */
     private final Cached[] front = new Cached[64];
     private final ConcurrentHashMap<Long, FutureTask<RiverNet>> building = new ConcurrentHashMap<>();
-    private final AtomicLong builds = new AtomicLong(), buildNanos = new AtomicLong();
+    private final AtomicLong builds = new AtomicLong(), buildNanos = new AtomicLong(), loads = new AtomicLong();
+    /** Networks on disk (null = none): read instead of built, written once built. */
+    private volatile RiverNetStore store;
+
+    /** Keeps the networks on disk from now on (null = memory only). The world is the same either way. */
+    public void setStore(RiverNetStore store) {
+        this.store = store;
+    }
+
+    /** Networks read from the store instead of built. */
+    public long loadCount() {
+        return loads.get();
+    }
 
     public RiverStage(WorldGen gen) {
         super(gen);
@@ -101,6 +113,15 @@ public class RiverStage extends GenStage {
         if (hit != null) return hit;
         long key = key(ci, cj);
         FutureTask<RiverNet> created = new FutureTask<>(() -> {
+            RiverNetStore st = store;
+            if (st != null) {
+                RiverNet stored = st.load(ci, cj);
+                if (stored != null) {
+                    loads.incrementAndGet();
+                    recordExit(key, stored);
+                    return stored;
+                }
+            }
             long t0 = System.nanoTime();
             RiverNet n = new RiverNetBuilder(gen).build(basins.cell(ci, cj), basins, new GenScratch()); // builder holds
                                                                                                         // per-build
@@ -109,6 +130,7 @@ public class RiverStage extends GenStage {
             net.junedev.viridium.worldgen.terrain.GenStats.RIVER_NET.add(System.nanoTime() - t0);
             builds.incrementAndGet();
             recordExit(key, n);
+            if (st != null) st.saveAsync(n);
             return n;
         });
         FutureTask<RiverNet> task = building.putIfAbsent(key, created);

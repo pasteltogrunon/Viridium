@@ -34,7 +34,7 @@
  * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html#sec:java_library_configurations_graph
  */
 dependencies {
-    api("com.cardinalstar.cubicchunks:CubicChunks1710:v0.1.24-alpha:dev")
+    api("com.cardinalstar.cubicchunks:CubicChunks1710:v0.1.30-alpha:dev")
 
     runtimeOnlyNonPublishable(rfg.deobf(files("../DistantHorizons/dh/forge17/build/libs/DistantHorizons-forge17-3.3.5-dev-1.7.10.jar")))
 

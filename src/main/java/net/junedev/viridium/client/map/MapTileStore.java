@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -16,7 +15,7 @@ import java.util.zip.GZIPOutputStream;
 
 import net.junedev.viridium.Viridium;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
-import net.junedev.viridium.worldgen.terrain.map.MapTileRenderer;
+import net.junedev.viridium.worldgen.terrain.core.GenFingerprint;
 
 /**
  * Finished map tiles that outlive the map screen: the last {@link #MEM_TILES} in memory (reopening the map costs
@@ -28,7 +27,6 @@ final class MapTileStore {
 
     private static final int MEM_TILES = 512;
     private static final int MAGIC = 0x56544d31; // "VTM1"
-    private static final long MAX_AGE_MS = 14L * 24 * 3600 * 1000;
 
     private static final Map<String, int[]> MEM = new LinkedHashMap<>(256, 0.75f, true) {
 
@@ -38,17 +36,13 @@ final class MapTileStore {
         }
     };
 
-    private static String codeStamp;
-
     private final String fingerprint;
     private final File dir;
 
     MapTileStore(WorldGen gen, File baseDir) {
-        fingerprint = Long.toHexString(hash(MapTileRenderer.paramsKey(gen.params) + "|" + codeStamp()));
-        File root = new File(baseDir, "viridium/mapcache");
-        dir = new File(root, fingerprint);
-        if (!dir.isDirectory() && !dir.mkdirs()) Viridium.LOGGER.warn("Cannot create the map cache {}", dir);
-        pruneOld(root);
+        fingerprint = GenFingerprint.of(gen.params);
+        dir = GenFingerprint.cacheDir(new File(baseDir, "viridium/mapcache"), gen.params);
+        if (!dir.isDirectory()) Viridium.LOGGER.warn("Cannot create the map cache {}", dir);
     }
 
     private static String id(MapTileCache.Key k) {
@@ -102,61 +96,5 @@ final class MapTileStore {
         synchronized (MEM) {
             MEM.put(fingerprint + id, px);
         }
-    }
-
-    /** Removes caches of other generator versions that nobody has used for a while. */
-    private void pruneOld(File root) {
-        File[] dirs = root.listFiles(File::isDirectory);
-        if (dirs == null) return;
-        long now = System.currentTimeMillis();
-        for (File d : dirs) {
-            if (d.equals(dir) || now - d.lastModified() < MAX_AGE_MS) continue;
-            File[] fs = d.listFiles();
-            if (fs != null) for (File f : fs) f.delete();
-            d.delete();
-        }
-        dir.setLastModified(now);
-    }
-
-    /** Identifies the generator code: the jar (size, date), or in a dev workspace the newest compiled terrain class. */
-    private static synchronized String codeStamp() {
-        if (codeStamp != null) return codeStamp;
-        String stamp = "?";
-        try {
-            URL u = WorldGen.class.getProtectionDomain()
-                .getCodeSource()
-                .getLocation();
-            File src = new File(u.toURI());
-            if (src.isFile()) stamp = src.length() + "@" + src.lastModified();
-            else {
-                long[] acc = { 0, 0 };
-                walk(new File(src, "net/junedev/viridium/worldgen/terrain"), acc);
-                stamp = acc[0] + "#" + acc[1];
-            }
-        } catch (Exception e) {
-            stamp = String.valueOf(System.nanoTime()); // unknown code: never reuse disk tiles
-        }
-        return codeStamp = stamp;
-    }
-
-    private static void walk(File d, long[] acc) {
-        File[] fs = d.listFiles();
-        if (fs == null) return;
-        for (File f : fs) {
-            if (f.isDirectory()) walk(f, acc);
-            else {
-                acc[0] = Math.max(acc[0], f.lastModified());
-                acc[1] = acc[1] * 31 + f.length();
-            }
-        }
-    }
-
-    private static long hash(String s) {
-        long h = 0xcbf29ce484222325L;
-        for (int i = 0; i < s.length(); i++) {
-            h ^= s.charAt(i);
-            h *= 0x100000001b3L;
-        }
-        return h;
     }
 }

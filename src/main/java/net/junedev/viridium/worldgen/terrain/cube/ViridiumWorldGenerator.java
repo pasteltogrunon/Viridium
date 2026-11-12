@@ -50,6 +50,7 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         GenParams params = new GenParams();
         params.seed = GenParams.foldSeed(world.getSeed());
         WorldGen gen = this.gen = new WorldGen(params);
+        openRiverStore(world, gen);
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
         net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora = new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(
@@ -71,6 +72,24 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         // the spawn area is prepared before any player joins: warm it right away
         p.prefetchAround(world.getSpawnPoint().posX >> 4, world.getSpawnPoint().posZ >> 4, 14);
         Viridium.LOGGER.info("Viridium terrain generator created (seed {})", params.seed);
+    }
+
+    /** Keeps the river networks of this world in its save folder, so later sessions read them instead of building. */
+    private static void openRiverStore(WorldServer world, WorldGen gen) {
+        try {
+            java.io.File save = world.getSaveHandler()
+                .getWorldDirectory();
+            if (save == null) return;
+            net.junedev.viridium.worldgen.terrain.stages.RiverNetStore store = net.junedev.viridium.worldgen.terrain.stages.RiverNetStore
+                .open(new java.io.File(save, "viridium/rivernets"), gen.params);
+            if (store == null) Viridium.LOGGER.warn("Cannot create the river network store in {}", save);
+            else {
+                gen.rivers.setStore(store);
+                Viridium.LOGGER.info("River networks kept in {}", store.dir());
+            }
+        } catch (RuntimeException e) {
+            Viridium.LOGGER.warn("River network store unavailable", e);
+        }
     }
 
     /** The pipeline of this world (shared: the map reuses its caches and river networks). */
