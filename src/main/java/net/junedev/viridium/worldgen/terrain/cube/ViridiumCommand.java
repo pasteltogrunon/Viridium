@@ -28,7 +28,7 @@ public class ViridiumCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/viridium bench [radius=4] [cubesDown=8] [cubesUp=8] | /viridium stats [reset]";
+        return "/viridium bench [radius=4] [cubesDown=8] [cubesUp=8] | /viridium stats [reset] | /viridium nether";
     }
 
     @Override
@@ -69,6 +69,18 @@ public class ViridiumCommand extends CommandBase {
             Viridium.LOGGER.info("Viridium generation stats:\n{}", r);
             for (String l : r.split("\n")) say(sender, l);
             if (args.length > 1 && args[1].equals("reset")) net.junedev.viridium.worldgen.terrain.GenStats.reset();
+            return;
+        }
+        if (args.length > 0 && args[0].equals("nether")) {
+            net.junedev.viridium.worldgen.nether.NetherWorldGenerator ng = net.junedev.viridium.worldgen.nether.NetherWorldGenerator
+                .forWorld(sender.getEntityWorld());
+            if (ng == null) {
+                say(sender, "This dimension does not use the Viridium nether generator.");
+                return;
+            }
+            net.minecraft.util.ChunkCoordinates p = sender.getPlayerCoordinates();
+            for (String l : net.junedev.viridium.worldgen.nether.NetherInfo
+                .describe(ng.nether(), p.posX + 0.5, p.posY, p.posZ + 0.5)) say(sender, l);
             return;
         }
         if (args.length == 0 || !args[0].equals("bench")) {

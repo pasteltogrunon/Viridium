@@ -84,7 +84,11 @@ public class Viridium {
         String gb = System.getenv("VIRIDIUM_GENBENCH");
         if (gb != null && !gb.isEmpty()) {
             net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
-            net.minecraft.world.WorldServer w = server.worldServerForDimension(0);
+            // VIRIDIUM_GENBENCH_DIM picks the dimension (e.g. -1 for the Viridium nether)
+            int dim = Integer.parseInt(
+                System.getenv()
+                    .getOrDefault("VIRIDIUM_GENBENCH_DIM", "0"));
+            net.minecraft.world.WorldServer w = server.worldServerForDimension(dim);
             StringBuilder all = new StringBuilder();
             int n = 0;
             for (String spec : gb.split(";")) {

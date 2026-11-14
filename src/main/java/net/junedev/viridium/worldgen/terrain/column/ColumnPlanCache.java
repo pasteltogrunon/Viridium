@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import net.junedev.viridium.worldgen.terrain.GenStats;
+import net.junedev.viridium.worldgen.terrain.core.GenMath;
 
 /**
  * Bounded cache of finished plans plus a map of in-flight computations, so concurrent requests for the same column
@@ -17,6 +19,7 @@ public final class ColumnPlanCache {
     /**
      * A plan is ~17.5 KiB (surface + crust profile), so 2048 plans ≈ 36 MiB. Plans are recomputed on a miss (output
      * is identical), so this only trades memory for repeated planning when players move vertically.
+     * TODO: This could get exposed in config or scale with the number of players
      */
     public static final int DEFAULT_MAXIMUM_SIZE = 2048;
 
@@ -51,7 +54,7 @@ public final class ColumnPlanCache {
             computed.incrementAndGet();
             long t0 = System.nanoTime();
             ColumnPlan p = planner.plan(chunkX, chunkZ);
-            net.junedev.viridium.worldgen.terrain.GenStats.PLAN.add(System.nanoTime() - t0);
+            GenStats.PLAN.add(System.nanoTime() - t0);
             return p;
         });
         FutureTask<ColumnPlan> task = inProgress.putIfAbsent(key, created);
@@ -59,6 +62,7 @@ public final class ColumnPlanCache {
             task = created;
             task.run();
         }
+
         try {
             ColumnPlan result = task.get();
             completed.put(key, result);
@@ -105,7 +109,6 @@ public final class ColumnPlanCache {
     }
 
     private static long key(int chunkX, int chunkZ) {
-        return net.junedev.viridium.worldgen.terrain.core.GenMath
-            .mixKey((chunkX & 0xffffffffL) | ((long) chunkZ << 32));
+        return GenMath.mixKey((chunkX & 0xffffffffL) | ((long) chunkZ << 32));
     }
 }

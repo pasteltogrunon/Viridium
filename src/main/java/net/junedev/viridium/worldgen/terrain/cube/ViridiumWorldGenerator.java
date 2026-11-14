@@ -10,10 +10,12 @@ import net.junedev.viridium.Viridium;
 import net.junedev.viridium.worldgen.terrain.GenStats;
 import net.junedev.viridium.worldgen.terrain.WorldGen;
 import net.junedev.viridium.worldgen.terrain.column.BiomeMapper;
+import net.junedev.viridium.worldgen.terrain.column.CliffDetail;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanCache;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlanner;
 import net.junedev.viridium.worldgen.terrain.core.GenParams;
+import net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner;
 import net.minecraft.entity.EnumCreatureType;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.ChunkPosition;
@@ -47,18 +49,22 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
 
     public ViridiumWorldGenerator(WorldServer world) {
         this.world = world;
+
         GenParams params = new GenParams();
         params.seed = GenParams.foldSeed(world.getSeed());
         WorldGen gen = this.gen = new WorldGen(params);
+
         openRiverStore(world, gen);
+
         this.plans = new ColumnPlanCache(new ColumnPlanner(gen, BiomeMapper.FROM_STAGE));
+
         this.filler = new CubeFiller(!world.provider.hasNoSky, gen.crust, LithologyBlocks.get());
-        net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora = new net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner(
+        FloraPlanner flora = new FloraPlanner(
             plans,
             filler.rules(),
             world.getSeed(),
             filler.hasSky());
-        net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs = new net.junedev.viridium.worldgen.terrain.column.CliffDetail(
+        CliffDetail cliffs = new CliffDetail(
             plans,
             params.seed ^ 0xC11FF,
             params.cliffDetail);
@@ -67,6 +73,7 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         flora.setCaves(gen.caves);
         flora.setCliffs(cliffs, gen.crust, LithologyBlocks.get(), params.cliffDetail);
         filler.setFlora(flora);
+
         BY_WORLD.put(world, this);
         PlanPrefetcher p = PlanPrefetcher.start(world, plans, gen);
         // the spawn area is prepared before any player joins: warm it right away
@@ -126,15 +133,18 @@ public class ViridiumWorldGenerator implements IWorldGenerator, IPreloadFailureD
         ColumnPlan plan = plans.get(cubeX, cubeZ);
         long t1 = System.nanoTime();
         GenStats.PLAN_WAIT.add(t1 - t0);
+
         List<Chunk> sideColumns = Collections.emptyList();
         if (column == null) {
             column = newColumn(cubeX, cubeZ, plan);
             sideColumns = Collections.singletonList(column);
         }
         CubeFiller.Kind kind = CubeFiller.classify(plan, cubeY);
+
         long t2 = System.nanoTime();
         Cube cube = new Cube(column, cubeY, filler.fill(plan, cubeX, cubeY, cubeZ));
         long dt = System.nanoTime() - t2;
+
         switch (kind) {
             case AIR -> GenStats.FILL_AIR.add(dt);
             case CRUST -> GenStats.FILL_CRUST.add(dt);

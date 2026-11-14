@@ -5,9 +5,13 @@ import static net.junedev.viridium.worldgen.terrain.column.TerrainLayout.MIN_Y;
 
 import javax.annotation.Nullable;
 
+import net.junedev.viridium.worldgen.terrain.caves.CaveCarver;
+import net.junedev.viridium.worldgen.terrain.column.CliffDetail;
 import net.junedev.viridium.worldgen.terrain.column.ColumnPlan;
 import net.junedev.viridium.worldgen.terrain.crust.CrustModel;
 import net.junedev.viridium.worldgen.terrain.crust.CrustPlan;
+import net.junedev.viridium.worldgen.terrain.crust.Lithology;
+import net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
@@ -43,22 +47,22 @@ public class CubeFiller {
     }
 
     /** Planned vegetation drawn into air and surface cubes (null = none). */
-    public void setFlora(net.junedev.viridium.worldgen.terrain.cube.flora.FloraPlanner flora) {
+    public void setFlora(FloraPlanner flora) {
         this.flora = flora;
     }
 
     /** Caves carved while filling (null = none). */
-    public void setCaves(net.junedev.viridium.worldgen.terrain.caves.CaveCarver caves) {
+    public void setCaves(CaveCarver caves) {
         this.caves = caves;
     }
 
     private static Block caveBlock(byte c) {
-        return c == net.junedev.viridium.worldgen.terrain.caves.CaveCarver.WATER ? Blocks.water
-            : c == net.junedev.viridium.worldgen.terrain.caves.CaveCarver.LAVA ? Blocks.lava : Blocks.air;
+        return c == CaveCarver.WATER ? Blocks.water
+            : c == CaveCarver.LAVA ? Blocks.lava : Blocks.air;
     }
 
     /** Notches and talus of cliffs (null = none). */
-    public void setCliffs(net.junedev.viridium.worldgen.terrain.column.CliffDetail cliffs) {
+    public void setCliffs(CliffDetail cliffs) {
         this.cliffs = cliffs;
     }
 
@@ -83,7 +87,7 @@ public class CubeFiller {
         Kind kind = classify(plan, cubeY);
         int y0 = cubeY << 4;
         // a notch can lie below the surface rules of this column (its wall is tall), talus above its highest point
-        net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc = null;
+        CliffDetail.Cols cc = null;
         if (cliffs != null && kind != Kind.BEDROCK) {
             cc = cliffs.get(cubeX, cubeZ);
             if (!cc.any || cc.maxY < y0 || cc.minY > y0 + 15) cc = null;
@@ -99,7 +103,7 @@ public class CubeFiller {
         s.prepare(cubeX << 4, y0, cubeZ << 4);
         CrustPlan cp = plan.crust;
         SurfaceRules.Column sc = surface.get();
-        net.junedev.viridium.worldgen.terrain.caves.CaveCarver.Cube cv = caves == null || kind == Kind.AIR ? null
+        CaveCarver.Cube cv = caves == null || kind == Kind.AIR ? null
             : caves.prepare(plan, cubeX, cubeY, cubeZ);
         for (int lz = 0; lz < 16; lz++) {
             for (int lx = 0; lx < 16; lx++) {
@@ -108,11 +112,11 @@ public class CubeFiller {
                 if (kind == Kind.CRUST) {
                     s.column(cp, i, lx, lz); // per-column state (constant zones, strata memo) for the 16 blocks
                     for (int ly = 0; ly < 16; ly++) {
-                        net.junedev.viridium.worldgen.terrain.crust.Lithology r = s.at(ly);
+                        Lithology r = s.at(ly);
                         Block b = lith[r.ordinal()];
                         if (cv != null) {
                             byte c = cv.at(lx, ly, lz, r);
-                            if (c != net.junedev.viridium.worldgen.terrain.caves.CaveCarver.SOLID) b = caveBlock(c);
+                            if (c != CaveCarver.SOLID) b = caveBlock(c);
                         }
                         ebs.func_150818_a(lx, ly, lz, b);
                     }
@@ -133,7 +137,7 @@ public class CubeFiller {
      * gravel on top, mossy cobblestone where it rains.
      */
     private void cliff(ExtendedBlockStorage ebs, ColumnPlan plan,
-        net.junedev.viridium.worldgen.terrain.column.CliffDetail.Cols cc, int i, int y0, int cubeX, int cubeZ) {
+        CliffDetail.Cols cc, int i, int y0, int cubeX, int cubeZ) {
         int lx = i & 15, lz = i >> 4;
         int lo = cc.notchLo[i];
         if (lo != NONE) {
@@ -169,7 +173,7 @@ public class CubeFiller {
     }
 
     private void fillColumn(ExtendedBlockStorage ebs, ColumnPlan plan, CrustModel.Sampler s, SurfaceRules.Column sc,
-        int i, int x, int z, int lx, int lz, int y0, net.junedev.viridium.worldgen.terrain.caves.CaveCarver.Cube cv) {
+        int i, int x, int z, int lx, int lz, int y0, CaveCarver.Cube cv) {
         int sy = plan.surfaceY[i];
         int water = plan.waterY[i], iceTop = plan.iceTop[i], iceBottom = plan.iceBottom[i];
         int fallTop = plan.fallTop[i];
